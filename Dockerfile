@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1
+
 # Adapted from the multi-stage build example in https://hub.docker.com/_/rust
 
 # Stage 1: builder

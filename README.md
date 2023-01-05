@@ -8,6 +8,12 @@ S3 Active Storage server
 make build
 ```
 
+## Test
+
+```bash
+make test
+```
+
 ## Run
 
 ```bash
