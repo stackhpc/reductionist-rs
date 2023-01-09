@@ -1,17 +1,15 @@
-use axum::{
-    routing::get,
-    Router,
-};
+use axum::Router;
 use tokio::signal;
+mod app;
 
 #[tokio::main]
 async fn main() {
-    // build our application with a single route
-    let app = Router::new().route("/", get(|| async { "Hello, World!" }));
+    let router = Router::new()
+        .nest("/v1", app::router());
 
-    // run it with hyper on localhost:3000
+    // run it with hyper on localhost:8080
     axum::Server::bind(&"0.0.0.0:8080".parse().unwrap())
-        .serve(app.into_make_service())
+        .serve(router.into_make_service())
         .with_graceful_shutdown(shutdown_signal())
         .await
         .unwrap();
