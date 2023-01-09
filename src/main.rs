@@ -1,12 +1,11 @@
-use axum::Router;
 use tokio::signal;
+
 mod app;
 mod models;
 
 #[tokio::main]
 async fn main() {
-    let router = Router::new()
-        .nest("/v1", app::router());
+    let router = app::router();
 
     // run it with hyper on localhost:8080
     axum::Server::bind(&"0.0.0.0:8080".parse().unwrap())
