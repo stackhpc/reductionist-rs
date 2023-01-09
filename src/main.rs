@@ -1,6 +1,7 @@
 use axum::Router;
 use tokio::signal;
 mod app;
+mod models;
 
 #[tokio::main]
 async fn main() {
