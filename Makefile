@@ -10,4 +10,4 @@ test:
 
 .PHONY: run
 run:
-	@docker run -it --rm --name s3-active-storage s3-active-storage
+	@docker run -it --rm --net=host --name s3-active-storage s3-active-storage
