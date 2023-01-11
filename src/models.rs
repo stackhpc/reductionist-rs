@@ -1,6 +1,6 @@
-use serde::{ Deserialize, Serialize };
+use serde::{Deserialize, Serialize};
 use url::Url;
-use validator::{ Validate, ValidationError };
+use validator::{Validate, ValidationError};
 
 #[derive(Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -10,13 +10,13 @@ pub enum DType {
     Uint32,
     Uint64,
     Float32,
-    Float64
+    Float64,
 }
 
 #[derive(Debug, Deserialize, PartialEq)]
 pub enum Order {
     C,
-    F
+    F,
 }
 
 // NOTE: In serde, structs can be deserialised from sequences or maps. This allows us to support
@@ -28,7 +28,7 @@ pub struct Slice {
     pub start: u32,
     pub end: u32,
     #[validate(range(min = 1))]
-    pub stride: u32
+    pub stride: u32,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Validate)]
@@ -55,7 +55,9 @@ pub struct RequestData {
 
 fn validate_slice(slice: &Slice) -> Result<(), ValidationError> {
     if slice.end <= slice.start {
-        return Err(ValidationError::new("Selection end must be greater than start"))
+        return Err(ValidationError::new(
+            "Selection end must be greater than start",
+        ));
     }
     Ok(())
 }
@@ -67,7 +69,9 @@ fn validate_request_data(request_data: &RequestData) -> Result<(), ValidationErr
     if let Some(shape) = &request_data.shape {
         if let Some(selection) = &request_data.selection {
             if shape.len() != selection.len() {
-                return Err(ValidationError::new("Shape and selection must have the same length"))
+                return Err(ValidationError::new(
+                    "Shape and selection must have the same length",
+                ));
             }
         }
     }
@@ -77,8 +81,7 @@ fn validate_request_data(request_data: &RequestData) -> Result<(), ValidationErr
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json;
-    use serde_test::{ assert_de_tokens, assert_de_tokens_error, Token };
+    use serde_test::{assert_de_tokens, assert_de_tokens_error, Token};
 
     fn get_test_request_data() -> RequestData {
         RequestData {
@@ -90,7 +93,7 @@ mod tests {
             size: None,
             shape: None,
             order: None,
-            selection: None
+            selection: None,
         }
     }
 
@@ -105,9 +108,17 @@ mod tests {
             shape: Some(vec![1, 2]),
             order: Some(Order::C),
             selection: Some(vec![
-                Slice { start: 1, end: 2, stride: 3 },
-                Slice { start: 4, end: 5, stride: 6 }
-            ])
+                Slice {
+                    start: 1,
+                    end: 2,
+                    stride: 3,
+                },
+                Slice {
+                    start: 4,
+                    end: 5,
+                    stride: 6,
+                },
+            ]),
         }
     }
 
@@ -117,105 +128,129 @@ mod tests {
     #[test]
     fn test_required_fields() {
         let request_data = get_test_request_data();
-        assert_de_tokens(&request_data, &[
-            Token::Struct { name: "RequestData", len: 2 },
-            Token::Str("source"),
-            Token::Str("http://example.com"),
-            Token::Str("bucket"),
-            Token::Str("bar"),
-            Token::Str("object"),
-            Token::Str("baz"),
-            Token::Str("dtype"),
-            Token::Enum { name: "DType" },
-            Token::Str("int32"),
-            Token::Unit,
-            Token::StructEnd
-        ]);
+        assert_de_tokens(
+            &request_data,
+            &[
+                Token::Struct {
+                    name: "RequestData",
+                    len: 2,
+                },
+                Token::Str("source"),
+                Token::Str("http://example.com"),
+                Token::Str("bucket"),
+                Token::Str("bar"),
+                Token::Str("object"),
+                Token::Str("baz"),
+                Token::Str("dtype"),
+                Token::Enum { name: "DType" },
+                Token::Str("int32"),
+                Token::Unit,
+                Token::StructEnd,
+            ],
+        );
         request_data.validate().unwrap()
     }
 
     #[test]
     fn test_optional_fields() {
         let request_data = get_test_request_data_optional();
-        assert_de_tokens(&request_data, &[
-            Token::Struct { name: "RequestData", len: 2 },
-            Token::Str("source"),
-            Token::Str("http://example.com"),
-            Token::Str("bucket"),
-            Token::Str("bar"),
-            Token::Str("object"),
-            Token::Str("baz"),
-            Token::Str("dtype"),
-            Token::Enum { name: "DType" },
-            Token::Str("int32"),
-            Token::Unit,
-            Token::Str("offset"),
-            Token::Some,
-            Token::U32(1),
-            Token::Str("size"),
-            Token::Some,
-            Token::U32(2),
-            Token::Str("shape"),
-            Token::Some,
-            Token::Seq { len: Some(2) },
-            Token::U32(1),
-            Token::U32(2),
-            Token::SeqEnd,
-            Token::Str("order"),
-            Token::Some,
-            Token::Enum { name: "Order" },
-            Token::Str("C"),
-            Token::Unit,
-            Token::Str("selection"),
-            Token::Some,
-            Token::Seq { len: Some(2) },
-            Token::Seq { len: Some(3) },
-            Token::U32(1),
-            Token::U32(2),
-            Token::U32(3),
-            Token::SeqEnd,
-            Token::Seq { len: Some(3) },
-            Token::U32(4),
-            Token::U32(5),
-            Token::U32(6),
-            Token::SeqEnd,
-            Token::SeqEnd,
-            Token::StructEnd
-        ]);
+        assert_de_tokens(
+            &request_data,
+            &[
+                Token::Struct {
+                    name: "RequestData",
+                    len: 2,
+                },
+                Token::Str("source"),
+                Token::Str("http://example.com"),
+                Token::Str("bucket"),
+                Token::Str("bar"),
+                Token::Str("object"),
+                Token::Str("baz"),
+                Token::Str("dtype"),
+                Token::Enum { name: "DType" },
+                Token::Str("int32"),
+                Token::Unit,
+                Token::Str("offset"),
+                Token::Some,
+                Token::U32(1),
+                Token::Str("size"),
+                Token::Some,
+                Token::U32(2),
+                Token::Str("shape"),
+                Token::Some,
+                Token::Seq { len: Some(2) },
+                Token::U32(1),
+                Token::U32(2),
+                Token::SeqEnd,
+                Token::Str("order"),
+                Token::Some,
+                Token::Enum { name: "Order" },
+                Token::Str("C"),
+                Token::Unit,
+                Token::Str("selection"),
+                Token::Some,
+                Token::Seq { len: Some(2) },
+                Token::Seq { len: Some(3) },
+                Token::U32(1),
+                Token::U32(2),
+                Token::U32(3),
+                Token::SeqEnd,
+                Token::Seq { len: Some(3) },
+                Token::U32(4),
+                Token::U32(5),
+                Token::U32(6),
+                Token::SeqEnd,
+                Token::SeqEnd,
+                Token::StructEnd,
+            ],
+        );
         request_data.validate().unwrap()
     }
 
     #[test]
     fn test_missing_source() {
-        assert_de_tokens_error::<RequestData>(&[
-            Token::Struct { name: "RequestData", len: 2 },
-            Token::StructEnd
+        assert_de_tokens_error::<RequestData>(
+            &[
+                Token::Struct {
+                    name: "RequestData",
+                    len: 2,
+                },
+                Token::StructEnd,
             ],
-            "missing field `source`"
+            "missing field `source`",
         )
     }
 
     #[test]
     fn test_invalid_source() {
-        assert_de_tokens_error::<RequestData>(&[
-            Token::Struct { name: "RequestData", len: 2 },
-            Token::Str("source"),
-            Token::Str("foo"),
-            Token::StructEnd
+        assert_de_tokens_error::<RequestData>(
+            &[
+                Token::Struct {
+                    name: "RequestData",
+                    len: 2,
+                },
+                Token::Str("source"),
+                Token::Str("foo"),
+                Token::StructEnd,
             ],
-            "invalid value: string \"foo\", expected relative URL without a base"
+            "invalid value: string \"foo\", expected relative URL without a base",
         )
     }
 
     #[test]
     fn test_missing_bucket() {
-        assert_de_tokens_error::<RequestData>(&[
-            Token::Struct { name: "RequestData", len: 2 },
-            Token::Str("source"),
-            Token::Str("http://example.com"),
-            Token::StructEnd
+        assert_de_tokens_error::<RequestData>(
+            &[
+                Token::Struct {
+                    name: "RequestData",
+                    len: 2,
+                },
+                Token::Str("source"),
+                Token::Str("http://example.com"),
+                Token::StructEnd,
             ],
-            "missing field `bucket`"
+            "missing field `bucket`",
         )
     }
 
@@ -229,15 +264,19 @@ mod tests {
 
     #[test]
     fn test_missing_object() {
-        assert_de_tokens_error::<RequestData>(&[
-            Token::Struct { name: "RequestData", len: 2 },
-            Token::Str("source"),
-            Token::Str("http://example.com"),
-            Token::Str("bucket"),
-            Token::Str("bar"),
-            Token::StructEnd
+        assert_de_tokens_error::<RequestData>(
+            &[
+                Token::Struct {
+                    name: "RequestData",
+                    len: 2,
+                },
+                Token::Str("source"),
+                Token::Str("http://example.com"),
+                Token::Str("bucket"),
+                Token::Str("bar"),
+                Token::StructEnd,
             ],
-            "missing field `object`"
+            "missing field `object`",
         )
     }
 
@@ -251,17 +290,21 @@ mod tests {
 
     #[test]
     fn test_missing_dtype() {
-        assert_de_tokens_error::<RequestData>(&[
-            Token::Struct { name: "RequestData", len: 2 },
-            Token::Str("source"),
-            Token::Str("http://example.com"),
-            Token::Str("bucket"),
-            Token::Str("bar"),
-            Token::Str("object"),
-            Token::Str("baz"),
-            Token::StructEnd
+        assert_de_tokens_error::<RequestData>(
+            &[
+                Token::Struct {
+                    name: "RequestData",
+                    len: 2,
+                },
+                Token::Str("source"),
+                Token::Str("http://example.com"),
+                Token::Str("bucket"),
+                Token::Str("bar"),
+                Token::Str("object"),
+                Token::Str("baz"),
+                Token::StructEnd,
             ],
-            "missing field `dtype`"
+            "missing field `dtype`",
         )
     }
 
@@ -296,15 +339,19 @@ mod tests {
 
     #[test]
     fn test_invalid_order() {
-        assert_de_tokens_error::<RequestData>(&[
-            Token::Struct { name: "RequestData", len: 2 },
-            Token::Str("order"),
-            Token::Some,
-            Token::Enum { name: "Order" },
-            Token::Str("foo"),
-            Token::StructEnd
+        assert_de_tokens_error::<RequestData>(
+            &[
+                Token::Struct {
+                    name: "RequestData",
+                    len: 2,
+                },
+                Token::Str("order"),
+                Token::Some,
+                Token::Enum { name: "Order" },
+                Token::Str("foo"),
+                Token::StructEnd,
             ],
-            "unknown variant `foo`, expected `C` or `F`"
+            "unknown variant `foo`, expected `C` or `F`",
         )
     }
 
@@ -320,7 +367,11 @@ mod tests {
     #[should_panic(expected = "selection")]
     fn test_invalid_selection2() {
         let mut request_data = get_test_request_data();
-        request_data.selection = Some(vec![Slice { start: 1, end: 2, stride: 0 }]);
+        request_data.selection = Some(vec![Slice {
+            start: 1,
+            end: 2,
+            stride: 0,
+        }]);
         request_data.validate().unwrap()
     }
 
@@ -328,7 +379,11 @@ mod tests {
     #[should_panic(expected = "Selection end must be greater than start")]
     fn test_invalid_selection3() {
         let mut request_data = get_test_request_data();
-        request_data.selection = Some(vec![Slice { start: 1, end: 1, stride: 1 }]);
+        request_data.selection = Some(vec![Slice {
+            start: 1,
+            end: 1,
+            stride: 1,
+        }]);
         request_data.validate().unwrap()
     }
 
@@ -337,7 +392,11 @@ mod tests {
     fn test_shape_selection_mismatch() {
         let mut request_data = get_test_request_data();
         request_data.shape = Some(vec![1, 2]);
-        request_data.selection = Some(vec![Slice { start: 1, end: 2, stride: 1 }]);
+        request_data.selection = Some(vec![Slice {
+            start: 1,
+            end: 2,
+            stride: 1,
+        }]);
         request_data.validate().unwrap()
     }
 
