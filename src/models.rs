@@ -27,7 +27,7 @@ pub enum Order {
 pub struct Slice {
     pub start: u32,
     pub end: u32,
-    #[validate(range(min = 1))]
+    #[validate(range(min = 1, message = "stride must be greater than 0"))]
     pub stride: u32,
 }
 
@@ -37,19 +37,19 @@ pub struct Slice {
 pub struct RequestData {
     // TODO: Investigate using lifetimes to enable zero-copy: https://serde.rs/lifetimes.html
     pub source: Url,
-    #[validate(length(min = 1))]
+    #[validate(length(min = 1, message = "bucket must not be empty"))]
     pub bucket: String,
-    #[validate(length(min = 1))]
+    #[validate(length(min = 1, message = "object must not be empty"))]
     pub object: String,
     pub dtype: DType,
     pub offset: Option<u32>,
-    #[validate(range(min = 1))]
+    #[validate(range(min = 1, message = "size must be greater than 0"))]
     pub size: Option<u32>,
-    #[validate(length(min = 1))]
+    #[validate(length(min = 1, message = "shape length must be greater than 0"))]
     pub shape: Option<Vec<u32>>,
     pub order: Option<Order>,
     #[validate]
-    #[validate(length(min = 1))]
+    #[validate(length(min = 1, message = "selection length must be greater than 0"))]
     pub selection: Option<Vec<Slice>>,
 }
 
@@ -255,7 +255,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "bucket")]
+    #[should_panic(expected = "bucket must not be empty")]
     fn test_invalid_bucket() {
         let mut request_data = get_test_request_data();
         request_data.bucket = "".to_string();
@@ -281,7 +281,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "object")]
+    #[should_panic(expected = "object must not be empty")]
     fn test_invalid_object() {
         let mut request_data = get_test_request_data();
         request_data.object = "".to_string();
@@ -322,7 +322,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "size")]
+    #[should_panic(expected = "size must be greater than 0")]
     fn test_invalid_size() {
         let mut request_data = get_test_request_data();
         request_data.size = Some(0);
@@ -330,7 +330,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "shape")]
+    #[should_panic(expected = "shape length must be greater than 0")]
     fn test_invalid_shape() {
         let mut request_data = get_test_request_data();
         request_data.shape = Some(vec![]);
@@ -356,7 +356,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "selection")]
+    #[should_panic(expected = "selection length must be greater than 0")]
     fn test_invalid_selection() {
         let mut request_data = get_test_request_data();
         request_data.selection = Some(vec![]);
@@ -364,7 +364,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "selection")]
+    #[should_panic(expected = "stride must be greater than 0")]
     fn test_invalid_selection2() {
         let mut request_data = get_test_request_data();
         request_data.selection = Some(vec![Slice {
