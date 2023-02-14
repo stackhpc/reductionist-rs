@@ -1,7 +1,7 @@
 use crate::models;
+use crate::validated_json::ValidatedJson;
 
 use axum::{
-    extract::Json,
     routing::{get, post},
     Router,
 };
@@ -26,26 +26,26 @@ async fn schema() -> &'static str {
     "Hello, world!"
 }
 
-async fn count(Json(request_data): Json<models::RequestData>) -> String {
+async fn count(ValidatedJson(request_data): ValidatedJson<models::RequestData>) -> String {
     format!("Hello, {}!", request_data.source)
 }
 
-async fn max(Json(request_data): Json<models::RequestData>) -> String {
+async fn max(ValidatedJson(request_data): ValidatedJson<models::RequestData>) -> String {
     format!("Hello, {}!", request_data.source)
 }
 
-async fn mean(Json(request_data): Json<models::RequestData>) -> String {
+async fn mean(ValidatedJson(request_data): ValidatedJson<models::RequestData>) -> String {
     format!("Hello, {}!", request_data.source)
 }
 
-async fn min(Json(request_data): Json<models::RequestData>) -> String {
+async fn min(ValidatedJson(request_data): ValidatedJson<models::RequestData>) -> String {
     format!("Hello, {}!", request_data.source)
 }
 
-async fn select(Json(request_data): Json<models::RequestData>) -> String {
+async fn select(ValidatedJson(request_data): ValidatedJson<models::RequestData>) -> String {
     format!("Hello, {}!", request_data.source)
 }
 
-async fn sum(Json(request_data): Json<models::RequestData>) -> String {
+async fn sum(ValidatedJson(request_data): ValidatedJson<models::RequestData>) -> String {
     format!("Hello, {}!", request_data.source)
 }
