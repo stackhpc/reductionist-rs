@@ -79,23 +79,6 @@ fn validate_request_data(request_data: &RequestData) -> Result<(), ValidationErr
     Ok(())
 }
 
-/// Response containing the result of a computation and associated metadata.
-pub struct Response {
-    pub result: String,
-    pub dtype: DType,
-    pub shape: Vec<u32>,
-}
-
-impl Response {
-    pub fn new(result: String, dtype: DType, shape: Vec<u32>) -> Response {
-        Response {
-            result,
-            dtype,
-            shape,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
