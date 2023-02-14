@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
+use strum_macros::Display;
 use url::Url;
 use validator::{Validate, ValidationError};
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, Display, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum DType {
     Int32,
@@ -76,6 +77,23 @@ fn validate_request_data(request_data: &RequestData) -> Result<(), ValidationErr
         }
     }
     Ok(())
+}
+
+/// Response containing the result of a computation and associated metadata.
+pub struct Response {
+    pub result: String,
+    pub dtype: DType,
+    pub shape: Vec<u32>,
+}
+
+impl Response {
+    pub fn new(result: String, dtype: DType, shape: Vec<u32>) -> Response {
+        Response {
+            result,
+            dtype,
+            shape,
+        }
+    }
 }
 
 #[cfg(test)]
