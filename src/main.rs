@@ -2,6 +2,7 @@ use tokio::signal;
 
 mod app;
 mod models;
+mod validated_json;
 
 #[tokio::main]
 async fn main() {

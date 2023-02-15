@@ -6,14 +6,21 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+async-trait = "0.1"
 axum = "0.6"
 hyper = { version = "0.14", features = ["full"] }
+mime = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "*"
+strum = { version = "0.24", features = ["derive"] }
+strum_macros = "0.24"
+thiserror = "1.0"
 tokio = { version = "1.24", features = ["full"] }
 tower = "0.4"
+tower-http = { version = "0.3", features = ["trace", "validate-request"] }
 url = { version = "2", features = ["serde"] }
 validator = { version = "0.16", features = ["derive"] }
 
 [dev-dependencies]
+regex = "1"
 serde_test = "1.0"
