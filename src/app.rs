@@ -3,12 +3,13 @@ use crate::validated_json::ValidatedJson;
 
 use axum::{
     body::Body,
+    headers::authorization::{Authorization, Basic},
     http::header,
     http::Request,
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::{get, post},
-    Router,
+    Router, TypedHeader,
 };
 
 use tower::ServiceBuilder;
@@ -70,53 +71,79 @@ async fn schema() -> &'static str {
 }
 
 async fn count(
+    TypedHeader(auth): TypedHeader<Authorization<Basic>>,
     ValidatedJson(request_data): ValidatedJson<models::RequestData>,
 ) -> models::Response {
-    models::Response::new(
-        request_data.source.to_string(),
-        models::DType::Int32,
-        vec![],
-    )
+    let message = format!(
+        "url {} username {} password {}",
+        request_data.source,
+        auth.username(),
+        auth.password()
+    );
+    models::Response::new(message, models::DType::Int32, vec![])
 }
 
-async fn max(ValidatedJson(request_data): ValidatedJson<models::RequestData>) -> models::Response {
-    models::Response::new(
-        request_data.source.to_string(),
-        models::DType::Int32,
-        vec![],
-    )
+async fn max(
+    TypedHeader(auth): TypedHeader<Authorization<Basic>>,
+    ValidatedJson(request_data): ValidatedJson<models::RequestData>,
+) -> models::Response {
+    let message = format!(
+        "url {} username {} password {}",
+        request_data.source,
+        auth.username(),
+        auth.password()
+    );
+    models::Response::new(message, models::DType::Int32, vec![])
 }
 
-async fn mean(ValidatedJson(request_data): ValidatedJson<models::RequestData>) -> models::Response {
-    models::Response::new(
-        request_data.source.to_string(),
-        models::DType::Int32,
-        vec![],
-    )
+async fn mean(
+    TypedHeader(auth): TypedHeader<Authorization<Basic>>,
+    ValidatedJson(request_data): ValidatedJson<models::RequestData>,
+) -> models::Response {
+    let message = format!(
+        "url {} username {} password {}",
+        request_data.source,
+        auth.username(),
+        auth.password()
+    );
+    models::Response::new(message, models::DType::Int32, vec![])
 }
 
-async fn min(ValidatedJson(request_data): ValidatedJson<models::RequestData>) -> models::Response {
-    models::Response::new(
-        request_data.source.to_string(),
-        models::DType::Int32,
-        vec![],
-    )
+async fn min(
+    TypedHeader(auth): TypedHeader<Authorization<Basic>>,
+    ValidatedJson(request_data): ValidatedJson<models::RequestData>,
+) -> models::Response {
+    let message = format!(
+        "url {} username {} password {}",
+        request_data.source,
+        auth.username(),
+        auth.password()
+    );
+    models::Response::new(message, models::DType::Int32, vec![])
 }
 
 async fn select(
+    TypedHeader(auth): TypedHeader<Authorization<Basic>>,
     ValidatedJson(request_data): ValidatedJson<models::RequestData>,
 ) -> models::Response {
-    models::Response::new(
-        request_data.source.to_string(),
-        models::DType::Int32,
-        vec![],
-    )
+    let message = format!(
+        "url {} username {} password {}",
+        request_data.source,
+        auth.username(),
+        auth.password()
+    );
+    models::Response::new(message, models::DType::Int32, vec![])
 }
 
-async fn sum(ValidatedJson(request_data): ValidatedJson<models::RequestData>) -> models::Response {
-    models::Response::new(
-        request_data.source.to_string(),
-        models::DType::Int32,
-        vec![],
-    )
+async fn sum(
+    TypedHeader(auth): TypedHeader<Authorization<Basic>>,
+    ValidatedJson(request_data): ValidatedJson<models::RequestData>,
+) -> models::Response {
+    let message = format!(
+        "url {} username {} password {}",
+        request_data.source,
+        auth.username(),
+        auth.password()
+    );
+    models::Response::new(message, models::DType::Int32, vec![])
 }
