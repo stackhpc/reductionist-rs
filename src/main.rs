@@ -2,6 +2,7 @@ use tokio::signal;
 
 mod app;
 mod models;
+mod s3_client;
 mod validated_json;
 
 #[tokio::main]

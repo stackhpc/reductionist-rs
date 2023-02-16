@@ -7,6 +7,10 @@ edition = "2021"
 
 [dependencies]
 async-trait = "0.1"
+aws-config = "0.54"
+aws-credential-types = { version = "0.54", features = ["hardcoded-credentials"] }
+aws-sdk-s3 = "0.24"
+aws-types = "0.54"
 axum = { version = "0.6", features = ["headers"] }
 hyper = { version = "0.14", features = ["full"] }
 mime = "0.3"

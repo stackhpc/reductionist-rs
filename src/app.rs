@@ -1,4 +1,5 @@
 use crate::models;
+use crate::s3_client::S3Client;
 use crate::validated_json::ValidatedJson;
 
 use axum::{
@@ -74,12 +75,11 @@ async fn count(
     TypedHeader(auth): TypedHeader<Authorization<Basic>>,
     ValidatedJson(request_data): ValidatedJson<models::RequestData>,
 ) -> models::Response {
-    let message = format!(
-        "url {} username {} password {}",
-        request_data.source,
-        auth.username(),
-        auth.password()
-    );
+    let client = S3Client::new(&request_data.source, auth.username(), auth.password()).await;
+    let data = client
+        .download_object(&request_data.bucket, &request_data.object, None)
+        .await;
+    let message = format!("{:?}", data);
     models::Response::new(message, models::DType::Int32, vec![])
 }
 
