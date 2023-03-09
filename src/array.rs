@@ -14,7 +14,6 @@ use ndarray::prelude::*;
 /// # Arguments
 ///
 /// * `data`: Bytes containing data to convert.
-#[allow(dead_code)]
 fn from_bytes<T: zerocopy::FromBytes>(data: &Bytes) -> anyhow::Result<&[T]> {
     let layout = zerocopy::LayoutVerified::<_, [T]>::new_slice(&data[..]).ok_or(anyhow!(
         "Failed to convert from bytes to {}",
@@ -29,7 +28,6 @@ fn from_bytes<T: zerocopy::FromBytes>(data: &Bytes) -> anyhow::Result<&[T]> {
 ///
 /// * `size`: Number of elements in the array
 /// * `request_data`: RequestData object for the request
-#[allow(dead_code)]
 fn get_shape(
     size: usize,
     request_data: &models::RequestData,
@@ -52,7 +50,6 @@ fn get_shape(
 ///
 /// * `shape`: The shape of the array
 /// * `data`: A slice of type `&[T]` containing the data to be consumed by the array view.
-#[allow(dead_code)]
 fn build_array_from_shape<T>(
     shape: ndarray::Shape<Dim<ndarray::IxDynImpl>>,
     data: &[T],
@@ -61,7 +58,6 @@ fn build_array_from_shape<T>(
 }
 
 /// Returns an optional [ndarray] SliceInfo object corresponding to the selection.
-#[allow(dead_code)]
 pub fn build_slice_info<T>(
     selection: &Option<Vec<models::Slice>>,
     shape: &[usize],
@@ -104,7 +100,6 @@ pub fn build_slice_info<T>(
 /// * `data`: Bytes containing data for the array. Must be at least as aligned as an instance of
 ///   `T`.
 /// * `request_data`: RequestData object for the request
-#[allow(dead_code)]
 pub fn build_array<'a, T>(
     request_data: &'a models::RequestData,
     data: &'a Bytes,

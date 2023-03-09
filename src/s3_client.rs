@@ -86,7 +86,6 @@ impl S3Client {
 ///
 /// * `offset`: Optional offset of data in bytes
 /// * `size`: Optional size of data in bytes
-#[allow(dead_code)]
 pub fn get_range(offset: Option<usize>, size: Option<usize>) -> Option<String> {
     match (offset, size) {
         (offset, Some(size)) => {
