@@ -1,0 +1,4 @@
+aioboto3
+botocore
+numpy
+s3fs

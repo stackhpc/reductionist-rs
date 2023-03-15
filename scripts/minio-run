@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+# REPO_ROOT="$(dirname $(dirname $(realpath ${BASH_SOURCE[0]:-${(%):-%x}})))" #Doesn't work on MacOS / zsh shell
+# REPO_ROOT="$(pwd)" #Use this instead then upload data to minio manually if needed
+# echo "Data directory for minio instance: $REPO_ROOT/testdata"
+
+# exec docker run \
+#   --rm \
+#   -p 9000:9000 \
+#   -p 9001:9001 \
+#   -v "$REPO_ROOT/testdata:/data" \
+#   minio/minio \
+#     server \
+#     /data \
+#     --console-address ":9001"
+
+# Use anon storage volume so that test data is removed when container is stopped
+exec docker run --rm -p 9000:9000 -p 9001:9001 -v :/data minio/minio server data --console-address ":9001"
