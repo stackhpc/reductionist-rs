@@ -14,6 +14,7 @@ use axum::{
 };
 
 use tower::ServiceBuilder;
+use tower_http::normalize_path::NormalizePathLayer;
 use tower_http::trace::TraceLayer;
 use tower_http::validate_request::ValidateRequestHeaderLayer;
 
@@ -65,6 +66,7 @@ pub fn router() -> Router {
     Router::new()
         .route("/.well-known/s3-active-storage-schema", get(schema))
         .nest("/v1", v1())
+        .layer(NormalizePathLayer::trim_trailing_slash())
 }
 
 async fn schema() -> &'static str {
