@@ -47,6 +47,7 @@ impl S3Client {
         key: &str,
         range: Option<String>,
     ) -> Bytes {
+        // TODO: Provide a streaming response.
         let response = self
             .client
             .get_object()
@@ -56,9 +57,25 @@ impl S3Client {
             .send()
             .await
             .unwrap();
+        let content_length = response.content_length();
+        // The data returned by the S3 client does not have any alignment guarantees. In order to
+        // reinterpret the data as an array of numbers with a higher alignment than 1, we need to
+        // return the data in Bytes object in which the underlying data has a higher alignment.
+        // For now we're hard-coding an alignment of 8 bytes, although this should depend on the
+        // data type, and potentially whether there are any SIMD requirements.
+        // FIXME: The current method is rather inefficient, involving copying the data at least
+        // twice. This is functional, but should be revisited.
+
+        // Read all data into memory as an AggregatedBytes.
         let data = response.body.collect().await;
-        // TODO: Provide a streaming response.
-        data.unwrap().into_bytes()
+        // Create an 8-byte aligned Vec<u8>.
+        let mut buf = maligned::align_first::<u8, maligned::A8>(content_length as usize);
+        // Copy the data into an unaligned Vec<u8>.
+        let mut vec = data.unwrap().to_vec();
+        // Copy the data into the aligned Vec<u8>.
+        buf.append(&mut vec);
+        // Return as Bytes.
+        buf.into()
     }
 }
 

@@ -1,4 +1,3 @@
-aioboto3
-botocore
 numpy
+requests
 s3fs
