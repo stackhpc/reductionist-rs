@@ -60,12 +60,22 @@ pub struct RequestData {
     pub offset: Option<u32>,
     #[validate(range(min = 1, message = "size must be greater than 0"))]
     pub size: Option<u32>,
-    #[validate(length(min = 1, message = "shape length must be greater than 0"))]
+    #[validate(
+        length(min = 1, message = "shape length must be greater than 0"),
+        custom = "validate_shape"
+    )]
     pub shape: Option<Vec<u32>>,
     pub order: Option<Order>,
     #[validate]
     #[validate(length(min = 1, message = "selection length must be greater than 0"))]
     pub selection: Option<Vec<Slice>>,
+}
+
+fn validate_shape(shape: &[u32]) -> Result<(), ValidationError> {
+    if shape.iter().any(|index| *index == 0) {
+        return Err(ValidationError::new("shape indices must be greater than 0"));
+    }
+    Ok(())
 }
 
 fn validate_slice(slice: &Slice) -> Result<(), ValidationError> {
@@ -379,6 +389,14 @@ mod tests {
     fn test_invalid_shape() {
         let mut request_data = get_test_request_data();
         request_data.shape = Some(vec![]);
+        request_data.validate().unwrap()
+    }
+
+    #[test]
+    #[should_panic(expected = "shape indices must be greater than 0")]
+    fn test_invalid_shape_indices() {
+        let mut request_data = get_test_request_data();
+        request_data.shape = Some(vec![0]);
         request_data.validate().unwrap()
     }
 
