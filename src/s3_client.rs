@@ -79,6 +79,29 @@ impl S3Client {
     }
 }
 
+/// Return an optional byte range string based on the offset and size.
+///
+/// The returned string is compatible with the HTTP Range header.
+///
+/// # Arguments
+///
+/// * `offset`: Optional offset of data in bytes
+/// * `size`: Optional size of data in bytes
+#[allow(dead_code)]
+pub fn get_range(offset: Option<usize>, size: Option<usize>) -> Option<String> {
+    match (offset, size) {
+        (offset, Some(size)) => {
+            // Default offset to 0.
+            let offset = offset.unwrap_or(0);
+            // Range-end is inclusive.
+            let end = offset + size - 1;
+            Some(format!("bytes={}-{}", offset, end))
+        }
+        (Some(offset), None) => Some(format!("bytes={}-", offset)),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -88,5 +111,25 @@ mod tests {
     async fn new() {
         let url = Url::parse("http://example.com").unwrap();
         S3Client::new(&url, "user", "password").await;
+    }
+
+    #[test]
+    fn get_range_none() {
+        assert_eq!(None, get_range(None, None));
+    }
+
+    #[test]
+    fn get_range_both() {
+        assert_eq!(Some("bytes=1-2".to_string()), get_range(Some(1), Some(2)));
+    }
+
+    #[test]
+    fn get_range_offset() {
+        assert_eq!(Some("bytes=1-".to_string()), get_range(Some(1), None));
+    }
+
+    #[test]
+    fn get_range_size() {
+        assert_eq!(Some("bytes=0-1".to_string()), get_range(None, Some(2)));
     }
 }
