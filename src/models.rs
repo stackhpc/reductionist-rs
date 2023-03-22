@@ -36,14 +36,14 @@ pub enum Order {
 
 // NOTE: In serde, structs can be deserialised from sequences or maps. This allows us to support
 // the [<start>, <end>, <stride>] API, with the convenience of named fields.
-#[derive(Debug, Deserialize, PartialEq, Serialize, Validate)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize, Validate)]
 #[serde(deny_unknown_fields)]
 #[validate(schema(function = "validate_slice"))]
 pub struct Slice {
-    pub start: u32,
-    pub end: u32,
+    pub start: usize,
+    pub end: usize,
     #[validate(range(min = 1, message = "stride must be greater than 0"))]
-    pub stride: u32,
+    pub stride: usize,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Validate)]
@@ -57,21 +57,21 @@ pub struct RequestData {
     #[validate(length(min = 1, message = "object must not be empty"))]
     pub object: String,
     pub dtype: DType,
-    pub offset: Option<u32>,
+    pub offset: Option<usize>,
     #[validate(range(min = 1, message = "size must be greater than 0"))]
-    pub size: Option<u32>,
+    pub size: Option<usize>,
     #[validate(
         length(min = 1, message = "shape length must be greater than 0"),
         custom = "validate_shape"
     )]
-    pub shape: Option<Vec<u32>>,
+    pub shape: Option<Vec<usize>>,
     pub order: Option<Order>,
     #[validate]
     #[validate(length(min = 1, message = "selection length must be greater than 0"))]
     pub selection: Option<Vec<Slice>>,
 }
 
-fn validate_shape(shape: &[u32]) -> Result<(), ValidationError> {
+fn validate_shape(shape: &[usize]) -> Result<(), ValidationError> {
     if shape.iter().any(|index| *index == 0) {
         return Err(ValidationError::new("shape indices must be greater than 0"));
     }
@@ -92,7 +92,7 @@ fn validate_request_data(request_data: &RequestData) -> Result<(), ValidationErr
     // TODO: More validation of shape & selection vs. size
     // TODO: More validation that selection fits in shape
     if let Some(size) = &request_data.size {
-        if (*size as usize) % request_data.dtype.size_of() != 0 {
+        if size % request_data.dtype.size_of() != 0 {
             return Err(ValidationError::new(
                 "Size must be a multiple of dtype size in bytes",
             ));
@@ -120,11 +120,11 @@ fn validate_request_data(request_data: &RequestData) -> Result<(), ValidationErr
 pub struct Response {
     pub result: String,
     pub dtype: DType,
-    pub shape: Vec<u32>,
+    pub shape: Vec<usize>,
 }
 
 impl Response {
-    pub fn new(result: String, dtype: DType, shape: Vec<u32>) -> Response {
+    pub fn new(result: String, dtype: DType, shape: Vec<usize>) -> Response {
         Response {
             result,
             dtype,
