@@ -8,6 +8,7 @@ rust-version = "1.62.1"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = "1.0"
 async-trait = "0.1"
 aws-config = "0.54"
 aws-credential-types = { version = "0.54", features = ["hardcoded-credentials"] }
@@ -17,6 +18,7 @@ axum = { version = "0.6", features = ["headers"] }
 hyper = { version = "0.14", features = ["full"] }
 maligned = "0.2.1"
 mime = "0.3"
+ndarray = "0.15"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "*"
 strum = { version = "0.24", features = ["derive"] }
@@ -27,6 +29,7 @@ tower = "0.4"
 tower-http = { version = "0.3", features = ["normalize-path", "trace", "validate-request"] }
 url = { version = "2", features = ["serde"] }
 validator = { version = "0.16", features = ["derive"] }
+zerocopy = { version = "0.6.1", features = ["alloc", "simd"] }
 
 [dev-dependencies]
 regex = "1"
