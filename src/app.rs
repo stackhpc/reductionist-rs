@@ -1,9 +1,11 @@
 use crate::models;
-use crate::s3_client::S3Client;
+use crate::operation;
+use crate::operations;
+use crate::s3_client;
 use crate::validated_json::ValidatedJson;
 
 use axum::{
-    body::Body,
+    body::{Body, Bytes},
     headers::authorization::{Authorization, Basic},
     http::header,
     http::Request,
@@ -32,7 +34,7 @@ impl IntoResponse for models::Response {
                 (&HEADER_DTYPE, self.dtype.to_string().to_lowercase()),
                 (&HEADER_SHAPE, serde_json::to_string(&self.shape).unwrap()),
             ],
-            self.result,
+            self.body,
         )
             .into_response()
     }
@@ -41,12 +43,12 @@ impl IntoResponse for models::Response {
 pub fn router() -> Router {
     fn v1() -> Router {
         Router::new()
-            .route("/count", post(count))
-            .route("/max", post(max))
-            .route("/mean", post(mean))
-            .route("/min", post(min))
-            .route("/select", post(select))
-            .route("/sum", post(sum))
+            .route("/count", post(operation_handler::<operations::Count>))
+            .route("/max", post(operation_handler::<operations::Max>))
+            .route("/mean", post(operation_handler::<operations::Mean>))
+            .route("/min", post(operation_handler::<operations::Min>))
+            .route("/select", post(operation_handler::<operations::Select>))
+            .route("/sum", post(operation_handler::<operations::Sum>))
             .layer(
                 ServiceBuilder::new()
                     .layer(TraceLayer::new_for_http())
@@ -73,79 +75,26 @@ async fn schema() -> &'static str {
     "Hello, world!"
 }
 
-async fn count(
-    TypedHeader(auth): TypedHeader<Authorization<Basic>>,
-    ValidatedJson(request_data): ValidatedJson<models::RequestData>,
-) -> models::Response {
-    let client = S3Client::new(&request_data.source, auth.username(), auth.password()).await;
-    let data = client
-        .download_object(&request_data.bucket, &request_data.object, None)
-        .await;
-    let message = format!("{:?}", data);
-    models::Response::new(message, models::DType::Int32, vec![])
+async fn download_object(auth: &Authorization<Basic>, request_data: &models::RequestData) -> Bytes {
+    let range = s3_client::get_range(request_data.offset, request_data.size);
+    s3_client::S3Client::new(&request_data.source, auth.username(), auth.password())
+        .await
+        .download_object(&request_data.bucket, &request_data.object, range)
+        .await
 }
 
-async fn max(
+/// Handler for operations
+///
+/// Returns a `Result` with `models::Response` on success and `AppError` on failure.
+///
+/// # Arguments
+///
+/// * `auth`: Basic authorization header
+/// * `request_data`: RequestData object for the request
+async fn operation_handler<T: operation::Operation>(
     TypedHeader(auth): TypedHeader<Authorization<Basic>>,
     ValidatedJson(request_data): ValidatedJson<models::RequestData>,
 ) -> models::Response {
-    let message = format!(
-        "url {} username {} password {}",
-        request_data.source,
-        auth.username(),
-        auth.password()
-    );
-    models::Response::new(message, models::DType::Int32, vec![])
-}
-
-async fn mean(
-    TypedHeader(auth): TypedHeader<Authorization<Basic>>,
-    ValidatedJson(request_data): ValidatedJson<models::RequestData>,
-) -> models::Response {
-    let message = format!(
-        "url {} username {} password {}",
-        request_data.source,
-        auth.username(),
-        auth.password()
-    );
-    models::Response::new(message, models::DType::Int32, vec![])
-}
-
-async fn min(
-    TypedHeader(auth): TypedHeader<Authorization<Basic>>,
-    ValidatedJson(request_data): ValidatedJson<models::RequestData>,
-) -> models::Response {
-    let message = format!(
-        "url {} username {} password {}",
-        request_data.source,
-        auth.username(),
-        auth.password()
-    );
-    models::Response::new(message, models::DType::Int32, vec![])
-}
-
-async fn select(
-    TypedHeader(auth): TypedHeader<Authorization<Basic>>,
-    ValidatedJson(request_data): ValidatedJson<models::RequestData>,
-) -> models::Response {
-    let message = format!(
-        "url {} username {} password {}",
-        request_data.source,
-        auth.username(),
-        auth.password()
-    );
-    models::Response::new(message, models::DType::Int32, vec![])
-}
-
-async fn sum(
-    TypedHeader(auth): TypedHeader<Authorization<Basic>>,
-    ValidatedJson(request_data): ValidatedJson<models::RequestData>,
-) -> models::Response {
-    let message = format!(
-        "url {} username {} password {}",
-        request_data.source,
-        auth.username(),
-        auth.password()
-    );
-    models::Response::new(message, models::DType::Int32, vec![])
+    let data = download_object(&auth, &request_data).await;
+    T::execute(&request_data, &data)
 }

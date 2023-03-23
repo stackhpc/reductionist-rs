@@ -39,6 +39,21 @@ pub enum JsonError {
     AxumJsonRejection(#[from] JsonRejection),
 }
 
+/// Return a string describing the error and any sources.
+///
+/// # Arguments
+///
+/// * `err`: The error to describe
+fn format_error<E: 'static + std::error::Error + Send + Sync>(err: E) -> String {
+    let mut message = format!("{}", err);
+    let mut current = err.source();
+    while let Some(source) = current {
+        message += &format!("\nCaused by:\n  {}", source);
+        current = source.source();
+    }
+    message
+}
+
 impl IntoResponse for JsonError {
     fn into_response(self) -> Response {
         match self {
@@ -46,7 +61,10 @@ impl IntoResponse for JsonError {
                 let message = format!("Input validation error: [{}]", self).replace('\n', ", ");
                 (StatusCode::BAD_REQUEST, message)
             }
-            JsonError::AxumJsonRejection(_) => (StatusCode::BAD_REQUEST, self.to_string()),
+            JsonError::AxumJsonRejection(_) => {
+                let message = format_error(self);
+                (StatusCode::BAD_REQUEST, message)
+            }
         }
         .into_response()
     }
@@ -125,7 +143,8 @@ mod tests {
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
         let body = body_string(response).await;
-        assert_eq!(&body[..], "Failed to parse the request body as JSON");
+        let re = Regex::new(r"Failed to parse the request body as JSON").unwrap();
+        assert!(re.is_match(&body[..]))
     }
 
     #[tokio::test]
@@ -136,10 +155,8 @@ mod tests {
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
         let body = body_string(response).await;
-        assert_eq!(
-            &body[..],
-            "Failed to deserialize the JSON body into the target type"
-        );
+        let re = Regex::new(r".*foo: invalid type: integer `123`.*").unwrap();
+        assert!(re.is_match(&body[..]))
     }
 
     #[tokio::test]

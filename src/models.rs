@@ -1,3 +1,4 @@
+use axum::body::Bytes;
 use serde::{Deserialize, Serialize};
 use strum_macros::Display;
 use url::Url;
@@ -36,14 +37,22 @@ pub enum Order {
 
 // NOTE: In serde, structs can be deserialised from sequences or maps. This allows us to support
 // the [<start>, <end>, <stride>] API, with the convenience of named fields.
-#[derive(Debug, Deserialize, PartialEq, Serialize, Validate)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize, Validate)]
 #[serde(deny_unknown_fields)]
 #[validate(schema(function = "validate_slice"))]
 pub struct Slice {
-    pub start: u32,
-    pub end: u32,
+    pub start: usize,
+    pub end: usize,
     #[validate(range(min = 1, message = "stride must be greater than 0"))]
-    pub stride: u32,
+    pub stride: usize,
+}
+
+impl Slice {
+    /// Return a new Slice object.
+    #[allow(dead_code)]
+    pub fn new(start: usize, end: usize, stride: usize) -> Self {
+        Slice { start, end, stride }
+    }
 }
 
 #[derive(Debug, Deserialize, PartialEq, Validate)]
@@ -57,15 +66,25 @@ pub struct RequestData {
     #[validate(length(min = 1, message = "object must not be empty"))]
     pub object: String,
     pub dtype: DType,
-    pub offset: Option<u32>,
+    pub offset: Option<usize>,
     #[validate(range(min = 1, message = "size must be greater than 0"))]
-    pub size: Option<u32>,
-    #[validate(length(min = 1, message = "shape length must be greater than 0"))]
-    pub shape: Option<Vec<u32>>,
+    pub size: Option<usize>,
+    #[validate(
+        length(min = 1, message = "shape length must be greater than 0"),
+        custom = "validate_shape"
+    )]
+    pub shape: Option<Vec<usize>>,
     pub order: Option<Order>,
     #[validate]
     #[validate(length(min = 1, message = "selection length must be greater than 0"))]
     pub selection: Option<Vec<Slice>>,
+}
+
+fn validate_shape(shape: &[usize]) -> Result<(), ValidationError> {
+    if shape.iter().any(|index| *index == 0) {
+        return Err(ValidationError::new("shape indices must be greater than 0"));
+    }
+    Ok(())
 }
 
 fn validate_slice(slice: &Slice) -> Result<(), ValidationError> {
@@ -82,7 +101,7 @@ fn validate_request_data(request_data: &RequestData) -> Result<(), ValidationErr
     // TODO: More validation of shape & selection vs. size
     // TODO: More validation that selection fits in shape
     if let Some(size) = &request_data.size {
-        if (*size as usize) % request_data.dtype.size_of() != 0 {
+        if size % request_data.dtype.size_of() != 0 {
             return Err(ValidationError::new(
                 "Size must be a multiple of dtype size in bytes",
             ));
@@ -108,18 +127,14 @@ fn validate_request_data(request_data: &RequestData) -> Result<(), ValidationErr
 
 /// Response containing the result of a computation and associated metadata.
 pub struct Response {
-    pub result: String,
+    pub body: Bytes,
     pub dtype: DType,
-    pub shape: Vec<u32>,
+    pub shape: Vec<usize>,
 }
 
 impl Response {
-    pub fn new(result: String, dtype: DType, shape: Vec<u32>) -> Response {
-        Response {
-            result,
-            dtype,
-            shape,
-        }
+    pub fn new(body: Bytes, dtype: DType, shape: Vec<usize>) -> Response {
+        Response { body, dtype, shape }
     }
 }
 
@@ -152,18 +167,7 @@ mod tests {
             size: Some(8),
             shape: Some(vec![1, 2]),
             order: Some(Order::C),
-            selection: Some(vec![
-                Slice {
-                    start: 1,
-                    end: 2,
-                    stride: 3,
-                },
-                Slice {
-                    start: 4,
-                    end: 5,
-                    stride: 6,
-                },
-            ]),
+            selection: Some(vec![Slice::new(1, 2, 3), Slice::new(4, 5, 6)]),
         }
     }
 
@@ -383,6 +387,14 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "shape indices must be greater than 0")]
+    fn test_invalid_shape_indices() {
+        let mut request_data = get_test_request_data();
+        request_data.shape = Some(vec![0]);
+        request_data.validate().unwrap()
+    }
+
+    #[test]
     fn test_invalid_order() {
         assert_de_tokens_error::<RequestData>(
             &[
@@ -412,11 +424,7 @@ mod tests {
     #[should_panic(expected = "stride must be greater than 0")]
     fn test_invalid_selection2() {
         let mut request_data = get_test_request_data();
-        request_data.selection = Some(vec![Slice {
-            start: 1,
-            end: 2,
-            stride: 0,
-        }]);
+        request_data.selection = Some(vec![Slice::new(1, 2, 0)]);
         request_data.validate().unwrap()
     }
 
@@ -424,11 +432,7 @@ mod tests {
     #[should_panic(expected = "Selection end must be greater than start")]
     fn test_invalid_selection3() {
         let mut request_data = get_test_request_data();
-        request_data.selection = Some(vec![Slice {
-            start: 1,
-            end: 1,
-            stride: 1,
-        }]);
+        request_data.selection = Some(vec![Slice::new(1, 1, 1)]);
         request_data.validate().unwrap()
     }
 
@@ -445,11 +449,7 @@ mod tests {
     fn test_shape_selection_mismatch() {
         let mut request_data = get_test_request_data();
         request_data.shape = Some(vec![1, 2]);
-        request_data.selection = Some(vec![Slice {
-            start: 1,
-            end: 2,
-            stride: 1,
-        }]);
+        request_data.selection = Some(vec![Slice::new(1, 2, 1)]);
         request_data.validate().unwrap()
     }
 
@@ -457,11 +457,7 @@ mod tests {
     #[should_panic(expected = "Selection requires shape to be specified")]
     fn test_selection_without_shape() {
         let mut request_data = get_test_request_data();
-        request_data.selection = Some(vec![Slice {
-            start: 1,
-            end: 2,
-            stride: 1,
-        }]);
+        request_data.selection = Some(vec![Slice::new(1, 2, 1)]);
         request_data.validate().unwrap()
     }
     #[test]

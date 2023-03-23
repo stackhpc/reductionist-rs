@@ -1,7 +1,10 @@
 use tokio::signal;
 
 mod app;
+mod array;
 mod models;
+mod operation;
+mod operations;
 mod s3_client;
 mod validated_json;
 
