@@ -32,7 +32,7 @@ impl IntoResponse for models::Response {
                 (&HEADER_DTYPE, self.dtype.to_string().to_lowercase()),
                 (&HEADER_SHAPE, serde_json::to_string(&self.shape).unwrap()),
             ],
-            self.result,
+            self.body,
         )
             .into_response()
     }
@@ -82,7 +82,7 @@ async fn count(
         .download_object(&request_data.bucket, &request_data.object, None)
         .await;
     let message = format!("{:?}", data);
-    models::Response::new(message, models::DType::Int32, vec![])
+    models::Response::new(message.into(), models::DType::Int32, vec![])
 }
 
 async fn max(
@@ -95,7 +95,7 @@ async fn max(
         auth.username(),
         auth.password()
     );
-    models::Response::new(message, models::DType::Int32, vec![])
+    models::Response::new(message.into(), models::DType::Int32, vec![])
 }
 
 async fn mean(
@@ -108,7 +108,7 @@ async fn mean(
         auth.username(),
         auth.password()
     );
-    models::Response::new(message, models::DType::Int32, vec![])
+    models::Response::new(message.into(), models::DType::Int32, vec![])
 }
 
 async fn min(
@@ -121,7 +121,7 @@ async fn min(
         auth.username(),
         auth.password()
     );
-    models::Response::new(message, models::DType::Int32, vec![])
+    models::Response::new(message.into(), models::DType::Int32, vec![])
 }
 
 async fn select(
@@ -134,7 +134,7 @@ async fn select(
         auth.username(),
         auth.password()
     );
-    models::Response::new(message, models::DType::Int32, vec![])
+    models::Response::new(message.into(), models::DType::Int32, vec![])
 }
 
 async fn sum(
@@ -147,5 +147,5 @@ async fn sum(
         auth.username(),
         auth.password()
     );
-    models::Response::new(message, models::DType::Int32, vec![])
+    models::Response::new(message.into(), models::DType::Int32, vec![])
 }

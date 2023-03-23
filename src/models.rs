@@ -1,3 +1,4 @@
+use axum::body::Bytes;
 use serde::{Deserialize, Serialize};
 use strum_macros::Display;
 use url::Url;
@@ -126,18 +127,14 @@ fn validate_request_data(request_data: &RequestData) -> Result<(), ValidationErr
 
 /// Response containing the result of a computation and associated metadata.
 pub struct Response {
-    pub result: String,
+    pub body: Bytes,
     pub dtype: DType,
     pub shape: Vec<usize>,
 }
 
 impl Response {
-    pub fn new(result: String, dtype: DType, shape: Vec<usize>) -> Response {
-        Response {
-            result,
-            dtype,
-            shape,
-        }
+    pub fn new(body: Bytes, dtype: DType, shape: Vec<usize>) -> Response {
+        Response { body, dtype, shape }
     }
 }
 

@@ -116,8 +116,8 @@ mod tests {
             _data: &Bytes,
         ) -> models::Response {
             // Write the name of the type parameter to the body.
-            let body = std::any::type_name::<T>().to_string();
-            models::Response::new(body, request_data.dtype, vec![1, 2])
+            let body = std::any::type_name::<T>();
+            models::Response::new(body.into(), request_data.dtype, vec![1, 2])
         }
     }
 
@@ -137,7 +137,7 @@ mod tests {
         let data = [1, 2, 3, 4];
         let bytes = Bytes::copy_from_slice(&data);
         let response = TestNumOp::execute(&request_data, &bytes);
-        assert_eq!("i64".to_string(), response.result);
+        assert_eq!("i64", response.body);
         assert_eq!(models::DType::Int64, response.dtype);
         assert_eq!(vec![1, 2], response.shape);
     }
