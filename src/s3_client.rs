@@ -1,6 +1,5 @@
 /// This module provides a simplified S3 client that supports downloading objects.
 /// It attempts to hide the complexities of working with the AWS SDK for S3.
-use aws_config::{self, meta::region::RegionProviderChain};
 use aws_credential_types::Credentials;
 use aws_sdk_s3::Client;
 use aws_types::region::Region;
@@ -23,10 +22,10 @@ impl S3Client {
     /// * `password`: Object storage account password
     pub async fn new(url: &Url, username: &str, password: &str) -> Self {
         let credentials = Credentials::from_keys(username, password, None);
-        let region = RegionProviderChain::default_provider().or_else(Region::new("us-east-1"));
-        let config = aws_config::from_env().region(region).load().await;
-        let s3_config = aws_sdk_s3::config::Builder::from(&config)
+        let region = Region::new("us-east-1");
+        let s3_config = aws_sdk_s3::Config::builder() //&config)
             .credentials_provider(credentials)
+            .region(Some(region))
             .endpoint_url(url.to_string())
             .force_path_style(true)
             .build();
