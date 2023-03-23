@@ -46,6 +46,14 @@ pub struct Slice {
     pub stride: usize,
 }
 
+impl Slice {
+    /// Return a new Slice object.
+    #[allow(dead_code)]
+    pub fn new(start: usize, end: usize, stride: usize) -> Self {
+        Slice { start, end, stride }
+    }
+}
+
 #[derive(Debug, Deserialize, PartialEq, Validate)]
 #[serde(deny_unknown_fields)]
 #[validate(schema(function = "validate_request_data"))]
@@ -162,18 +170,7 @@ mod tests {
             size: Some(8),
             shape: Some(vec![1, 2]),
             order: Some(Order::C),
-            selection: Some(vec![
-                Slice {
-                    start: 1,
-                    end: 2,
-                    stride: 3,
-                },
-                Slice {
-                    start: 4,
-                    end: 5,
-                    stride: 6,
-                },
-            ]),
+            selection: Some(vec![Slice::new(1, 2, 3), Slice::new(4, 5, 6)]),
         }
     }
 
@@ -430,11 +427,7 @@ mod tests {
     #[should_panic(expected = "stride must be greater than 0")]
     fn test_invalid_selection2() {
         let mut request_data = get_test_request_data();
-        request_data.selection = Some(vec![Slice {
-            start: 1,
-            end: 2,
-            stride: 0,
-        }]);
+        request_data.selection = Some(vec![Slice::new(1, 2, 0)]);
         request_data.validate().unwrap()
     }
 
@@ -442,11 +435,7 @@ mod tests {
     #[should_panic(expected = "Selection end must be greater than start")]
     fn test_invalid_selection3() {
         let mut request_data = get_test_request_data();
-        request_data.selection = Some(vec![Slice {
-            start: 1,
-            end: 1,
-            stride: 1,
-        }]);
+        request_data.selection = Some(vec![Slice::new(1, 1, 1)]);
         request_data.validate().unwrap()
     }
 
@@ -463,11 +452,7 @@ mod tests {
     fn test_shape_selection_mismatch() {
         let mut request_data = get_test_request_data();
         request_data.shape = Some(vec![1, 2]);
-        request_data.selection = Some(vec![Slice {
-            start: 1,
-            end: 2,
-            stride: 1,
-        }]);
+        request_data.selection = Some(vec![Slice::new(1, 2, 1)]);
         request_data.validate().unwrap()
     }
 
@@ -475,11 +460,7 @@ mod tests {
     #[should_panic(expected = "Selection requires shape to be specified")]
     fn test_selection_without_shape() {
         let mut request_data = get_test_request_data();
-        request_data.selection = Some(vec![Slice {
-            start: 1,
-            end: 2,
-            stride: 1,
-        }]);
+        request_data.selection = Some(vec![Slice::new(1, 2, 1)]);
         request_data.validate().unwrap()
     }
     #[test]
