@@ -203,10 +203,6 @@ The proxy adds two custom headers `x-activestorage-dtype` and `x-activestrorage-
 
 ---
 
-## A note on row-major ('C') vs column-major ('F') ordering
-
-Since we use `ndarray` to implement all array options, it is simplest to perform all internal operations using C ordering. To accomplish this, if the incoming requests specifies that the source data is Fortran-ordered (via `order = 'F'` in the request body) then the data bytes are first read from the S3 source into an array of the correct shape before transposing this array to convert from 'F' to 'C' ordering. Once the data reduction is complete, the result is then converted back to raw bytes using the same ordering convention as specified in the incoming request. This ensures that all internal numpy operations are performed efficiently while also returning the raw response bytes in the order requested.
-
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for information about contributing to S3 active storage.
