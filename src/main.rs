@@ -2,6 +2,7 @@ use tokio::signal;
 
 mod app;
 mod array;
+mod error;
 mod models;
 mod operation;
 mod operations;

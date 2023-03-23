@@ -1,5 +1,8 @@
-/// This module provides a simplified S3 client that supports downloading objects.
-/// It attempts to hide the complexities of working with the AWS SDK for S3.
+//! This module provides a simplified S3 client that supports downloading objects.
+//! It attempts to hide the complexities of working with the AWS SDK for S3.
+
+use crate::error::ActiveStorageError;
+
 use aws_credential_types::Credentials;
 use aws_sdk_s3::Client;
 use aws_types::region::Region;
@@ -23,7 +26,7 @@ impl S3Client {
     pub async fn new(url: &Url, username: &str, password: &str) -> Self {
         let credentials = Credentials::from_keys(username, password, None);
         let region = Region::new("us-east-1");
-        let s3_config = aws_sdk_s3::Config::builder() //&config)
+        let s3_config = aws_sdk_s3::Config::builder()
             .credentials_provider(credentials)
             .region(Some(region))
             .endpoint_url(url.to_string())
@@ -45,7 +48,7 @@ impl S3Client {
         bucket: &str,
         key: &str,
         range: Option<String>,
-    ) -> Bytes {
+    ) -> Result<Bytes, ActiveStorageError> {
         // TODO: Provide a streaming response.
         let response = self
             .client
@@ -54,8 +57,7 @@ impl S3Client {
             .key(key)
             .set_range(range)
             .send()
-            .await
-            .unwrap();
+            .await?;
         let content_length = response.content_length();
         // The data returned by the S3 client does not have any alignment guarantees. In order to
         // reinterpret the data as an array of numbers with a higher alignment than 1, we need to
@@ -74,7 +76,7 @@ impl S3Client {
         // Copy the data into the aligned Vec<u8>.
         buf.append(&mut vec);
         // Return as Bytes.
-        buf.into()
+        Ok(buf.into())
     }
 }
 

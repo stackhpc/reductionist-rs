@@ -1,3 +1,4 @@
+use crate::error::ActiveStorageError;
 use crate::models;
 use crate::operation;
 use crate::operations;
@@ -75,7 +76,10 @@ async fn schema() -> &'static str {
     "Hello, world!"
 }
 
-async fn download_object(auth: &Authorization<Basic>, request_data: &models::RequestData) -> Bytes {
+async fn download_object(
+    auth: &Authorization<Basic>,
+    request_data: &models::RequestData,
+) -> Result<Bytes, ActiveStorageError> {
     let range = s3_client::get_range(request_data.offset, request_data.size);
     s3_client::S3Client::new(&request_data.source, auth.username(), auth.password())
         .await
@@ -85,7 +89,7 @@ async fn download_object(auth: &Authorization<Basic>, request_data: &models::Req
 
 /// Handler for operations
 ///
-/// Returns a `Result` with `models::Response` on success and `AppError` on failure.
+/// Returns a `Result` with `models::Response` on success and `ActiveStorageError` on failure.
 ///
 /// # Arguments
 ///
@@ -94,7 +98,7 @@ async fn download_object(auth: &Authorization<Basic>, request_data: &models::Req
 async fn operation_handler<T: operation::Operation>(
     TypedHeader(auth): TypedHeader<Authorization<Basic>>,
     ValidatedJson(request_data): ValidatedJson<models::RequestData>,
-) -> models::Response {
-    let data = download_object(&auth, &request_data).await;
-    T::execute(&request_data, &data)
+) -> Result<models::Response, ActiveStorageError> {
+    let data = download_object(&auth, &request_data).await?;
+    Ok(T::execute(&request_data, &data))
 }
