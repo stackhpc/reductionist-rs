@@ -19,7 +19,7 @@ else:
     reducer = 'min'
 
 response = requests.post(
-  f'http://localhost:8080/v1/{reducer}',
+  f'http://localhost:8000/v1/{reducer}/',
   json=request_data,
   auth=('minioadmin', 'minioadmin')
 )
