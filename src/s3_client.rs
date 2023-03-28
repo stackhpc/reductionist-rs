@@ -67,12 +67,13 @@ impl S3Client {
         // FIXME: The current method is rather inefficient, involving copying the data at least
         // twice. This is functional, but should be revisited.
 
-        // Read all data into memory as an AggregatedBytes.
-        let data = response.body.collect().await;
         // Create an 8-byte aligned Vec<u8>.
         let mut buf = maligned::align_first::<u8, maligned::A8>(content_length as usize);
+        // Read all data into memory as an AggregatedBytes.
+        let data = response.body.collect().await;
         // Copy the data into an unaligned Vec<u8>.
-        let mut vec = data.unwrap().to_vec();
+        let bytes = data.map_err(ActiveStorageError::S3ByteStream)?;
+        let mut vec = bytes.to_vec();
         // Copy the data into the aligned Vec<u8>.
         buf.append(&mut vec);
         // Return as Bytes.

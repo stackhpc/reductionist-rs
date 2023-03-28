@@ -100,5 +100,5 @@ async fn operation_handler<T: operation::Operation>(
     ValidatedJson(request_data): ValidatedJson<models::RequestData>,
 ) -> Result<models::Response, ActiveStorageError> {
     let data = download_object(&auth, &request_data).await?;
-    Ok(T::execute(&request_data, &data))
+    T::execute(&request_data, &data)
 }
