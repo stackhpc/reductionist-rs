@@ -3,7 +3,7 @@
 use clap::Parser;
 
 /// Reductionist command line interface
-#[derive(Debug, Parser)]
+#[derive(Clone, Debug, Parser)]
 pub struct CommandLineArgs {
     /// The IP address on which the proxy should listen
     #[arg(long, default_value = "0.0.0.0", env = "REDUCTIONIST_HOST")]
@@ -34,6 +34,9 @@ pub struct CommandLineArgs {
     /// Whether to enable sending traces to Jaeger.
     #[arg(long, default_value_t = false, env = "REDUCTIONIST_ENABLE_JAEGER")]
     pub enable_jaeger: bool,
+    /// Whether to use Rayon for execution of CPU-bound tasks.
+    #[arg(long, default_value_t = false, env = "REDUCTIONIST_USE_RAYON")]
+    pub use_rayon: bool,
 }
 
 /// Returns parsed command line arguments.

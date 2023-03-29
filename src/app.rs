@@ -1,5 +1,6 @@
 //! Active Storage server API
 
+use crate::cli::CommandLineArgs;
 use crate::error::ActiveStorageError;
 use crate::filter_pipeline;
 use crate::metrics::{metrics_handler, track_metrics};
@@ -48,14 +49,18 @@ const HEADER_BYTE_ORDER_VALUE: &str = match NATIVE_BYTE_ORDER {
 
 /// Shared application state passed to each operation request handler.
 struct AppState {
+    /// Command line arguments.
+    args: CommandLineArgs,
+
     /// Map of S3 client objects.
     s3_client_map: s3_client::S3ClientMap,
 }
 
 impl AppState {
     /// Create and return an [AppState].
-    fn new() -> Self {
+    fn new(args: &CommandLineArgs) -> Self {
         Self {
+            args: args.clone(),
             s3_client_map: s3_client::S3ClientMap::new(),
         }
     }
@@ -84,6 +89,16 @@ impl IntoResponse for models::Response {
     }
 }
 
+/// Initialise the application
+pub fn init(args: &CommandLineArgs) {
+    if args.use_rayon {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(num_cpus::get() - 1)
+            .build_global()
+            .expect("Failed to build Rayon thread pool");
+    };
+}
+
 /// Returns a [axum::Router] for the Active Storage server API
 ///
 /// The router is populated with all routes as well as the following middleware:
@@ -91,9 +106,8 @@ impl IntoResponse for models::Response {
 /// * a [tower_http::trace::TraceLayer] for tracing requests and responses
 /// * a [tower_http::validate_request::ValidateRequestHeaderLayer] for validating authorisation
 ///   headers
-fn router() -> Router {
-    fn v1() -> Router {
-        let state = SharedAppState::new(AppState::new());
+fn router(args: &CommandLineArgs) -> Router {
+    fn v1(state: SharedAppState) -> Router {
         Router::new()
             .route("/count", post(operation_handler::<operations::Count>))
             .route("/max", post(operation_handler::<operations::Max>))
@@ -118,10 +132,11 @@ fn router() -> Router {
             .with_state(state)
     }
 
+    let state = SharedAppState::new(AppState::new(args));
     Router::new()
         .route("/.well-known/reductionist-schema", get(schema))
         .route("/metrics", get(metrics_handler))
-        .nest("/v1", v1())
+        .nest("/v1", v1(state))
         .route_layer(middleware::from_fn(track_metrics))
 }
 
@@ -141,11 +156,11 @@ pub type Service = tower_http::normalize_path::NormalizePath<Router>;
 ///   headers
 /// * a [tower_http::normalize_path::NormalizePathLayer] for trimming trailing slashes from
 ///   requests
-pub fn service() -> Service {
+pub fn service(args: &CommandLineArgs) -> Service {
     // Note that any middleware that should affect routing must wrap the router.
     // See
     // https://docs.rs/axum/0.6.18/axum/middleware/index.html#rewriting-request-uri-in-middleware.
-    NormalizePathLayer::trim_trailing_slash().layer(router())
+    NormalizePathLayer::trim_trailing_slash().layer(router(args))
 }
 
 /// TODO: Return an OpenAPI schema
@@ -199,6 +214,27 @@ async fn operation_handler<T: operation::Operation>(
     let data = download_object(&s3_client, &request_data)
         .instrument(tracing::Span::current())
         .await?;
+    // All remaining work is synchronous. If the use_rayon argument was specified, delegate to the
+    // Rayon thread pool. Otherwise, execute as normal using Tokio.
+    if state.args.use_rayon {
+        tokio_rayon::spawn(move || operation::<T>(request_data, data)).await
+    } else {
+        operation::<T>(request_data, data)
+    }
+}
+
+/// Perform a reduction operation
+///
+/// This function encapsulates the synchronous part of an operation.
+///
+/// # Arguments
+///
+/// * `request_data`: RequestData object for the request.
+/// * `data`: Object data `Bytes`.
+fn operation<T: operation::Operation>(
+    request_data: models::RequestData,
+    data: Bytes,
+) -> Result<models::Response, ActiveStorageError> {
     let ptr = data.as_ptr();
     let data = filter_pipeline::filter_pipeline(&request_data, data)?;
     if request_data.compression.is_some() || request_data.size.is_none() {
