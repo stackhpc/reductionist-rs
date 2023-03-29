@@ -1,4 +1,5 @@
 use tokio::signal;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod app;
 mod array;
@@ -11,6 +12,8 @@ mod validated_json;
 
 #[tokio::main]
 async fn main() {
+    init_tracing();
+
     let router = app::router();
 
     // run it with hyper on localhost:8080
@@ -19,6 +22,16 @@ async fn main() {
         .with_graceful_shutdown(shutdown_signal())
         .await
         .unwrap();
+}
+
+fn init_tracing() {
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "s3_active_storage=debug,tower_http=debug".into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
 }
 
 async fn shutdown_signal() {
