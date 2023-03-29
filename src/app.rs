@@ -7,6 +7,7 @@ use crate::validated_json::ValidatedJson;
 
 use axum::{
     body::{Body, Bytes},
+    extract::Path,
     headers::authorization::{Authorization, Basic},
     http::header,
     http::Request,
@@ -50,6 +51,7 @@ pub fn router() -> Router {
             .route("/min", post(operation_handler::<operations::Min>))
             .route("/select", post(operation_handler::<operations::Select>))
             .route("/sum", post(operation_handler::<operations::Sum>))
+            .route("/:operation", post(unknown_operation_handler))
             .layer(
                 ServiceBuilder::new()
                     .layer(TraceLayer::new_for_http())
@@ -101,4 +103,8 @@ async fn operation_handler<T: operation::Operation>(
 ) -> Result<models::Response, ActiveStorageError> {
     let data = download_object(&auth, &request_data).await?;
     T::execute(&request_data, &data)
+}
+
+async fn unknown_operation_handler(Path(operation): Path<String>) -> ActiveStorageError {
+    ActiveStorageError::UnsupportedOperation { operation }
 }

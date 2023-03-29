@@ -50,6 +50,10 @@ pub enum ActiveStorageError {
     /// Error converting between integer types
     #[error(transparent)]
     TryFromInt(#[from] std::num::TryFromIntError),
+
+    /// Unsupported operation requested
+    #[error("unsupported operation {operation}")]
+    UnsupportedOperation { operation: String },
 }
 
 // Tell axum how to convert `ActiveStorageError` into a response.
@@ -133,6 +137,14 @@ impl ErrorResponse {
         Self::new(StatusCode::BAD_REQUEST, error)
     }
 
+    /// Return a 404 not found ErrorResponse
+    fn not_found<E>(error: &E) -> Self
+    where
+        E: std::error::Error + Send + Sync,
+    {
+        Self::new(StatusCode::NOT_FOUND, error)
+    }
+
     /// Return a 500 internal server error ErrorResponse
     fn internal_server_error<E>(error: &E) -> Self
     where
@@ -151,6 +163,9 @@ impl From<ActiveStorageError> for ErrorResponse {
             | ActiveStorageError::RequestDataJsonRejection(_)
             | ActiveStorageError::RequestDataValidation(_)
             | ActiveStorageError::ShapeInvalid(_) => Self::bad_request(&error),
+
+            // Not found
+            ActiveStorageError::UnsupportedOperation { operation: _ } => Self::not_found(&error),
 
             // Internal server error
             ActiveStorageError::FromBytes { type_name: _ }
@@ -336,5 +351,15 @@ mod tests {
         let caused_by = None;
         test_active_storage_error(error, StatusCode::INTERNAL_SERVER_ERROR, message, caused_by)
             .await;
+    }
+
+    #[tokio::test]
+    async fn unsupported_operation() {
+        let error = ActiveStorageError::UnsupportedOperation {
+            operation: "foo".to_string(),
+        };
+        let message = "unsupported operation foo";
+        let caused_by = None;
+        test_active_storage_error(error, StatusCode::NOT_FOUND, message, caused_by).await;
     }
 }
