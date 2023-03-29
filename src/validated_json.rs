@@ -1,11 +1,11 @@
+use crate::error::ActiveStorageError;
+
 use async_trait::async_trait;
 use axum::{
     extract::{rejection::JsonRejection, FromRequest, Json},
-    http::{Request, StatusCode},
-    response::{IntoResponse, Response},
+    http::Request,
 };
 use serde::de::DeserializeOwned;
-use thiserror::Error;
 use validator::Validate;
 
 /// An axum extractor based on the Json extractor that also performs validation using the validator
@@ -21,52 +21,13 @@ where
     Json<T>: FromRequest<S, B, Rejection = JsonRejection>,
     B: Send + 'static,
 {
-    type Rejection = JsonError;
+    type Rejection = ActiveStorageError;
 
+    /// Extract a `ValidatedJson` from a `Request`.
     async fn from_request(req: Request<B>, state: &S) -> Result<Self, Self::Rejection> {
         let Json(value) = Json::<T>::from_request(req, state).await?;
         value.validate()?;
         Ok(ValidatedJson(value))
-    }
-}
-
-#[derive(Debug, Error)]
-pub enum JsonError {
-    #[error(transparent)]
-    ValidationError(#[from] validator::ValidationErrors),
-
-    #[error(transparent)]
-    AxumJsonRejection(#[from] JsonRejection),
-}
-
-/// Return a string describing the error and any sources.
-///
-/// # Arguments
-///
-/// * `err`: The error to describe
-fn format_error<E: 'static + std::error::Error + Send + Sync>(err: E) -> String {
-    let mut message = format!("{}", err);
-    let mut current = err.source();
-    while let Some(source) = current {
-        message += &format!("\nCaused by:\n  {}", source);
-        current = source.source();
-    }
-    message
-}
-
-impl IntoResponse for JsonError {
-    fn into_response(self) -> Response {
-        match self {
-            JsonError::ValidationError(_) => {
-                let message = format!("Input validation error: [{}]", self).replace('\n', ", ");
-                (StatusCode::BAD_REQUEST, message)
-            }
-            JsonError::AxumJsonRejection(_) => {
-                let message = format_error(self);
-                (StatusCode::BAD_REQUEST, message)
-            }
-        }
-        .into_response()
     }
 }
 
@@ -78,6 +39,7 @@ mod tests {
     use axum::{
         body::Body,
         http::{self, Request, StatusCode},
+        response::Response,
         routing::post,
         Router,
     };
@@ -144,7 +106,7 @@ mod tests {
 
         let body = body_string(response).await;
         let re = Regex::new(r"Failed to parse the request body as JSON").unwrap();
-        assert!(re.is_match(&body[..]))
+        assert!(re.is_match(&body[..]), "body: {}", body)
     }
 
     #[tokio::test]
@@ -156,7 +118,7 @@ mod tests {
 
         let body = body_string(response).await;
         let re = Regex::new(r".*foo: invalid type: integer `123`.*").unwrap();
-        assert!(re.is_match(&body[..]))
+        assert!(re.is_match(&body[..]), "body: {}", body)
     }
 
     #[tokio::test]
@@ -167,10 +129,10 @@ mod tests {
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
         let body = body_string(response).await;
-        let re =
-            Regex::new(r"Input validation error: \[foo: Validation error: length \[\{.*\}\]\]")
-                .unwrap();
-        assert!(re.is_match(&body[..]))
+        let re = Regex::new(r".*request data is not valid.*").unwrap();
+        assert!(re.is_match(&body[..]), "body: {}", body);
+        let re = Regex::new(r".*foo: Validation error: length.*").unwrap();
+        assert!(re.is_match(&body[..]), "body: {}", body);
     }
 
     #[tokio::test]
@@ -181,9 +143,9 @@ mod tests {
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
         let body = body_string(response).await;
-        let re =
-            Regex::new(r"Input validation error: \[foo: Validation error: length \[\{.*\}\]\]")
-                .unwrap();
-        assert!(re.is_match(&body[..]))
+        let re = Regex::new(r".*request data is not valid.*").unwrap();
+        assert!(re.is_match(&body[..]), "body: {}", body);
+        let re = Regex::new(r".*foo: Validation error: length.*").unwrap();
+        assert!(re.is_match(&body[..]), "body: {}", body);
     }
 }

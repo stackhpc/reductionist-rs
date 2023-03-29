@@ -1,9 +1,10 @@
 //! This module provides functions and utilities for working with ndarray objects.
 
+use crate::error::ActiveStorageError;
 use crate::models;
 
-use anyhow::anyhow;
 use axum::body::Bytes;
+use core::convert::TryFrom;
 use ndarray::prelude::*;
 
 /// Convert from Bytes to `&[T]`.
@@ -14,11 +15,12 @@ use ndarray::prelude::*;
 /// # Arguments
 ///
 /// * `data`: Bytes containing data to convert.
-fn from_bytes<T: zerocopy::FromBytes>(data: &Bytes) -> anyhow::Result<&[T]> {
-    let layout = zerocopy::LayoutVerified::<_, [T]>::new_slice(&data[..]).ok_or(anyhow!(
-        "Failed to convert from bytes to {}",
-        std::any::type_name::<T>()
-    ))?;
+fn from_bytes<T: zerocopy::FromBytes>(data: &Bytes) -> Result<&[T], ActiveStorageError> {
+    let layout = zerocopy::LayoutVerified::<_, [T]>::new_slice(&data[..]).ok_or(
+        ActiveStorageError::FromBytes {
+            type_name: std::any::type_name::<T>(),
+        },
+    )?;
     Ok(layout.into_slice())
 }
 
@@ -53,18 +55,18 @@ fn get_shape(
 fn build_array_from_shape<T>(
     shape: ndarray::Shape<Dim<ndarray::IxDynImpl>>,
     data: &[T],
-) -> Result<ArrayView<T, ndarray::Dim<ndarray::IxDynImpl>>, ndarray::ShapeError> {
-    ArrayView::<T, _>::from_shape(shape, data)
+) -> Result<ArrayView<T, ndarray::Dim<ndarray::IxDynImpl>>, ActiveStorageError> {
+    ArrayView::<T, _>::from_shape(shape, data).map_err(ActiveStorageError::ShapeInvalid)
 }
 
 /// Returns an optional [ndarray] SliceInfo object corresponding to the selection.
 pub fn build_slice_info<T>(
     selection: &Option<Vec<models::Slice>>,
     shape: &[usize],
-) -> Option<ndarray::SliceInfo<Vec<ndarray::SliceInfoElem>, ndarray::IxDyn, ndarray::IxDyn>> {
+) -> ndarray::SliceInfo<Vec<ndarray::SliceInfoElem>, ndarray::IxDyn, ndarray::IxDyn> {
     match selection {
         Some(selection) => {
-            let si = selection
+            let si: Vec<ndarray::SliceInfoElem> = selection
                 .iter()
                 .map(|slice| ndarray::SliceInfoElem::Slice {
                     // FIXME: usize should be isize?
@@ -73,11 +75,10 @@ pub fn build_slice_info<T>(
                     step: slice.stride as isize,
                 })
                 .collect();
-            unsafe { Some(ndarray::SliceInfo::new(si).unwrap()) }
+            ndarray::SliceInfo::try_from(si).expect("SliceInfo should not fail for IxDyn")
         }
         _ => {
-            //let si = (1..shape.len()).map(|index| ndarray::SliceInfoElem::Index(index as isize)).collect();
-            let si = shape
+            let si: Vec<ndarray::SliceInfoElem> = shape
                 .iter()
                 .map(|_| ndarray::SliceInfoElem::Slice {
                     // FIXME: usize should be isize?
@@ -86,7 +87,7 @@ pub fn build_slice_info<T>(
                     step: 1,
                 })
                 .collect();
-            unsafe { Some(ndarray::SliceInfo::new(si).unwrap()) }
+            ndarray::SliceInfo::try_from(si).expect("SliceInfo should not fail for IxDyn")
         }
     }
 }
@@ -103,13 +104,13 @@ pub fn build_slice_info<T>(
 pub fn build_array<'a, T>(
     request_data: &'a models::RequestData,
     data: &'a Bytes,
-) -> ArrayView<'a, T, ndarray::Dim<ndarray::IxDynImpl>>
+) -> Result<ArrayView<'a, T, ndarray::Dim<ndarray::IxDynImpl>>, ActiveStorageError>
 where
     T: zerocopy::FromBytes,
 {
-    let data = from_bytes::<T>(data).unwrap();
+    let data = from_bytes::<T>(data)?;
     let shape = get_shape(data.len(), request_data);
-    build_array_from_shape(shape, data).unwrap()
+    build_array_from_shape(shape, data)
 }
 
 #[cfg(test)]
@@ -166,23 +167,27 @@ mod tests {
         );
     }
 
+    fn assert_from_bytes_error<T: std::fmt::Debug>(result: Result<T, ActiveStorageError>) {
+        match result.unwrap_err() {
+            ActiveStorageError::FromBytes { type_name: _ } => (),
+            _ => panic!("expected from_bytes to fail"),
+        };
+    }
+
     #[test]
-    #[should_panic(expected = "Failed to convert from bytes to u32")]
     fn from_bytes_u32_too_small() {
-        from_bytes::<u32>(&Bytes::from_static(&[1, 2, 3])).unwrap();
+        assert_from_bytes_error(from_bytes::<u32>(&Bytes::from_static(&[1, 2, 3])))
     }
 
     #[test]
-    #[should_panic(expected = "Failed to convert from bytes to u32")]
     fn from_bytes_u32_too_big() {
-        from_bytes::<u32>(&Bytes::from_static(&[1, 2, 3, 4, 5])).unwrap();
+        assert_from_bytes_error(from_bytes::<u32>(&Bytes::from_static(&[1, 2, 3, 4, 5])))
     }
 
     #[test]
-    #[should_panic(expected = "Failed to convert from bytes to u32")]
     fn from_bytes_u32_unaligned() {
         static ARRAY: [u8; 5] = [1, 2, 3, 4, 5];
-        from_bytes::<u32>(&Bytes::from_static(&ARRAY[1..])).unwrap();
+        assert_from_bytes_error(from_bytes::<u32>(&Bytes::from_static(&ARRAY[1..])))
     }
 
     #[test]
@@ -278,8 +283,8 @@ mod tests {
     fn build_array_from_shape_err() {
         let data = [1, 2, 3];
         let shape = vec![4].into_shape();
-        match build_array_from_shape(shape, &data) {
-            Err(err) => {
+        match build_array_from_shape(shape, &data).unwrap_err() {
+            ActiveStorageError::ShapeInvalid(err) => {
                 assert_eq!(ndarray::ErrorKind::OutOfBounds, err.kind())
             }
             _ => panic!("Expected out of bounds error"),
@@ -290,7 +295,7 @@ mod tests {
     fn build_slice_info_1d_no_selection() {
         let selection = None;
         let shape = [1];
-        let slice_info = build_slice_info::<u32>(&selection, &shape).unwrap();
+        let slice_info = build_slice_info::<u32>(&selection, &shape);
         assert_eq!(
             [ndarray::SliceInfoElem::Slice {
                 start: 0,
@@ -305,7 +310,7 @@ mod tests {
     fn build_slice_info_1d_selection() {
         let selection = Some(vec![models::Slice::new(0, 1, 1)]);
         let shape = [];
-        let slice_info = build_slice_info::<u32>(&selection, &shape).unwrap();
+        let slice_info = build_slice_info::<u32>(&selection, &shape);
         assert_eq!(
             [ndarray::SliceInfoElem::Slice {
                 start: 0,
@@ -320,7 +325,7 @@ mod tests {
     fn build_slice_info_2d_no_selection() {
         let selection = None;
         let shape = [1, 2];
-        let slice_info = build_slice_info::<u32>(&selection, &shape).unwrap();
+        let slice_info = build_slice_info::<u32>(&selection, &shape);
         assert_eq!(
             [
                 ndarray::SliceInfoElem::Slice {
@@ -345,7 +350,7 @@ mod tests {
             models::Slice::new(0, 1, 1),
         ]);
         let shape = [];
-        let slice_info = build_slice_info::<u32>(&selection, &shape).unwrap();
+        let slice_info = build_slice_info::<u32>(&selection, &shape);
         assert_eq!(
             [
                 ndarray::SliceInfoElem::Slice {
@@ -378,7 +383,7 @@ mod tests {
             selection: None,
         };
         let bytes = Bytes::copy_from_slice(&data);
-        let array = build_array::<u32>(&request_data, &bytes);
+        let array = build_array::<u32>(&request_data, &bytes).unwrap();
         assert_eq!(array![0x04030201_u32, 0x08070605_u32].into_dyn(), array);
     }
 
@@ -397,7 +402,7 @@ mod tests {
             selection: None,
         };
         let bytes = Bytes::copy_from_slice(&data);
-        let array = build_array::<i64>(&request_data, &bytes);
+        let array = build_array::<i64>(&request_data, &bytes).unwrap();
         assert_eq!(array![[0x04030201_i64], [0x08070605_i64]].into_dyn(), array);
     }
 }

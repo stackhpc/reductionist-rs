@@ -4,11 +4,12 @@
 //! [Operation](crate::operation::Operation) trait.
 
 use crate::array;
+use crate::error::ActiveStorageError;
 use crate::models;
 use crate::operation::{Element, NumOperation};
 
 use axum::body::Bytes;
-use ndarray_stats::QuantileExt;
+use ndarray_stats::{errors::MinMaxError, QuantileExt};
 // Bring trait into scope to use as_bytes method.
 use zerocopy::AsBytes;
 
@@ -16,17 +17,19 @@ use zerocopy::AsBytes;
 pub struct Count {}
 
 impl NumOperation for Count {
-    fn execute_t<T: Element>(request_data: &models::RequestData, data: &Bytes) -> models::Response {
-        let array = array::build_array::<T>(request_data, data);
+    fn execute_t<T: Element>(
+        request_data: &models::RequestData,
+        data: &Bytes,
+    ) -> Result<models::Response, ActiveStorageError> {
+        let array = array::build_array::<T>(request_data, data)?;
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
-        let sliced = array.slice(slice_info.unwrap());
+        let sliced = array.slice(slice_info);
         // FIXME: endianness?
-        // FIXME: handle errors
-        let len = i64::try_from(sliced.len()).unwrap();
+        let len = i64::try_from(sliced.len())?;
         let body = len.to_le_bytes();
         // Need to copy to provide ownership to caller.
         let body = Bytes::copy_from_slice(&body);
-        models::Response::new(body, models::DType::Int64, vec![])
+        Ok(models::Response::new(body, models::DType::Int64, vec![]))
     }
 }
 
@@ -34,16 +37,24 @@ impl NumOperation for Count {
 pub struct Max {}
 
 impl NumOperation for Max {
-    fn execute_t<T: Element>(request_data: &models::RequestData, data: &Bytes) -> models::Response {
-        let array = array::build_array::<T>(request_data, data);
+    fn execute_t<T: Element>(
+        request_data: &models::RequestData,
+        data: &Bytes,
+    ) -> Result<models::Response, ActiveStorageError> {
+        let array = array::build_array::<T>(request_data, data)?;
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
-        let sliced = array.slice(slice_info.unwrap());
+        let sliced = array.slice(slice_info);
         // FIXME: endianness?
-        // FIXME: handle errors
-        let body = sliced.max().unwrap().as_bytes();
+        let body = sliced
+            .max()
+            .map_err(|err| match err {
+                MinMaxError::EmptyInput => ActiveStorageError::EmptyArray { operation: "max" },
+                MinMaxError::UndefinedOrder => panic!("unexpected undefined order error for max"),
+            })?
+            .as_bytes();
         // Need to copy to provide ownership to caller.
         let body = Bytes::copy_from_slice(body);
-        models::Response::new(body, request_data.dtype, vec![])
+        Ok(models::Response::new(body, request_data.dtype, vec![]))
     }
 }
 
@@ -51,17 +62,21 @@ impl NumOperation for Max {
 pub struct Mean {}
 
 impl NumOperation for Mean {
-    fn execute_t<T: Element>(request_data: &models::RequestData, data: &Bytes) -> models::Response {
-        let array = array::build_array::<T>(request_data, data);
+    fn execute_t<T: Element>(
+        request_data: &models::RequestData,
+        data: &Bytes,
+    ) -> Result<models::Response, ActiveStorageError> {
+        let array = array::build_array::<T>(request_data, data)?;
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
-        let sliced = array.slice(slice_info.unwrap());
+        let sliced = array.slice(slice_info);
         // FIXME: endianness?
-        // FIXME: handle errors
-        let body = sliced.mean().unwrap();
+        let body = sliced
+            .mean()
+            .ok_or(ActiveStorageError::EmptyArray { operation: "mean" })?;
         let body = body.as_bytes();
         // Need to copy to provide ownership to caller.
         let body = Bytes::copy_from_slice(body);
-        models::Response::new(body, request_data.dtype, vec![])
+        Ok(models::Response::new(body, request_data.dtype, vec![]))
     }
 }
 
@@ -69,16 +84,24 @@ impl NumOperation for Mean {
 pub struct Min {}
 
 impl NumOperation for Min {
-    fn execute_t<T: Element>(request_data: &models::RequestData, data: &Bytes) -> models::Response {
-        let array = array::build_array::<T>(request_data, data);
+    fn execute_t<T: Element>(
+        request_data: &models::RequestData,
+        data: &Bytes,
+    ) -> Result<models::Response, ActiveStorageError> {
+        let array = array::build_array::<T>(request_data, data)?;
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
-        let sliced = array.slice(slice_info.unwrap());
+        let sliced = array.slice(slice_info);
         // FIXME: endianness?
-        // FIXME: handle errors
-        let body = sliced.min().unwrap().as_bytes();
+        let body = sliced
+            .min()
+            .map_err(|err| match err {
+                MinMaxError::EmptyInput => ActiveStorageError::EmptyArray { operation: "min" },
+                MinMaxError::UndefinedOrder => panic!("unexpected undefined order error for min"),
+            })?
+            .as_bytes();
         // Need to copy to provide ownership to caller.
         let body = Bytes::copy_from_slice(body);
-        models::Response::new(body, request_data.dtype, vec![])
+        Ok(models::Response::new(body, request_data.dtype, vec![]))
     }
 }
 
@@ -86,10 +109,13 @@ impl NumOperation for Min {
 pub struct Select {}
 
 impl NumOperation for Select {
-    fn execute_t<T: Element>(request_data: &models::RequestData, data: &Bytes) -> models::Response {
-        let array = array::build_array::<T>(request_data, data);
+    fn execute_t<T: Element>(
+        request_data: &models::RequestData,
+        data: &Bytes,
+    ) -> Result<models::Response, ActiveStorageError> {
+        let array = array::build_array::<T>(request_data, data)?;
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
-        let sliced = array.slice(slice_info.unwrap());
+        let sliced = array.slice(slice_info);
         let shape = sliced.shape().to_vec();
         // Transpose Fortran ordered arrays before iterating.
         let body = if !array.is_standard_layout() {
@@ -103,7 +129,7 @@ impl NumOperation for Select {
         let body = body.as_bytes();
         // Need to copy to provide ownership to caller.
         let body = Bytes::copy_from_slice(body);
-        models::Response::new(body, request_data.dtype, shape)
+        Ok(models::Response::new(body, request_data.dtype, shape))
     }
 }
 
@@ -111,16 +137,19 @@ impl NumOperation for Select {
 pub struct Sum {}
 
 impl NumOperation for Sum {
-    fn execute_t<T: Element>(request_data: &models::RequestData, data: &Bytes) -> models::Response {
-        let array = array::build_array::<T>(request_data, data);
+    fn execute_t<T: Element>(
+        request_data: &models::RequestData,
+        data: &Bytes,
+    ) -> Result<models::Response, ActiveStorageError> {
+        let array = array::build_array::<T>(request_data, data)?;
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
-        let sliced = array.slice(slice_info.unwrap());
+        let sliced = array.slice(slice_info);
         // FIXME: endianness?
         let body = sliced.sum();
         let body = body.as_bytes();
         // Need to copy to provide ownership to caller.
         let body = Bytes::copy_from_slice(body);
-        models::Response::new(body, request_data.dtype, vec![])
+        Ok(models::Response::new(body, request_data.dtype, vec![]))
     }
 }
 
@@ -147,7 +176,7 @@ mod tests {
         };
         let data = [1, 2, 3, 4, 5, 6, 7, 8];
         let bytes = Bytes::copy_from_slice(&data);
-        let response = Count::execute(&request_data, &bytes);
+        let response = Count::execute(&request_data, &bytes).unwrap();
         // Count is always i64.
         let expected: i64 = 2;
         assert_eq!(expected.as_bytes(), response.body);
@@ -171,7 +200,7 @@ mod tests {
         };
         let data = [1, 2, 3, 4, 5, 6, 7, 8];
         let bytes = Bytes::copy_from_slice(&data);
-        let response = Max::execute(&request_data, &bytes);
+        let response = Max::execute(&request_data, &bytes).unwrap();
         let expected: i64 = 0x0807060504030201;
         assert_eq!(expected.as_bytes(), response.body);
         assert_eq!(8, response.body.len());
@@ -194,7 +223,7 @@ mod tests {
         };
         let data = [1, 2, 3, 4, 5, 6, 7, 8];
         let bytes = Bytes::copy_from_slice(&data);
-        let response = Mean::execute(&request_data, &bytes);
+        let response = Mean::execute(&request_data, &bytes).unwrap();
         let expected: i32 = (0x08070605 + 0x04030201) / 2;
         assert_eq!(expected.as_bytes(), response.body);
         assert_eq!(4, response.body.len());
@@ -217,7 +246,7 @@ mod tests {
         };
         let data = [1, 2, 3, 4, 5, 6, 7, 8];
         let bytes = Bytes::copy_from_slice(&data);
-        let response = Min::execute(&request_data, &bytes);
+        let response = Min::execute(&request_data, &bytes).unwrap();
         let expected: u64 = 0x0807060504030201;
         assert_eq!(expected.as_bytes(), response.body);
         assert_eq!(8, response.body.len());
@@ -240,7 +269,7 @@ mod tests {
         };
         let data = [1, 2, 3, 4, 5, 6, 7, 8];
         let bytes = Bytes::copy_from_slice(&data);
-        let response = Select::execute(&request_data, &bytes);
+        let response = Select::execute(&request_data, &bytes).unwrap();
         let expected: [u8; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
         assert_eq!(expected.as_bytes(), response.body);
         assert_eq!(8, response.body.len());
@@ -263,7 +292,7 @@ mod tests {
         };
         let data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
         let bytes = Bytes::copy_from_slice(&data);
-        let response = Select::execute(&request_data, &bytes);
+        let response = Select::execute(&request_data, &bytes).unwrap();
         let expected: [u8; 16] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
         assert_eq!(expected.as_bytes(), response.body);
         assert_eq!(16, response.body.len());
@@ -291,7 +320,7 @@ mod tests {
         // [[0x04030201, 0x08070605], [0x12111009, 0x16151413]]
         let data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
         let bytes = Bytes::copy_from_slice(&data);
-        let response = Select::execute(&request_data, &bytes);
+        let response = Select::execute(&request_data, &bytes).unwrap();
         // [[0x08070605], [0x16151413]]
         let expected: [u8; 8] = [5, 6, 7, 8, 13, 14, 15, 16];
         assert_eq!(expected.as_bytes(), response.body);
@@ -315,7 +344,7 @@ mod tests {
         };
         let data = [1, 2, 3, 4, 5, 6, 7, 8];
         let bytes = Bytes::copy_from_slice(&data);
-        let response = Sum::execute(&request_data, &bytes);
+        let response = Sum::execute(&request_data, &bytes).unwrap();
         let expected: u32 = 0x04030201 + 0x08070605;
         assert_eq!(expected.as_bytes(), response.body);
         assert_eq!(4, response.body.len());
