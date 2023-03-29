@@ -9,7 +9,7 @@ use crate::models;
 use crate::operation::{Element, NumOperation};
 
 use axum::body::Bytes;
-use ndarray_stats::QuantileExt;
+use ndarray_stats::{errors::MinMaxError, QuantileExt};
 // Bring trait into scope to use as_bytes method.
 use zerocopy::AsBytes;
 
@@ -45,7 +45,13 @@ impl NumOperation for Max {
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
         let sliced = array.slice(slice_info);
         // FIXME: endianness?
-        let body = sliced.max()?.as_bytes();
+        let body = sliced
+            .max()
+            .map_err(|err| match err {
+                MinMaxError::EmptyInput => ActiveStorageError::EmptyArray { operation: "max" },
+                MinMaxError::UndefinedOrder => panic!("unexpected undefined order error for max"),
+            })?
+            .as_bytes();
         // Need to copy to provide ownership to caller.
         let body = Bytes::copy_from_slice(body);
         Ok(models::Response::new(body, request_data.dtype, vec![]))
@@ -86,7 +92,13 @@ impl NumOperation for Min {
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
         let sliced = array.slice(slice_info);
         // FIXME: endianness?
-        let body = sliced.min()?.as_bytes();
+        let body = sliced
+            .min()
+            .map_err(|err| match err {
+                MinMaxError::EmptyInput => ActiveStorageError::EmptyArray { operation: "min" },
+                MinMaxError::UndefinedOrder => panic!("unexpected undefined order error for min"),
+            })?
+            .as_bytes();
         // Need to copy to provide ownership to caller.
         let body = Bytes::copy_from_slice(body);
         Ok(models::Response::new(body, request_data.dtype, vec![]))
