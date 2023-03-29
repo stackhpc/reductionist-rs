@@ -95,6 +95,10 @@ impl ErrorBody {
             caused_by = Some(causes);
             current = source.source();
         }
+        // Remove duplicate entries.
+        if let Some(caused_by) = caused_by.as_mut() {
+            caused_by.dedup()
+        }
         ErrorBody { message, caused_by }
     }
 }
@@ -318,7 +322,7 @@ mod tests {
             smithy_response,
         ));
         let message = "error retrieving object from S3 storage";
-        let caused_by = Some(vec!["service error", "NoSuchKey", "NoSuchKey"]);
+        let caused_by = Some(vec!["service error", "NoSuchKey"]);
         test_active_storage_error(error, StatusCode::BAD_REQUEST, message, caused_by).await;
     }
 
