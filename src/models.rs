@@ -89,9 +89,10 @@ fn validate_shape(shape: &[usize]) -> Result<(), ValidationError> {
 
 fn validate_slice(slice: &Slice) -> Result<(), ValidationError> {
     if slice.end <= slice.start {
-        return Err(ValidationError::new(
-            "Selection end must be greater than start",
-        ));
+        let mut error = ValidationError::new("Selection end must be greater than start");
+        error.add_param("start".into(), &slice.start);
+        error.add_param("end".into(), &slice.end);
+        return Err(error);
     }
     Ok(())
 }
@@ -101,18 +102,22 @@ fn validate_request_data(request_data: &RequestData) -> Result<(), ValidationErr
     // TODO: More validation of shape & selection vs. size
     // TODO: More validation that selection fits in shape
     if let Some(size) = &request_data.size {
-        if size % request_data.dtype.size_of() != 0 {
-            return Err(ValidationError::new(
-                "Size must be a multiple of dtype size in bytes",
-            ));
+        let dtype_size = request_data.dtype.size_of();
+        if size % dtype_size != 0 {
+            let mut error = ValidationError::new("Size must be a multiple of dtype size in bytes");
+            error.add_param("size".into(), &size);
+            error.add_param("dtype size".into(), &dtype_size);
+            return Err(error);
         }
     };
     match (&request_data.shape, &request_data.selection) {
         (Some(shape), Some(selection)) => {
             if shape.len() != selection.len() {
-                return Err(ValidationError::new(
-                    "Shape and selection must have the same length",
-                ));
+                let mut error =
+                    ValidationError::new("Shape and selection must have the same length");
+                error.add_param("shape".into(), &shape.len());
+                error.add_param("selection".into(), &selection.len());
+                return Err(error);
             }
         }
         (None, Some(_)) => {
