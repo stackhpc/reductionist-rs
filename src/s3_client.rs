@@ -7,6 +7,7 @@ use aws_credential_types::Credentials;
 use aws_sdk_s3::Client;
 use aws_types::region::Region;
 use axum::body::Bytes;
+use tokio_stream::StreamExt;
 use url::Url;
 
 /// S3 client object.
@@ -49,8 +50,7 @@ impl S3Client {
         key: &str,
         range: Option<String>,
     ) -> Result<Bytes, ActiveStorageError> {
-        // TODO: Provide a streaming response.
-        let response = self
+        let mut response = self
             .client
             .get_object()
             .bucket(bucket)
@@ -64,18 +64,13 @@ impl S3Client {
         // return the data in Bytes object in which the underlying data has a higher alignment.
         // For now we're hard-coding an alignment of 8 bytes, although this should depend on the
         // data type, and potentially whether there are any SIMD requirements.
-        // FIXME: The current method is rather inefficient, involving copying the data at least
-        // twice. This is functional, but should be revisited.
-
         // Create an 8-byte aligned Vec<u8>.
         let mut buf = maligned::align_first::<u8, maligned::A8>(content_length as usize);
-        // Read all data into memory as an AggregatedBytes.
-        let data = response.body.collect().await;
-        // Copy the data into an unaligned Vec<u8>.
-        let bytes = data.map_err(ActiveStorageError::S3ByteStream)?;
-        let mut vec = bytes.to_vec();
-        // Copy the data into the aligned Vec<u8>.
-        buf.append(&mut vec);
+
+        // Iterate over the streaming response, copying data into the aligned Vec<u8>.
+        while let Some(bytes) = response.body.try_next().await? {
+            buf.extend_from_slice(&bytes)
+        }
         // Return as Bytes.
         Ok(buf.into())
     }

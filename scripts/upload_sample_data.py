@@ -3,6 +3,9 @@ import numpy as np
 import pathlib
 import s3fs
 
+NUM_ITEMS = 10
+OBJECT_PREFIX = "data"
+
 #Use enum which also subclasses string type so that 
 # auto-generated OpenAPI schema can determine allowed dtypes
 class AllowedDatatypes(str, Enum):
@@ -32,7 +35,7 @@ except FileExistsError:
 
 # Create numpy arrays and upload to S3 as bytes
 for d in AllowedDatatypes.__members__.keys():
-    with s3_fs.open(bucket / f'data-{d}.dat', 'wb') as s3_file:
-        s3_file.write(np.arange(10, dtype=d).tobytes())
+    with s3_fs.open(bucket / f'{OBJECT_PREFIX}-{d}.dat', 'wb') as s3_file:
+        s3_file.write(np.arange(NUM_ITEMS, dtype=d).tobytes())
 
 print("Data upload successful. \nBucket contents:\n", s3_fs.ls(bucket))

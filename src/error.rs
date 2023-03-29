@@ -177,7 +177,6 @@ impl From<ActiveStorageError> for ErrorResponse {
             | ActiveStorageError::S3ByteStream(_) => Self::internal_server_error(&error),
 
             ActiveStorageError::S3GetObject(sdk_error) => {
-                // FIXME: we lose "error retrieving object from S3 storage"
                 // Tailor the response based on the specific SdkError variant.
                 match &sdk_error {
                     // These are generic SdkError variants.
@@ -190,12 +189,6 @@ impl From<ActiveStorageError> for ErrorResponse {
                     // This is a more specific ServiceError variant, with GetObjectError as the
                     // inner error.
                     SdkError::ServiceError(get_obj_error) => {
-                        //let error = if let Some(get_obj_message) = get_obj_error.err().message() {
-                        //    // FIXME: use message() & code()?
-                        //    &get_obj_error.err()
-                        //} else {
-                        //    &sdk_error
-                        //};
                         let get_obj_error = get_obj_error.err();
                         match get_obj_error.kind {
                             GetObjectErrorKind::InvalidObjectState(_)
