@@ -11,7 +11,9 @@ use axum::{
 };
 use ndarray::ShapeError;
 use serde::{Deserialize, Serialize};
+use std::error::Error;
 use thiserror::Error;
+use tracing::{event, Level};
 
 /// Active Storage server error type
 ///
@@ -169,7 +171,7 @@ impl ErrorResponse {
 impl From<ActiveStorageError> for ErrorResponse {
     /// Convert from an `ActiveStorageError` into an `ErrorResponse`.
     fn from(error: ActiveStorageError) -> Self {
-        match &error {
+        let response = match &error {
             // Bad request
             ActiveStorageError::EmptyArray { operation: _ }
             | ActiveStorageError::RequestDataJsonRejection(_)
@@ -228,7 +230,19 @@ impl From<ActiveStorageError> for ErrorResponse {
                     _ => Self::internal_server_error(&error),
                 }
             }
+        };
+
+        // Log server errors.
+        if response.status.is_server_error() {
+            event!(Level::ERROR, "{}", error.to_string());
+            let mut current = error.source();
+            while let Some(source) = current {
+                event!(Level::ERROR, "Caused by: {}", source.to_string());
+                current = source.source();
+            }
         }
+
+        response
     }
 }
 
