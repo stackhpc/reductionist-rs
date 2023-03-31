@@ -113,13 +113,13 @@ cd s3-active-storage-rs
 Next, use Cargo to build the package:
 
 ```sh
-cargo build
+cargo build --release
 ```
 
 The active storage server may be run using Cargo:
 
 ```sh
-cargo run
+cargo run --release
 ```
 
 Or installed to the system:
