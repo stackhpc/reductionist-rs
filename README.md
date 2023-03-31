@@ -203,6 +203,19 @@ The proxy adds two custom headers `x-activestorage-dtype` and `x-activestrorage-
 
 ---
 
+## Documentation
+
+The source code is documented using [rustdoc](https://doc.rust-lang.org/rustdoc/what-is-rustdoc.html).
+Currently the `s3-active-storage` crate is not uploaded to https://crates.io, so we do not benefit from hosted documentation on https://docs.rs.
+It is however possible to build the documentation locally:
+
+```sh
+cargo doc
+```
+
+Cargo builds documentation for the `s3-active-storage` crate and all of its dependencies.
+The resulting documentation is available under `target/doc`, and may be viewed in a web browser using file:///path/to/s3-active-storage/target/doc/s3-active-storage/index.html.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for information about contributing to S3 active storage.
