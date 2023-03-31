@@ -22,6 +22,7 @@
 //! * [ndarray] provides [NumPy](https://numpy.orgq)-like n-dimensional arrays used in numerical
 //!   computation.
 
+use clap::Parser;
 use tokio::signal;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -34,15 +35,26 @@ mod operations;
 mod s3_client;
 mod validated_json;
 
+/// S3 Active Storage Proxy command line interface
+#[derive(Debug, Parser)]
+struct CommandLineArgs {
+    #[arg(long, default_value = "0.0.0.0", env = "S3_ACTIVE_STORAGE_HOST")]
+    host: String,
+    #[arg(long, default_value = "8080", env = "S3_ACTIVE_STORAGE_PORT")]
+    port: String,
+}
+
 /// Application entry point
 #[tokio::main]
 async fn main() {
+    let args = CommandLineArgs::parse();
+
     init_tracing();
 
     let router = app::router();
 
-    // run it with hyper on localhost:8080
-    axum::Server::bind(&"0.0.0.0:8080".parse().unwrap())
+    // run it with hyper
+    axum::Server::bind(&format!("{}:{}", args.host, args.port).parse().unwrap())
         .serve(router.into_make_service())
         .with_graceful_shutdown(shutdown_signal())
         .await
