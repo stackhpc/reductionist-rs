@@ -56,8 +56,8 @@ pub enum ActiveStorageError {
     UnsupportedOperation { operation: String },
 }
 
-// Tell axum how to convert `ActiveStorageError` into a response.
 impl IntoResponse for ActiveStorageError {
+    /// Convert from an `ActiveStorageError` into an [axum::response::Response].
     fn into_response(self) -> Response {
         ErrorResponse::from(self).into_response()
     }

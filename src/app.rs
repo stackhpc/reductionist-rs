@@ -1,3 +1,5 @@
+//! Active Storage server API
+
 use crate::error::ActiveStorageError;
 use crate::models;
 use crate::operation;
@@ -22,10 +24,13 @@ use tower_http::normalize_path::NormalizePathLayer;
 use tower_http::trace::TraceLayer;
 use tower_http::validate_request::ValidateRequestHeaderLayer;
 
+/// `x-activestorage-dtype` header definition
 static HEADER_DTYPE: header::HeaderName = header::HeaderName::from_static("x-activestorage-dtype");
+/// `x-activestorage-shape` header definition
 static HEADER_SHAPE: header::HeaderName = header::HeaderName::from_static("x-activestorage-shape");
 
 impl IntoResponse for models::Response {
+    /// Convert a [crate::models::Response] into a [axum::response::Response].
     fn into_response(self) -> Response {
         (
             [
@@ -42,6 +47,15 @@ impl IntoResponse for models::Response {
     }
 }
 
+/// Returns a [axum::Router] for the Active Storage server API
+///
+/// The router is populated with all routes as well as the following middleware:
+///
+/// * a [tower_http::trace::TraceLayer] for tracing requests and responses
+/// * a [tower_http::validate_request::ValidateRequestHeaderLayer] for validating authorisation
+///   headers
+/// * a [tower_http::normalize_path::NormalizePathLayer] for trimming trailing slashes from
+///   requests
 pub fn router() -> Router {
     fn v1() -> Router {
         Router::new()
@@ -74,10 +88,19 @@ pub fn router() -> Router {
         .layer(NormalizePathLayer::trim_trailing_slash())
 }
 
+/// TODO: Return an OpenAPI schema
 async fn schema() -> &'static str {
     "Hello, world!"
 }
 
+/// Download an object from S3
+///
+/// Requests a byte range if `offset` or `size` is specified in the request.
+///
+/// # Arguments
+///
+/// * `auth`: Basic authentication credentials
+/// * `request_data`: RequestData object for the request
 async fn download_object(
     auth: &Authorization<Basic>,
     request_data: &models::RequestData,
@@ -89,9 +112,15 @@ async fn download_object(
         .await
 }
 
-/// Handler for operations
+/// Handler for Active Storage operations
 ///
-/// Returns a `Result` with `models::Response` on success and `ActiveStorageError` on failure.
+/// Downloads object data from S3 storage and executes the requested reduction operation.
+///
+/// This function is generic over any type implementing the [crate::operation::Operation] trait,
+/// allowing it to handle any operation conforming to that interface.
+///
+/// Returns a `Result` with [crate::models::Response] on success and
+/// [crate::error::ActiveStorageError] on failure.
 ///
 /// # Arguments
 ///
@@ -105,6 +134,13 @@ async fn operation_handler<T: operation::Operation>(
     T::execute(&request_data, &data)
 }
 
+/// Handler for unknown operations
+///
+/// Returns an [crate::error::ActiveStorageError].
+///
+/// # Arguments
+///
+/// * `operation`: the unknown operation from the URL path
 async fn unknown_operation_handler(Path(operation): Path<String>) -> ActiveStorageError {
     ActiveStorageError::UnsupportedOperation { operation }
 }

@@ -1,3 +1,5 @@
+//! Interface for Active Storage operations
+
 use crate::error::ActiveStorageError;
 use crate::models;
 

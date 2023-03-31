@@ -1,4 +1,4 @@
-//! This module provides a simplified S3 client that supports downloading objects.
+//! A simplified S3 client that supports downloading objects.
 //! It attempts to hide the complexities of working with the AWS SDK for S3.
 
 use crate::error::ActiveStorageError;

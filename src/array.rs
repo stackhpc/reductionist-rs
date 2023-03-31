@@ -1,4 +1,4 @@
-//! This module provides functions and utilities for working with ndarray objects.
+//! Functions and utilities for working with [ndarray] objects.
 
 use crate::error::ActiveStorageError;
 use crate::models;
