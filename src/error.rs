@@ -141,6 +141,14 @@ impl ErrorResponse {
         Self::new(StatusCode::BAD_REQUEST, error)
     }
 
+    /// Return a 401 unauthorised ErrorResponse
+    fn unauthorised<E>(error: &E) -> Self
+    where
+        E: std::error::Error + Send + Sync,
+    {
+        Self::new(StatusCode::UNAUTHORIZED, error)
+    }
+
     /// Return a 404 not found ErrorResponse
     fn not_found<E>(error: &E) -> Self
     where
@@ -194,9 +202,22 @@ impl From<ActiveStorageError> for ErrorResponse {
                             GetObjectErrorKind::InvalidObjectState(_)
                             | GetObjectErrorKind::NoSuchKey(_) => Self::bad_request(&error),
 
-                            // FIXME: Quite a lot of error cases end up here - invalid username,
-                            // password, etc.
-                            GetObjectErrorKind::Unhandled(_) => Self::internal_server_error(&error),
+                            // Quite a lot of error cases end up as unhandled. Attempt to determine
+                            // the error from the code.
+                            GetObjectErrorKind::Unhandled(_) => {
+                                match get_obj_error.code() {
+                                    // Bad request
+                                    Some("NoSuchBucket") => Self::bad_request(&error),
+
+                                    // Unauthorised
+                                    Some("InvalidAccessKeyId") | Some("SignatureDoesNotMatch") => {
+                                        Self::unauthorised(&error)
+                                    }
+
+                                    // Internal server error
+                                    _ => Self::internal_server_error(&error),
+                                }
+                            }
 
                             // The enum is marked as non-exhaustive
                             _ => Self::internal_server_error(&error),
@@ -301,22 +322,83 @@ mod tests {
         test_active_storage_error(error, StatusCode::BAD_REQUEST, message, caused_by).await;
     }
 
+    // Helper function for S3 GetObjectError errors
+    async fn test_s3_get_object_error(
+        sdk_error: SdkError<GetObjectError>,
+        status: StatusCode,
+        caused_by: Option<Vec<&'static str>>,
+    ) {
+        let error = ActiveStorageError::S3GetObject(sdk_error);
+        let message = "error retrieving object from S3 storage";
+        test_active_storage_error(error, status, message, caused_by).await;
+    }
+
+    fn get_smithy_response() -> SmithyResponse {
+        let sdk_body = "body";
+        let http_response = HttpResponse::new(sdk_body.into());
+        SmithyResponse::new(http_response)
+    }
+
     #[tokio::test]
     async fn s3_get_object_error() {
         // Jump through hoops to create an SdkError.
         let smithy_error = SmithyError::builder().message("fake smithy error").build();
         let no_such_key_error = GetObjectErrorKind::NoSuchKey(NoSuchKey::builder().build());
         let get_object_error = GetObjectError::new(no_such_key_error, smithy_error);
-        let sdk_body = "body";
-        let http_response = HttpResponse::new(sdk_body.into());
-        let smithy_response = SmithyResponse::new(http_response);
-        let error = ActiveStorageError::S3GetObject(SdkError::service_error(
-            get_object_error,
-            smithy_response,
-        ));
-        let message = "error retrieving object from S3 storage";
+        let sdk_error = SdkError::service_error(get_object_error, get_smithy_response());
         let caused_by = Some(vec!["service error", "NoSuchKey"]);
-        test_active_storage_error(error, StatusCode::BAD_REQUEST, message, caused_by).await;
+        test_s3_get_object_error(sdk_error, StatusCode::BAD_REQUEST, caused_by).await;
+    }
+
+    #[tokio::test]
+    async fn s3_get_object_invalid_access_key_error() {
+        // Jump through hoops to create an SdkError.
+        let smithy_error = SmithyError::builder()
+            .message("fake smithy error")
+            .code("InvalidAccessKeyId")
+            .build();
+        let get_object_error = GetObjectError::generic(smithy_error);
+        let sdk_error = SdkError::service_error(get_object_error, get_smithy_response());
+        let caused_by = Some(vec![
+            "service error",
+            "unhandled error",
+            "Error { code: \"InvalidAccessKeyId\", message: \"fake smithy error\" }",
+        ]);
+        test_s3_get_object_error(sdk_error, StatusCode::UNAUTHORIZED, caused_by).await;
+    }
+
+    #[tokio::test]
+    async fn s3_get_object_no_such_bucket() {
+        // Jump through hoops to create an SdkError.
+        let smithy_error = SmithyError::builder()
+            .message("fake smithy error")
+            .code("NoSuchBucket")
+            .build();
+        let get_object_error = GetObjectError::generic(smithy_error);
+        let sdk_error = SdkError::service_error(get_object_error, get_smithy_response());
+        let caused_by = Some(vec![
+            "service error",
+            "unhandled error",
+            "Error { code: \"NoSuchBucket\", message: \"fake smithy error\" }",
+        ]);
+        test_s3_get_object_error(sdk_error, StatusCode::BAD_REQUEST, caused_by).await;
+    }
+
+    #[tokio::test]
+    async fn s3_get_object_sig_does_not_match_error() {
+        // Jump through hoops to create an SdkError.
+        let smithy_error = SmithyError::builder()
+            .message("fake smithy error")
+            .code("SignatureDoesNotMatch")
+            .build();
+        let get_object_error = GetObjectError::generic(smithy_error);
+        let sdk_error = SdkError::service_error(get_object_error, get_smithy_response());
+        let caused_by = Some(vec![
+            "service error",
+            "unhandled error",
+            "Error { code: \"SignatureDoesNotMatch\", message: \"fake smithy error\" }",
+        ]);
+        test_s3_get_object_error(sdk_error, StatusCode::UNAUTHORIZED, caused_by).await;
     }
 
     #[tokio::test]
