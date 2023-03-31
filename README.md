@@ -113,13 +113,13 @@ cd s3-active-storage-rs
 Next, use Cargo to build the package:
 
 ```sh
-cargo build
+cargo build --release
 ```
 
 The active storage server may be run using Cargo:
 
 ```sh
-cargo run
+cargo run --release
 ```
 
 Or installed to the system:
@@ -202,6 +202,19 @@ sum_result = sum_result.reshape(shape)
 The proxy adds two custom headers `x-activestorage-dtype` and `x-activestrorage-shape` to the HTTP response to allow the numeric result to be reconstructed from the binary content of the response.
 
 ---
+
+## Documentation
+
+The source code is documented using [rustdoc](https://doc.rust-lang.org/rustdoc/what-is-rustdoc.html).
+Currently the `s3-active-storage` crate is not uploaded to https://crates.io, so we do not benefit from hosted documentation on https://docs.rs.
+It is however possible to build the documentation locally:
+
+```sh
+cargo doc
+```
+
+Cargo builds documentation for the `s3-active-storage` crate and all of its dependencies.
+The resulting documentation is available under `target/doc`, and may be viewed in a web browser using file:///path/to/s3-active-storage/target/doc/s3-active-storage/index.html.
 
 ## Contributing
 

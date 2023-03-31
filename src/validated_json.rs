@@ -1,3 +1,5 @@
+//! Axum extractor that deserialises and validates JSON
+
 use crate::error::ActiveStorageError;
 
 use async_trait::async_trait;

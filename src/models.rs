@@ -1,17 +1,26 @@
+//! Data types and associated functions and methods
+
 use axum::body::Bytes;
 use serde::{Deserialize, Serialize};
 use strum_macros::Display;
 use url::Url;
 use validator::{Validate, ValidationError};
 
+/// Supported numerical data types
 #[derive(Clone, Copy, Debug, Deserialize, Display, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum DType {
+    /// [i32]
     Int32,
+    /// [i64]
     Int64,
+    /// [u64]
     Uint32,
+    /// [u64]
     Uint64,
+    /// [f64]
     Float32,
+    /// [f64]
     Float64,
 }
 
@@ -29,20 +38,29 @@ impl DType {
     }
 }
 
+/// Array ordering
+///
+/// Defines an ordering for multi-dimensional arrays.
 #[derive(Debug, Deserialize, PartialEq)]
 pub enum Order {
+    /// Row-major (C) ordering
     C,
+    /// Column-major (Fortran) ordering
     F,
 }
 
+/// A slice of a single dimension of an array
 // NOTE: In serde, structs can be deserialised from sequences or maps. This allows us to support
 // the [<start>, <end>, <stride>] API, with the convenience of named fields.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize, Validate)]
 #[serde(deny_unknown_fields)]
 #[validate(schema(function = "validate_slice"))]
 pub struct Slice {
+    /// Start of the slice
     pub start: usize,
+    /// End of the slice
     pub end: usize,
+    /// Stride size
     #[validate(range(min = 1, message = "stride must be greater than 0"))]
     pub stride: usize,
 }
@@ -55,31 +73,42 @@ impl Slice {
     }
 }
 
+/// Request data for operations
 #[derive(Debug, Deserialize, PartialEq, Validate)]
 #[serde(deny_unknown_fields)]
 #[validate(schema(function = "validate_request_data"))]
 pub struct RequestData {
+    /// URL of the S3-compatible object store
     // TODO: Investigate using lifetimes to enable zero-copy: https://serde.rs/lifetimes.html
     pub source: Url,
+    /// S3 bucket containing the object
     #[validate(length(min = 1, message = "bucket must not be empty"))]
     pub bucket: String,
+    /// S3 object containing the data
     #[validate(length(min = 1, message = "object must not be empty"))]
     pub object: String,
+    /// Data type
     pub dtype: DType,
+    /// Offset in bytes of the numerical data within the object
     pub offset: Option<usize>,
+    /// Size in bytes of the numerical data from the offset
     #[validate(range(min = 1, message = "size must be greater than 0"))]
     pub size: Option<usize>,
+    /// Shape of the multi-dimensional array
     #[validate(
         length(min = 1, message = "shape length must be greater than 0"),
         custom = "validate_shape"
     )]
     pub shape: Option<Vec<usize>>,
+    /// Order of the multi-dimensional array
     pub order: Option<Order>,
+    /// Subset of the data to operate on
     #[validate]
     #[validate(length(min = 1, message = "selection length must be greater than 0"))]
     pub selection: Option<Vec<Slice>>,
 }
 
+/// Validate an array shape
 fn validate_shape(shape: &[usize]) -> Result<(), ValidationError> {
     if shape.iter().any(|index| *index == 0) {
         return Err(ValidationError::new("shape indices must be greater than 0"));
@@ -87,6 +116,7 @@ fn validate_shape(shape: &[usize]) -> Result<(), ValidationError> {
     Ok(())
 }
 
+/// Validate an array slice
 fn validate_slice(slice: &Slice) -> Result<(), ValidationError> {
     if slice.end <= slice.start {
         let mut error = ValidationError::new("Selection end must be greater than start");
@@ -121,10 +151,10 @@ fn validate_shape_selection(
     Ok(())
 }
 
+/// Validate request data
 fn validate_request_data(request_data: &RequestData) -> Result<(), ValidationError> {
     // Validation of multiple fields in RequestData.
     // TODO: More validation of shape & selection vs. size
-    // TODO: More validation that selection fits in shape
     if let Some(size) = &request_data.size {
         let dtype_size = request_data.dtype.size_of();
         if size % dtype_size != 0 {
@@ -150,12 +180,16 @@ fn validate_request_data(request_data: &RequestData) -> Result<(), ValidationErr
 
 /// Response containing the result of a computation and associated metadata.
 pub struct Response {
+    /// Response data. May be a scalar or multi-dimensional array.
     pub body: Bytes,
+    /// Data type of the response
     pub dtype: DType,
+    /// Shape of the response
     pub shape: Vec<usize>,
 }
 
 impl Response {
+    /// Return a Response object
     pub fn new(body: Bytes, dtype: DType, shape: Vec<usize>) -> Response {
         Response { body, dtype, shape }
     }
