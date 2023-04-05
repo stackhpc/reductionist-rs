@@ -22,6 +22,9 @@
 //! * [ndarray] provides [NumPy](https://numpy.orgq)-like n-dimensional arrays used in numerical
 //!   computation.
 
+use std::{net::SocketAddr, path::PathBuf, str::FromStr, time::Duration};
+
+use axum_server::{tls_rustls::RustlsConfig, Handle};
 use clap::Parser;
 use tokio::signal;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -44,6 +47,23 @@ struct CommandLineArgs {
     /// The port to which the proxy should bind
     #[arg(long, default_value_t = 8080, env = "S3_ACTIVE_STORAGE_PORT")]
     port: u16,
+    /// Flag indicating whether HTTPS should be used
+    #[arg(long, default_value_t = false, env = "S3_ACTIVE_STORAGE_HTTPS")]
+    https: bool,
+    /// Path to the TLS certificate file to be used for HTTPS encryption
+    #[arg(
+        long,
+        default_value = ".certs/cert.pem",
+        env = "S3_ACTIVE_STORAGE_CERT_FILE"
+    )]
+    cert_file: PathBuf,
+    /// Path to the TLS key file to be used for HTTPS encryption
+    #[arg(
+        long,
+        default_value = ".certs/key.pem",
+        env = "S3_ACTIVE_STORAGE_KEY_FILE"
+    )]
+    key_file: PathBuf,
 }
 
 /// Application entry point
@@ -51,16 +71,37 @@ struct CommandLineArgs {
 async fn main() {
     let args = CommandLineArgs::parse();
 
+    // Make use of command line args
+    let addr = SocketAddr::from_str(&format!("{}:{}", args.host, args.port)).unwrap();
+    let cert_path = args.cert_file.canonicalize().unwrap();
+    let key_path = args.key_file.canonicalize().unwrap();
+    let tls_config = RustlsConfig::from_pem_file(cert_path, key_path)
+        .await
+        .unwrap();
+
     init_tracing();
 
     let router = app::router();
 
-    // run it with hyper
-    axum::Server::bind(&format!("{}:{}", args.host, args.port).parse().unwrap())
-        .serve(router.into_make_service())
-        .with_graceful_shutdown(shutdown_signal())
-        .await
-        .unwrap();
+    if args.https {
+        // Catch ctrl+c and try to shutdown gracefully
+        let handle = Handle::new();
+        tokio::spawn(shutdown_signal_https(handle.clone()));
+        // run HTTPS server with hyper
+        axum_server::bind_rustls(addr, tls_config)
+            .handle(handle)
+            .serve(router.into_make_service())
+            .await
+            .unwrap();
+    } else {
+        // TODO: Use axum_server here too mimic HTTPS API and remove need for two shutdown handlers
+        // run HTTP server with hyper
+        axum::Server::bind(&format!("{}:{}", args.host, args.port).parse().unwrap())
+            .serve(router.into_make_service())
+            .with_graceful_shutdown(shutdown_signal_http())
+            .await
+            .unwrap();
+    }
 }
 
 /// Initlialise tracing (logging)
@@ -77,10 +118,41 @@ fn init_tracing() {
         .init();
 }
 
-/// Graceful shutdown handler
+/// Graceful shutdown handler for HTTPS server
 ///
 /// Installs signal handlers to catch Ctrl-C or SIGTERM and trigger a graceful shutdown.
-async fn shutdown_signal() {
+async fn shutdown_signal_https(handle: Handle) {
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
+
+    println!("signal received, starting graceful shutdown");
+    // Force shutdown if graceful shutdown takes longer than 10s
+    handle.graceful_shutdown(Some(Duration::from_secs(10)));
+}
+
+/// Graceful shutdown handler for HTTP server
+///
+/// Installs signal handlers to catch Ctrl-C or SIGTERM and trigger a graceful shutdown.
+async fn shutdown_signal_http() {
     let ctrl_c = async {
         signal::ctrl_c()
             .await
