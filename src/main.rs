@@ -40,8 +40,8 @@ mod validated_json;
 struct CommandLineArgs {
     #[arg(long, default_value = "0.0.0.0", env = "S3_ACTIVE_STORAGE_HOST")]
     host: String,
-    #[arg(long, default_value = "8080", env = "S3_ACTIVE_STORAGE_PORT")]
-    port: String,
+    #[arg(long, default_value = 8080, env = "S3_ACTIVE_STORAGE_PORT")]
+    port: u16,
 }
 
 /// Application entry point
