@@ -38,8 +38,10 @@ mod validated_json;
 /// S3 Active Storage Proxy command line interface
 #[derive(Debug, Parser)]
 struct CommandLineArgs {
+    /// The IP address on which the proxy should listen
     #[arg(long, default_value = "0.0.0.0", env = "S3_ACTIVE_STORAGE_HOST")]
     host: String,
+    /// The port to which the proxy should bind
     #[arg(long, default_value_t = 8080, env = "S3_ACTIVE_STORAGE_PORT")]
     port: u16,
 }
