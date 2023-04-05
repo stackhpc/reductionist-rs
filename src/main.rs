@@ -95,7 +95,7 @@ async fn main() {
             .await
             .unwrap();
     } else {
-        // run HTTPS server with hyper
+        // run HTTP server with hyper
         axum_server::bind(addr)
             .handle(handle)
             .serve(router.into_make_service())
