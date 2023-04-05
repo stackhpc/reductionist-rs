@@ -85,7 +85,7 @@ async fn main() {
 
     // Catch ctrl+c and try to shutdown gracefully
     let handle = Handle::new();
-    tokio::spawn(shutdown_signal_https(handle.clone()));
+    tokio::spawn(shutdown_signal(handle.clone()));
 
     if args.https {
         // run HTTPS server with hyper
@@ -121,7 +121,7 @@ fn init_tracing() {
 /// Graceful shutdown handler
 ///
 /// Installs signal handlers to catch Ctrl-C or SIGTERM and trigger a graceful shutdown.
-async fn shutdown_signal_https(handle: Handle) {
+async fn shutdown_signal(handle: Handle) {
     let ctrl_c = async {
         signal::ctrl_c()
             .await
