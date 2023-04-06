@@ -9,7 +9,7 @@ use crate::validated_json::ValidatedJson;
 
 use axum::{
     body::{Body, Bytes},
-    extract::Path,
+    extract::{Path, State},
     headers::authorization::{Authorization, Basic},
     http::header,
     http::Request,
@@ -59,12 +59,27 @@ impl IntoResponse for models::Response {
 pub fn router() -> Router {
     fn v1() -> Router {
         Router::new()
-            .route("/count", post(operation_handler::<operations::Count>))
-            .route("/max", post(operation_handler::<operations::Max>))
-            .route("/mean", post(operation_handler::<operations::Mean>))
-            .route("/min", post(operation_handler::<operations::Min>))
-            .route("/select", post(operation_handler::<operations::Select>))
-            .route("/sum", post(operation_handler::<operations::Sum>))
+            .route(
+                "/count",
+                post(operation_handler).with_state(&operations::Count {}),
+            )
+            .route(
+                "/max",
+                post(operation_handler).with_state(&operations::Max {}),
+            )
+            .route(
+                "/mean",
+                post(operation_handler).with_state(&operations::Mean {}),
+            )
+            .route(
+                "/min",
+                post(operation_handler).with_state(&operations::Min {}),
+            )
+            //.route("/select", post(operation_handler).with_state(&operations::Select { }))
+            .route(
+                "/sum",
+                post(operation_handler).with_state(&operations::Sum {}),
+            )
             .route("/:operation", post(unknown_operation_handler))
             .layer(
                 ServiceBuilder::new()
@@ -127,11 +142,12 @@ async fn download_object(
 /// * `auth`: Basic authorization header
 /// * `request_data`: RequestData object for the request
 async fn operation_handler<T: operation::Operation>(
+    State(operation): State<&T>,
     TypedHeader(auth): TypedHeader<Authorization<Basic>>,
     ValidatedJson(request_data): ValidatedJson<models::RequestData>,
 ) -> Result<models::Response, ActiveStorageError> {
     let data = download_object(&auth, &request_data).await?;
-    T::execute(&request_data, &data)
+    operation.execute(&request_data, &data)
 }
 
 /// Handler for unknown operations

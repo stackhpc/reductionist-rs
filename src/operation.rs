@@ -1,40 +1,11 @@
 //! Interface for Active Storage operations
 
+use crate::array;
 use crate::error::ActiveStorageError;
 use crate::models;
 
 use axum::body::Bytes;
-
-/// Trait for array elements.
-pub trait Element:
-    Clone
-    + Copy
-    + PartialOrd
-    + num_traits::FromPrimitive
-    + num_traits::Zero
-    + std::fmt::Debug
-    + std::ops::Add<Output = Self>
-    + std::ops::Div<Output = Self>
-    + zerocopy::AsBytes
-    + zerocopy::FromBytes
-{
-}
-
-/// Blanket implementation of Element.
-impl<T> Element for T where
-    T: Clone
-        + Copy
-        + PartialOrd
-        + num_traits::FromPrimitive
-        + num_traits::One
-        + num_traits::Zero
-        + std::fmt::Debug
-        + std::ops::Add<Output = Self>
-        + std::ops::Div<Output = Self>
-        + zerocopy::AsBytes
-        + zerocopy::FromBytes
-{
-}
+use ndarray::ArrayView;
 
 /// Trait for active storage operations.
 ///
@@ -49,40 +20,117 @@ pub trait Operation {
     /// * `request_data`: RequestData object for the request
     /// * `data`: Bytes containing data to operate on.
     fn execute(
+        &self,
         request_data: &models::RequestData,
         data: &Bytes,
     ) -> Result<models::Response, ActiveStorageError>;
+}
+
+impl<T> Operation for T
+where
+    i32: NumOp<T>,
+    i64: NumOp<T>,
+    u32: NumOp<T>,
+    u64: NumOp<T>,
+    f32: NumOp<T>,
+    f64: NumOp<T>,
+{
+    fn execute(
+        &self,
+        request_data: &models::RequestData,
+        data: &Bytes,
+    ) -> Result<models::Response, ActiveStorageError> {
+        match request_data.dtype {
+            models::DType::Int32 => i32::execute(self, request_data, data),
+            models::DType::Int64 => i64::execute(self, request_data, data),
+            models::DType::Uint32 => u32::execute(self, request_data, data),
+            models::DType::Uint64 => u64::execute(self, request_data, data),
+            models::DType::Float32 => f32::execute(self, request_data, data),
+            models::DType::Float64 => f64::execute(self, request_data, data),
+        }
+    }
 }
 
 /// Trait for active storage operations on numerical data.
 ///
 /// This trait provides an entry point into the type system based on the runtime `dtype` value.
-pub trait NumOperation: Operation {
-    fn execute_t<T: Element>(
+pub trait NumOp<O> {
+    fn execute(
+        operation: &O,
         request_data: &models::RequestData,
         data: &Bytes,
-    ) -> Result<models::Response, ActiveStorageError>;
+    ) -> Result<models::Response, ActiveStorageError>
+    where
+        Self: Sized;
 }
 
-impl<T: NumOperation> Operation for T {
-    /// Execute the operation.
-    ///
-    /// This method dispatches to `execute_t` based on the `dtype`.
-    fn execute(
-        request_data: &models::RequestData,
-        data: &Bytes,
-    ) -> Result<models::Response, ActiveStorageError> {
-        // Convert runtime data type into concrete types.
-        match request_data.dtype {
-            models::DType::Int32 => Self::execute_t::<i32>(request_data, data),
-            models::DType::Int64 => Self::execute_t::<i64>(request_data, data),
-            models::DType::Uint32 => Self::execute_t::<u32>(request_data, data),
-            models::DType::Uint64 => Self::execute_t::<u64>(request_data, data),
-            models::DType::Float32 => Self::execute_t::<f32>(request_data, data),
-            models::DType::Float64 => Self::execute_t::<f64>(request_data, data),
+/// A typed operation result.
+pub struct OperationResult<R: zerocopy::AsBytes> {
+    /// Result data
+    pub result: R,
+    /// Data type of the result
+    pub dtype: models::DType,
+    /// Shape of the result
+    pub shape: Vec<usize>,
+}
+
+impl<R: zerocopy::AsBytes> OperationResult<R> {
+    pub fn new(result: R, dtype: models::DType, shape: Vec<usize>) -> Self {
+        OperationResult {
+            result,
+            dtype,
+            shape,
         }
     }
 }
+
+impl<R: zerocopy::AsBytes> From<OperationResult<R>> for models::Response {
+    fn from(result: OperationResult<R>) -> models::Response {
+        // FIXME: endianness
+        let body = result.result.as_bytes();
+        // Need to copy to provide ownership to caller.
+        let body = Bytes::copy_from_slice(body);
+        models::Response::new(body, result.dtype, result.shape)
+    }
+}
+
+pub trait ArrayOp<O> {
+    type Res: zerocopy::AsBytes;
+
+    fn execute_array(
+        operation: &O,
+        request_data: &models::RequestData,
+        array: &ArrayView<Self, ndarray::Dim<ndarray::IxDynImpl>>,
+    ) -> Result<OperationResult<Self::Res>, ActiveStorageError>
+    where
+        Self: Sized;
+}
+
+impl<T, O> NumOp<O> for T
+where
+    T: zerocopy::AsBytes + zerocopy::FromBytes + ArrayOp<O>,
+{
+    fn execute(
+        operation: &O,
+        request_data: &models::RequestData,
+        data: &Bytes,
+    ) -> Result<models::Response, ActiveStorageError>
+    where
+        Self: Sized,
+    {
+        let array = array::build_array(request_data, data)?;
+        let result = if let Some(selection) = &request_data.selection {
+            let slice_info = array::build_slice_info::<T>(selection);
+            let sliced = array.slice(slice_info);
+            Self::execute_array(operation, request_data, &sliced)?
+        } else {
+            Self::execute_array(operation, request_data, &array)?
+        };
+        Ok(result.into())
+    }
+}
+
+// TODO: fix tests
 
 #[cfg(test)]
 mod tests {

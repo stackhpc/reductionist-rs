@@ -3,155 +3,154 @@
 //! Each operation is implemented as a struct that implements the
 //! [Operation](crate::operation::Operation) trait.
 
-use crate::array;
 use crate::error::ActiveStorageError;
 use crate::models;
-use crate::operation::{Element, NumOperation};
+use crate::operation::{ArrayOp, OperationResult};
 
-use axum::body::Bytes;
+use ndarray::ArrayView;
 use ndarray_stats::{errors::MinMaxError, QuantileExt};
-// Bring trait into scope to use as_bytes method.
-use zerocopy::AsBytes;
 
 /// Return the number of selected elements in the array.
 pub struct Count {}
 
-impl NumOperation for Count {
-    fn execute_t<T: Element>(
-        request_data: &models::RequestData,
-        data: &Bytes,
-    ) -> Result<models::Response, ActiveStorageError> {
-        let array = array::build_array::<T>(request_data, data)?;
-        let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
-        let sliced = array.slice(slice_info);
-        // FIXME: endianness?
-        let len = i64::try_from(sliced.len())?;
-        let body = len.to_le_bytes();
-        // Need to copy to provide ownership to caller.
-        let body = Bytes::copy_from_slice(&body);
-        Ok(models::Response::new(body, models::DType::Int64, vec![]))
+impl<T> ArrayOp<Count> for T {
+    type Res = u64;
+
+    fn execute_array(
+        _operation: &Count,
+        _request_data: &models::RequestData,
+        array: &ArrayView<T, ndarray::Dim<ndarray::IxDynImpl>>,
+    ) -> Result<OperationResult<Self::Res>, ActiveStorageError> {
+        let result = array
+            .len()
+            .try_into()
+            .map_err(ActiveStorageError::TryFromInt)?;
+        Ok(OperationResult::new(result, models::DType::Int64, vec![]))
     }
 }
 
 /// Return the maximum of selected elements in the array.
 pub struct Max {}
 
-impl NumOperation for Max {
-    fn execute_t<T: Element>(
+impl<T> ArrayOp<Max> for T
+where
+    T: Copy + PartialOrd + zerocopy::AsBytes,
+{
+    type Res = T;
+
+    fn execute_array(
+        _operation: &Max,
         request_data: &models::RequestData,
-        data: &Bytes,
-    ) -> Result<models::Response, ActiveStorageError> {
-        let array = array::build_array::<T>(request_data, data)?;
-        let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
-        let sliced = array.slice(slice_info);
-        // FIXME: endianness?
-        let body = sliced
+        array: &ArrayView<T, ndarray::Dim<ndarray::IxDynImpl>>,
+    ) -> Result<OperationResult<Self::Res>, ActiveStorageError> {
+        let result = array
             .max()
             .map_err(|err| match err {
                 MinMaxError::EmptyInput => ActiveStorageError::EmptyArray { operation: "max" },
                 MinMaxError::UndefinedOrder => panic!("unexpected undefined order error for max"),
-            })?
-            .as_bytes();
-        // Need to copy to provide ownership to caller.
-        let body = Bytes::copy_from_slice(body);
-        Ok(models::Response::new(body, request_data.dtype, vec![]))
+            })
+            .copied()?;
+        Ok(OperationResult::new(result, request_data.dtype, vec![]))
     }
 }
 
 /// Return the mean of selected elements in the array.
 pub struct Mean {}
 
-impl NumOperation for Mean {
-    fn execute_t<T: Element>(
+impl<T> ArrayOp<Mean> for T
+where
+    T: Copy
+        + num_traits::FromPrimitive
+        + num_traits::Zero
+        + std::ops::Div<Output = T>
+        + zerocopy::AsBytes,
+{
+    type Res = T;
+
+    fn execute_array(
+        _operation: &Mean,
         request_data: &models::RequestData,
-        data: &Bytes,
-    ) -> Result<models::Response, ActiveStorageError> {
-        let array = array::build_array::<T>(request_data, data)?;
-        let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
-        let sliced = array.slice(slice_info);
-        // FIXME: endianness?
-        let body = sliced
+        array: &ArrayView<T, ndarray::Dim<ndarray::IxDynImpl>>,
+    ) -> Result<OperationResult<Self::Res>, ActiveStorageError> {
+        let result = array
             .mean()
             .ok_or(ActiveStorageError::EmptyArray { operation: "mean" })?;
-        let body = body.as_bytes();
-        // Need to copy to provide ownership to caller.
-        let body = Bytes::copy_from_slice(body);
-        Ok(models::Response::new(body, request_data.dtype, vec![]))
+        Ok(OperationResult::new(result, request_data.dtype, vec![]))
     }
 }
 
 /// Return the minimum of selected elements in the array.
 pub struct Min {}
 
-impl NumOperation for Min {
-    fn execute_t<T: Element>(
+impl<T> ArrayOp<Min> for T
+where
+    T: Copy + PartialOrd + zerocopy::AsBytes,
+{
+    type Res = T;
+
+    fn execute_array(
+        _operation: &Min,
         request_data: &models::RequestData,
-        data: &Bytes,
-    ) -> Result<models::Response, ActiveStorageError> {
-        let array = array::build_array::<T>(request_data, data)?;
-        let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
-        let sliced = array.slice(slice_info);
-        // FIXME: endianness?
-        let body = sliced
+        array: &ArrayView<T, ndarray::Dim<ndarray::IxDynImpl>>,
+    ) -> Result<OperationResult<Self::Res>, ActiveStorageError> {
+        let result = array
             .min()
             .map_err(|err| match err {
                 MinMaxError::EmptyInput => ActiveStorageError::EmptyArray { operation: "min" },
                 MinMaxError::UndefinedOrder => panic!("unexpected undefined order error for min"),
-            })?
-            .as_bytes();
-        // Need to copy to provide ownership to caller.
-        let body = Bytes::copy_from_slice(body);
-        Ok(models::Response::new(body, request_data.dtype, vec![]))
+            })
+            .copied()?;
+        Ok(OperationResult::new(result, request_data.dtype, vec![]))
     }
 }
 
 /// Return all selected elements in the array.
-pub struct Select {}
-
-impl NumOperation for Select {
-    fn execute_t<T: Element>(
-        request_data: &models::RequestData,
-        data: &Bytes,
-    ) -> Result<models::Response, ActiveStorageError> {
-        let array = array::build_array::<T>(request_data, data)?;
-        let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
-        let sliced = array.slice(slice_info);
-        let shape = sliced.shape().to_vec();
-        // Transpose Fortran ordered arrays before iterating.
-        let body = if !array.is_standard_layout() {
-            let sliced_ordered = sliced.t();
-            // FIXME: endianness?
-            sliced_ordered.iter().copied().collect::<Vec<T>>()
-        } else {
-            // FIXME: endianness?
-            sliced.iter().copied().collect::<Vec<T>>()
-        };
-        let body = body.as_bytes();
-        // Need to copy to provide ownership to caller.
-        let body = Bytes::copy_from_slice(body);
-        Ok(models::Response::new(body, request_data.dtype, shape))
-    }
-}
+//pub struct Select {}
+//
+//// FIXME: explicit lifetime name needed here
+//impl<T> ArrayOp<Select> for T
+//where
+//    T: Copy
+//        + zerocopy::AsBytes
+//{
+//    type Res = Vec<T>; // doesn't implement AsBytes. Need a wrapper type?
+//
+//    fn execute_array(
+//        _operation: &Select,
+//        request_data: &models::RequestData,
+//        array: &ArrayView<T, ndarray::Dim<ndarray::IxDynImpl>>,
+//    ) -> Result<OperationResult<Self::Res>, ActiveStorageError> {
+//        // Transpose Fortran ordered arrays before iterating.
+//        let result = if !array.is_standard_layout() {
+//            array.t()
+//        } else {
+//            array
+//        }.iter().copied().collect::<Vec<T>>();
+//        let shape = array.shape().to_vec();
+//        Ok(OperationResult::new(result, request_data.dtype, shape))
+//    }
+//}
 
 /// Return the sum of selected elements in the array.
 pub struct Sum {}
 
-impl NumOperation for Sum {
-    fn execute_t<T: Element>(
+impl<T> ArrayOp<Sum> for T
+where
+    T: Copy + num_traits::Zero + zerocopy::AsBytes,
+{
+    type Res = T;
+
+    fn execute_array(
+        _operation: &Sum,
         request_data: &models::RequestData,
-        data: &Bytes,
-    ) -> Result<models::Response, ActiveStorageError> {
-        let array = array::build_array::<T>(request_data, data)?;
-        let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
-        let sliced = array.slice(slice_info);
-        // FIXME: endianness?
-        let body = sliced.sum();
-        let body = body.as_bytes();
-        // Need to copy to provide ownership to caller.
-        let body = Bytes::copy_from_slice(body);
-        Ok(models::Response::new(body, request_data.dtype, vec![]))
+        array: &ArrayView<T, ndarray::Dim<ndarray::IxDynImpl>>,
+    ) -> Result<OperationResult<Self::Res>, ActiveStorageError> {
+        let result = array.sum();
+        Ok(OperationResult::new(result, request_data.dtype, vec![]))
     }
 }
+
+// TODO: fix tests...
 
 #[cfg(test)]
 mod tests {

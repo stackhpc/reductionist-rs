@@ -61,35 +61,18 @@ fn build_array_from_shape<T>(
 
 /// Returns an optional [ndarray] SliceInfo object corresponding to the selection.
 pub fn build_slice_info<T>(
-    selection: &Option<Vec<models::Slice>>,
-    shape: &[usize],
+    selection: &[models::Slice],
 ) -> ndarray::SliceInfo<Vec<ndarray::SliceInfoElem>, ndarray::IxDyn, ndarray::IxDyn> {
-    match selection {
-        Some(selection) => {
-            let si: Vec<ndarray::SliceInfoElem> = selection
-                .iter()
-                .map(|slice| ndarray::SliceInfoElem::Slice {
-                    // FIXME: usize should be isize?
-                    start: slice.start as isize,
-                    end: Some(slice.end as isize),
-                    step: slice.stride as isize,
-                })
-                .collect();
-            ndarray::SliceInfo::try_from(si).expect("SliceInfo should not fail for IxDyn")
-        }
-        _ => {
-            let si: Vec<ndarray::SliceInfoElem> = shape
-                .iter()
-                .map(|_| ndarray::SliceInfoElem::Slice {
-                    // FIXME: usize should be isize?
-                    start: 0,
-                    end: None,
-                    step: 1,
-                })
-                .collect();
-            ndarray::SliceInfo::try_from(si).expect("SliceInfo should not fail for IxDyn")
-        }
-    }
+    let si: Vec<ndarray::SliceInfoElem> = selection
+        .iter()
+        .map(|slice| ndarray::SliceInfoElem::Slice {
+            // FIXME: usize should be isize?
+            start: slice.start as isize,
+            end: Some(slice.end as isize),
+            step: slice.stride as isize,
+        })
+        .collect();
+    ndarray::SliceInfo::try_from(si).expect("SliceInfo should not fail for IxDyn")
 }
 
 /// Build an [ndarray::ArrayView](ndarray::ArrayView) object corresponding to the request and data Bytes.
