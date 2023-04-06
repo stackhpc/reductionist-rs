@@ -22,10 +22,11 @@
 //! * [ndarray] provides [NumPy](https://numpy.orgq)-like n-dimensional arrays used in numerical
 //!   computation.
 
-use std::{net::SocketAddr, path::PathBuf, str::FromStr, time::Duration};
+use std::{net::SocketAddr, process::exit, str::FromStr, time::Duration};
 
 use axum_server::{tls_rustls::RustlsConfig, Handle};
 use clap::Parser;
+use expanduser::expanduser;
 use tokio::signal;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -53,17 +54,20 @@ struct CommandLineArgs {
     /// Path to the certificate file to be used for HTTPS encryption
     #[arg(
         long,
-        default_value = ".certs/cert.pem",
+        default_value = "~/.config/s3-active-storage/certs/cert.pem",
         env = "S3_ACTIVE_STORAGE_CERT_FILE"
     )]
-    cert_file: PathBuf,
+    cert_file: String,
     /// Path to the key file to be used for HTTPS encryption
     #[arg(
         long,
-        default_value = ".certs/key.pem",
+        default_value = "~/.config/s3-active-storage/certs/key.pem",
         env = "S3_ACTIVE_STORAGE_KEY_FILE"
     )]
-    key_file: PathBuf,
+    key_file: String,
+    /// Maximum time in seconds to wait for operations to complete upon receiving `ctrl+c` signal.
+    #[arg(long, default_value_t = 60, env = "S3_ACTIVE_STORAGE_SHUTDOWN_TIMEOUT")]
+    graceful_shutdown_timeout: u64,
 }
 
 /// Application entry point
@@ -71,23 +75,48 @@ struct CommandLineArgs {
 async fn main() {
     let args = CommandLineArgs::parse();
 
-    // Make use of command line args
-    let addr = SocketAddr::from_str(&format!("{}:{}", args.host, args.port)).unwrap();
-    let cert_path = args.cert_file.canonicalize().unwrap();
-    let key_path = args.key_file.canonicalize().unwrap();
-    let tls_config = RustlsConfig::from_pem_file(cert_path, key_path)
-        .await
-        .unwrap();
-
     init_tracing();
 
     let router = app::router();
+    let addr = SocketAddr::from_str(&format!("{}:{}", args.host, args.port))
+        .expect("invalid host name, IP address or port number");
 
     // Catch ctrl+c and try to shutdown gracefully
     let handle = Handle::new();
-    tokio::spawn(shutdown_signal(handle.clone()));
+    tokio::spawn(shutdown_signal(
+        handle.clone(),
+        args.graceful_shutdown_timeout,
+    ));
 
     if args.https {
+        // Expand files
+        let abs_cert_file = expanduser(args.cert_file)
+            .expect("Failed to expand ~ to user name. Please provide an absolute path instead.")
+            .canonicalize()
+            .expect("failed to determine absolute path to TLS cerficate file");
+        let abs_key_file = expanduser(args.key_file)
+            .expect("Failed to expand ~ to user name. Please provide an absolute path instead.")
+            .canonicalize()
+            .expect("failed to determine absolute path to TLS key file");
+        // Check files exist
+        if !abs_cert_file.exists() {
+            println!(
+                "TLS certificate file expected at '{}' but not found.",
+                abs_cert_file.display()
+            );
+            exit(1)
+        }
+        if !abs_key_file.exists() {
+            println!(
+                "TLS key file expected at '{}' but not found.",
+                abs_key_file.display()
+            );
+            exit(1)
+        }
+        // Set up TLS config
+        let tls_config = RustlsConfig::from_pem_file(abs_cert_file, abs_key_file)
+            .await
+            .expect("Failed to load TLS certificate files");
         // run HTTPS server with hyper
         axum_server::bind_rustls(addr, tls_config)
             .handle(handle)
@@ -121,7 +150,7 @@ fn init_tracing() {
 /// Graceful shutdown handler
 ///
 /// Installs signal handlers to catch Ctrl-C or SIGTERM and trigger a graceful shutdown.
-async fn shutdown_signal(handle: Handle) {
+async fn shutdown_signal(handle: Handle, timeout: u64) {
     let ctrl_c = async {
         signal::ctrl_c()
             .await
@@ -146,5 +175,5 @@ async fn shutdown_signal(handle: Handle) {
 
     println!("signal received, starting graceful shutdown");
     // Force shutdown if graceful shutdown takes longer than 10s
-    handle.graceful_shutdown(Some(Duration::from_secs(10)));
+    handle.graceful_shutdown(Some(Duration::from_secs(timeout)));
 }
