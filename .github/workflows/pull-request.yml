@@ -1,8 +1,10 @@
 ---
 name: Pull request
 on:
-  - push
-  - pull_request
+  push:
+    branches:
+      - main
+  pull_request:
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -20,3 +22,72 @@ jobs:
 
       - name: Test
         run: make test
+  compliance-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Build
+        run: make build
+
+      - name: Checkout compliance test suite
+        uses: actions/checkout@v3
+        with:
+          repository: stackhpc/s3-active-storage-compliance-suite
+          path: compliance
+
+      - name: Setup python
+        uses: actions/setup-python@v4
+
+      - name: Install compliance test suite dependencies
+        run: pip install -r requirements.txt
+        working-directory: compliance
+
+      - name: Configure compliance test suite
+        run: |
+          echo 'PROXY_URL = "http://localhost:8080"' >> compliance/config.py
+        working-directory: compliance
+
+      - name: Start minio object storage
+        run: scripts/minio-start
+
+      - name: Wait for minio object storage to start
+        run: |
+          until curl -if http://localhost:9001; do
+            sleep 1;
+          done
+
+      - name: Run active storage container
+        run: make run
+
+      - name: Wait for active storage server to start
+        run: |
+          until curl -if http://localhost:8080/.well-known/s3-active-storage-schema; do
+            sleep 1;
+          done
+
+      - name: Create artifacts directory
+        run: mkdir artifacts
+
+      - name: Run compliance test suite
+        run: pytest -s > artifacts/pytest.log
+
+      - name: Get active storage logs
+        run: docker logs s3-active-storage > artifacts/s3-active-storage.log
+        if: always()
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: compliance-test
+          path: artifacts
+        if: always()
+
+      - name: Stop minio object storage
+        run: scripts/minio-stop
+        if: always()
+
+      - name: Stop active storage container
+        run: make stop
+        if: always()
