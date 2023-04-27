@@ -2,11 +2,18 @@
 
 # Adapted from the multi-stage build example in https://hub.docker.com/_/rust
 
+# Which Cargo profile to use.
+ARG PROFILE=release
+
 # Stage 1: builder
 FROM rust:1.66 as builder
-WORKDIR /usr/src/s3-active-storage
+ARG PROFILE
+WORKDIR /build
 COPY . .
-RUN cargo install --path .
+# NOTE: By default 'cargo install' ignores the Cargo.lock file, and pulls in
+# the latest allowed versions. This can result in builds failing, so use the
+# --locked argument to use Cargo.lock.
+RUN cargo install --path . --profile $PROFILE --locked
 
 # Stage 2: final image
 FROM debian:bullseye-slim
