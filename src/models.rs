@@ -50,6 +50,19 @@ pub enum Order {
 }
 
 /// A slice of a single dimension of an array
+///
+/// The API uses NumPy slice semantics:
+///
+/// When start or end is negative:
+/// * positive_start = start + length
+/// * positive_end = end + length
+/// Start and end are clamped:
+/// * positive_start = min(positive_start, 0)
+/// * positive_end + max(positive_end, length)
+/// When the stride is positive:
+/// * positive_start <= i < positive_end
+/// When the stride is negative:
+/// * positive_end <= i < positive_start
 // NOTE: In serde, structs can be deserialised from sequences or maps. This allows us to support
 // the [<start>, <end>, <stride>] API, with the convenience of named fields.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize, Validate)]
@@ -57,18 +70,17 @@ pub enum Order {
 #[validate(schema(function = "validate_slice"))]
 pub struct Slice {
     /// Start of the slice
-    pub start: usize,
+    pub start: isize,
     /// End of the slice
-    pub end: usize,
+    pub end: isize,
     /// Stride size
-    #[validate(range(min = 1, message = "stride must be greater than 0"))]
-    pub stride: usize,
+    pub stride: isize,
 }
 
 impl Slice {
     /// Return a new Slice object.
     #[allow(dead_code)]
-    pub fn new(start: usize, end: usize, stride: usize) -> Self {
+    pub fn new(start: isize, end: isize, stride: isize) -> Self {
         Slice { start, end, stride }
     }
 }
@@ -118,10 +130,9 @@ fn validate_shape(shape: &[usize]) -> Result<(), ValidationError> {
 
 /// Validate an array slice
 fn validate_slice(slice: &Slice) -> Result<(), ValidationError> {
-    if slice.end <= slice.start {
-        let mut error = ValidationError::new("Selection end must be greater than start");
-        error.add_param("start".into(), &slice.start);
-        error.add_param("end".into(), &slice.end);
+    if slice.stride == 0 {
+        let mut error = ValidationError::new("Selection stride must not be equal to zero");
+        error.add_param("stride".into(), &slice.stride);
         return Err(error);
     }
     Ok(())
@@ -138,23 +149,12 @@ fn validate_shape_selection(
         error.add_param("selection".into(), &selection.len());
         return Err(error);
     }
-    for (shape_i, selection_i) in std::iter::zip(shape, selection) {
-        if selection_i.end > *shape_i {
-            let mut error = ValidationError::new(
-                "Selection end must be less than or equal to corresponding shape index",
-            );
-            error.add_param("shape".into(), &shape_i);
-            error.add_param("selection".into(), &selection_i);
-            return Err(error);
-        }
-    }
     Ok(())
 }
 
 /// Validate request data
 fn validate_request_data(request_data: &RequestData) -> Result<(), ValidationError> {
     // Validation of multiple fields in RequestData.
-    // TODO: More validation of shape & selection vs. size
     if let Some(size) = &request_data.size {
         let dtype_size = request_data.dtype.size_of();
         if size % dtype_size != 0 {
@@ -478,7 +478,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "stride must be greater than 0")]
+    #[should_panic(expected = "Selection stride must not be equal to zero")]
     fn test_invalid_selection2() {
         let mut request_data = get_test_request_data();
         request_data.selection = Some(vec![Slice::new(1, 2, 0)]);
@@ -486,10 +486,19 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Selection end must be greater than start")]
-    fn test_invalid_selection3() {
+    fn test_selection_end_lt_start() {
+        // Numpy sementics: start >= end yields an empty array
         let mut request_data = get_test_request_data();
-        request_data.selection = Some(vec![Slice::new(1, 1, 1)]);
+        request_data.shape = Some(vec![1]);
+        request_data.selection = Some(vec![Slice::new(1, 0, 1)]);
+        request_data.validate().unwrap()
+    }
+
+    #[test]
+    fn test_selection_negative_stride() {
+        let mut request_data = get_test_request_data();
+        request_data.shape = Some(vec![1]);
+        request_data.selection = Some(vec![Slice::new(1, 0, -1)]);
         request_data.validate().unwrap()
     }
 
@@ -511,13 +520,38 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(
-        expected = "Selection end must be less than or equal to corresponding shape index"
-    )]
+    fn test_selection_start_gt_shape() {
+        // Numpy sementics: start > length yields an empty array
+        let mut request_data = get_test_request_data();
+        request_data.shape = Some(vec![4]);
+        request_data.selection = Some(vec![Slice::new(5, 5, 1)]);
+        request_data.validate().unwrap()
+    }
+
+    #[test]
+    fn test_selection_start_lt_negative_shape() {
+        // Numpy sementics: start < -length gets clamped to zero
+        let mut request_data = get_test_request_data();
+        request_data.shape = Some(vec![4]);
+        request_data.selection = Some(vec![Slice::new(-5, 5, 1)]);
+        request_data.validate().unwrap()
+    }
+
+    #[test]
     fn test_selection_end_gt_shape() {
+        // Numpy semantics: end > length gets clamped to length
         let mut request_data = get_test_request_data();
         request_data.shape = Some(vec![4]);
         request_data.selection = Some(vec![Slice::new(1, 5, 1)]);
+        request_data.validate().unwrap()
+    }
+
+    #[test]
+    fn test_selection_end_lt_negative_shape() {
+        // Numpy semantics: end < -length gets clamped to zero
+        let mut request_data = get_test_request_data();
+        request_data.shape = Some(vec![4]);
+        request_data.selection = Some(vec![Slice::new(1, -5, 1)]);
         request_data.validate().unwrap()
     }
 
