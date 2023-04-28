@@ -39,6 +39,9 @@ mod operations;
 mod s3_client;
 mod validated_json;
 
+// TODO: Gate metrics module behind a cargo feature?
+mod metrics;
+
 /// S3 Active Storage Proxy command line interface
 #[derive(Debug, Parser)]
 struct CommandLineArgs {
@@ -76,6 +79,7 @@ async fn main() {
     let args = CommandLineArgs::parse();
 
     init_tracing();
+    metrics::register_metrics();
 
     let router = app::router();
     let addr = SocketAddr::from_str(&format!("{}:{}", args.host, args.port))

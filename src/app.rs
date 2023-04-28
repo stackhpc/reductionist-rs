@@ -1,6 +1,7 @@
 //! Active Storage server API
 
 use crate::error::ActiveStorageError;
+use crate::metrics::{metrics_handler, record_response_metrics, request_counter};
 use crate::models;
 use crate::operation;
 use crate::operations;
@@ -68,7 +69,11 @@ pub fn router() -> Router {
             .route("/:operation", post(unknown_operation_handler))
             .layer(
                 ServiceBuilder::new()
-                    .layer(TraceLayer::new_for_http())
+                    .layer(
+                        TraceLayer::new_for_http()
+                            .on_request(request_counter)
+                            .on_response(record_response_metrics),
+                    )
                     .layer(ValidateRequestHeaderLayer::custom(
                         // Validate that an authorization header has been provided.
                         |request: &mut Request<Body>| {
@@ -84,6 +89,7 @@ pub fn router() -> Router {
 
     Router::new()
         .route("/.well-known/s3-active-storage-schema", get(schema))
+        .route("/metrics", get(metrics_handler))
         .nest("/v1", v1())
         .layer(NormalizePathLayer::trim_trailing_slash())
 }

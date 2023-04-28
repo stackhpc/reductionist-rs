@@ -20,11 +20,13 @@ clap = { version = "4.2.1", features = ["derive", "env"] }
 expanduser = "1.2.2"
 http = "*"
 hyper = { version = "0.14", features = ["full"] }
+lazy_static = "1.4"
 maligned = "0.2.1"
 mime = "0.3"
 ndarray = "0.15"
 ndarray-stats = "0.5"
 num-traits = "0.2.15"
+prometheus = { version = "0.13", features = ["process"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "*"
 strum_macros = "0.24"
