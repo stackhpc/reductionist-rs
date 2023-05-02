@@ -14,8 +14,7 @@ aws-sdk-s3 = "0.27"
 aws-smithy-http = "0.55"
 aws-smithy-types = "0.55"
 aws-types = "0.55"
-# Axum 0.6.13 introduced a change in behaviour around trimming trailing paths.
-axum = { version = "=0.6.12", features = ["headers"] }
+axum = { version = "0.6", features = ["headers"] }
 axum-server = { version = "0.4.7", features = ["tls-rustls"] }
 clap = { version = "4.2", features = ["derive", "env"] }
 expanduser = "1.2.2"
