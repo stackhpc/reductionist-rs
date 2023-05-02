@@ -86,7 +86,14 @@ fn router() -> Router {
         .nest("/v1", v1())
 }
 
-/// Returns a [tower_service::Service] for the Active Storage server API
+/// S3 Active Storage Server Service type alias
+///
+/// This type implements [tower_service::Service].
+// FIXME: The Service type should be some form of tower_service::Service, but couldn't find the
+// necessary trait bounds.
+pub type Service = tower_http::normalize_path::NormalizePath<Router>;
+
+/// Returns a [crate::app::Service] for the Active Storage server API
 ///
 /// The service is populated with all routes as well as the following middleware:
 ///
@@ -95,10 +102,7 @@ fn router() -> Router {
 ///   headers
 /// * a [tower_http::normalize_path::NormalizePathLayer] for trimming trailing slashes from
 ///   requests
-pub fn service() -> tower_http::normalize_path::NormalizePath<Router> {
-    // FIXME: The return type should be some form of tower_service::Service, but couldn't find the
-    // necessary trait bounds.
-
+pub fn service() -> Service {
     // Note that any middleware that should affect routing must wrap the router.
     // See
     // https://docs.rs/axum/0.6.18/axum/middleware/index.html#rewriting-request-uri-in-middleware.
