@@ -3,7 +3,7 @@ name = "s3-active-storage"
 version = "0.1.0"
 edition = "2021"
 # Due to AWS SDK.
-rust-version = "1.62.1"
+rust-version = "1.66.1"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
