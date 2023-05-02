@@ -1,7 +1,8 @@
 //! Error handling.
 
-use aws_sdk_s3::error::{GetObjectError, GetObjectErrorKind};
-use aws_sdk_s3::types::SdkError;
+use aws_sdk_s3::error::ProvideErrorMetadata;
+use aws_sdk_s3::error::SdkError;
+use aws_sdk_s3::operation::get_object::GetObjectError;
 use aws_smithy_http::byte_stream::error::Error as ByteStreamError;
 use axum::{
     extract::rejection::JsonRejection,
@@ -200,13 +201,13 @@ impl From<ActiveStorageError> for ErrorResponse {
                     // inner error.
                     SdkError::ServiceError(get_obj_error) => {
                         let get_obj_error = get_obj_error.err();
-                        match get_obj_error.kind {
-                            GetObjectErrorKind::InvalidObjectState(_)
-                            | GetObjectErrorKind::NoSuchKey(_) => Self::bad_request(&error),
+                        match get_obj_error {
+                            GetObjectError::InvalidObjectState(_)
+                            | GetObjectError::NoSuchKey(_) => Self::bad_request(&error),
 
                             // Quite a lot of error cases end up as unhandled. Attempt to determine
                             // the error from the code.
-                            GetObjectErrorKind::Unhandled(_) => {
+                            GetObjectError::Unhandled(_) => {
                                 match get_obj_error.code() {
                                     // Bad request
                                     Some("NoSuchBucket") => Self::bad_request(&error),
@@ -272,9 +273,9 @@ impl IntoResponse for ErrorResponse {
 mod tests {
     use super::*;
 
-    use aws_sdk_s3::error::NoSuchKey;
+    use aws_sdk_s3::types::error::NoSuchKey;
     use aws_smithy_http::operation::Response as SmithyResponse;
-    use aws_smithy_types::error::Error as SmithyError;
+    use aws_smithy_types::Error as SmithyError;
     use http::response::Response as HttpResponse;
     use hyper::HeaderMap;
 
@@ -356,9 +357,8 @@ mod tests {
     #[tokio::test]
     async fn s3_get_object_error() {
         // Jump through hoops to create an SdkError.
-        let smithy_error = SmithyError::builder().message("fake smithy error").build();
-        let no_such_key_error = GetObjectErrorKind::NoSuchKey(NoSuchKey::builder().build());
-        let get_object_error = GetObjectError::new(no_such_key_error, smithy_error);
+        let no_such_key = NoSuchKey::builder().build();
+        let get_object_error = GetObjectError::NoSuchKey(no_such_key);
         let sdk_error = SdkError::service_error(get_object_error, get_smithy_response());
         let caused_by = Some(vec!["service error", "NoSuchKey"]);
         test_s3_get_object_error(sdk_error, StatusCode::BAD_REQUEST, caused_by).await;
