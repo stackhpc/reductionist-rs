@@ -24,6 +24,7 @@
 
 use std::{net::SocketAddr, process::exit, str::FromStr, time::Duration};
 
+use axum::ServiceExt;
 use axum_server::{tls_rustls::RustlsConfig, Handle};
 use clap::Parser;
 use expanduser::expanduser;
@@ -77,7 +78,7 @@ async fn main() {
 
     init_tracing();
 
-    let router = app::router();
+    let service = app::service();
     let addr = SocketAddr::from_str(&format!("{}:{}", args.host, args.port))
         .expect("invalid host name, IP address or port number");
 
@@ -120,14 +121,14 @@ async fn main() {
         // run HTTPS server with hyper
         axum_server::bind_rustls(addr, tls_config)
             .handle(handle)
-            .serve(router.into_make_service())
+            .serve(service.into_make_service())
             .await
             .unwrap();
     } else {
         // run HTTP server with hyper
         axum_server::bind(addr)
             .handle(handle)
-            .serve(router.into_make_service())
+            .serve(service.into_make_service())
             .await
             .unwrap();
     }
