@@ -32,3 +32,8 @@ pub struct CommandLineArgs {
     #[arg(long, default_value_t = 60, env = "S3_ACTIVE_STORAGE_SHUTDOWN_TIMEOUT")]
     pub graceful_shutdown_timeout: u64,
 }
+
+/// Returns parsed command line arguments.
+pub fn parse() -> CommandLineArgs {
+    CommandLineArgs::parse()
+}

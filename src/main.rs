@@ -22,8 +22,6 @@
 //! * [ndarray] provides [NumPy](https://numpy.orgq)-like n-dimensional arrays used in numerical
 //!   computation.
 
-use clap::Parser;
-
 mod app;
 mod array;
 mod cli;
@@ -39,7 +37,7 @@ mod validated_json;
 /// Application entry point
 #[tokio::main]
 async fn main() {
-    let args = cli::CommandLineArgs::parse();
+    let args = cli::parse();
     tracing::init_tracing();
     let service = app::service();
     server::serve(&args, service).await;
