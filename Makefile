@@ -4,7 +4,7 @@ build:
 
 .PHONY: test
 test:
-	@docker buildx build --target builder -t s3-active-storage-test .
+	@docker buildx build --build-arg PROFILE=dev --target builder -t s3-active-storage-test .
 	@docker run --rm s3-active-storage-test cargo check --color always
 	@docker run --rm s3-active-storage-test cargo test --color always
 
