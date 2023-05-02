@@ -143,11 +143,16 @@ For simple testing purposes Minio is a convenient object storage server.
 Start a local [Minio](https://min.io/) server which serves the test data:
 
 ```sh
-chmod +x ./scripts/minio-run
-./scripts/minio-run
+./scripts/minio-start
 ```
 
-The Minio server will run until it is stopped using `Ctrl+C`.
+The Minio server will run in a detached container and may be stopped:
+
+```sh
+./scripts/minio-stop
+```
+
+Note that object data is not preserved when the container is stopped.
 
 ### Upload some test data
 
