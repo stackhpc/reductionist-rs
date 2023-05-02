@@ -10,34 +10,36 @@ lazy_static! {
     pub static ref INCOMING_REQUESTS: IntCounterVec = IntCounterVec::new(
         Opts::new("incoming_requests", "The number of HTTP requests received"),
         &["http_method"]
-    ).unwrap();
+    ).expect("Prometheus metric initialization failed");
     // Request counter by status code
     pub static ref RESPONSE_CODE_COLLECTOR: IntCounterVec = IntCounterVec::new(
-        Opts::new("outgoing_response", "The number of responses sent."),
+        Opts::new("outgoing_response", "The number of responses sent"),
         &["status_code"]
-    ).unwrap();
-    // Request histogram by response time
+    ).expect("Prometheus metric initialization failed");
+    // Response histogram by response time
     pub static ref RESPONSE_TIME_COLLECTOR: HistogramVec = HistogramVec::new(
         HistogramOpts{
             common_opts: Opts::new("response_time", "The time taken to respond to each request"),
             buckets: prometheus::DEFAULT_BUCKETS.to_vec(), // Change buckets here if desired
         },
         &[],
-    ).unwrap();
+    ).expect("Prometheus metric initialization failed");
 }
 
+/// Registers various prometheus metrics with the global registry
 pub fn register_metrics() {
     REGISTRY
         .register(Box::new(INCOMING_REQUESTS.clone()))
-        .unwrap();
+        .expect("registering prometheus metrics during initialization failed");
     REGISTRY
         .register(Box::new(RESPONSE_CODE_COLLECTOR.clone()))
-        .unwrap();
+        .expect("registering prometheus metrics during initialization failed");
     REGISTRY
         .register(Box::new(RESPONSE_TIME_COLLECTOR.clone()))
-        .unwrap();
+        .expect("registering prometheus metrics during initialization failed");
 }
 
+/// Returns currently gathered prometheus metrics
 pub async fn metrics_handler() -> String {
     let encoder = prometheus::TextEncoder::new();
     let mut buffer = Vec::new();
@@ -50,23 +52,25 @@ pub async fn metrics_handler() -> String {
     output
 }
 
-/// Increments the prometheus counter on all incoming requests, labelled by http method
-pub fn request_counter(request: &Request<Body>, _span: &Span) {
+/// Gather relevant prometheus metrics on all incoming requests
+pub fn record_request_metrics(request: &Request<Body>, _span: &Span) {
+    // Increment request counter
     INCOMING_REQUESTS
         .with_label_values(&[&request.method().to_string().to_ascii_uppercase()])
         .inc();
 }
 
-/// Increment the prometheus counter on all outgoing responses, labelled by status code
+/// Gather relevant prometheus metrics on all outgoing responses
 pub fn record_response_metrics<B>(
     response: &Response<B>,
     latency: std::time::Duration,
     _span: &Span,
 ) {
+    // Record http status code
     RESPONSE_CODE_COLLECTOR
         .with_label_values(&[response.status().as_str()])
         .inc();
-
+    // Record response time
     RESPONSE_TIME_COLLECTOR
         .with_label_values(&[])
         .observe(latency.as_secs_f64());

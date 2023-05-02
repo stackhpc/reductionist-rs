@@ -1,7 +1,7 @@
 //! Active Storage server API
 
 use crate::error::ActiveStorageError;
-use crate::metrics::{metrics_handler, record_response_metrics, request_counter};
+use crate::metrics::{metrics_handler, record_request_metrics, record_response_metrics};
 use crate::models;
 use crate::operation;
 use crate::operations;
@@ -71,7 +71,7 @@ pub fn router() -> Router {
                 ServiceBuilder::new()
                     .layer(
                         TraceLayer::new_for_http()
-                            .on_request(request_counter)
+                            .on_request(record_request_metrics)
                             .on_response(record_response_metrics),
                     )
                     .layer(ValidateRequestHeaderLayer::custom(
