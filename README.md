@@ -94,7 +94,48 @@ In particular, the following are known limitations which we intend to address:
   * No support for missing data
   * No support for compressed or encrypted objects
 
+## Running
+
+There are various ways to run the S3 Active Storage server.
+
+### Running in a container
+
+The simplest method is to run it in a container using a pre-built image:
+
+```sh
+docker run -it --detach --rm --net=host --name s3-active-storage ghcr.io/stackhpc/s3-active-storage-rs:latest
+```
+
+Images are published to [GitHub Container Registry](https://github.com/stackhpc/s3-active-storage-rs/pkgs/container/s3-active-storage-rs) when the project is released.
+The `latest` tag corresponds to the most recent release, or you can use a specific release e.g. `0.1.0`.
+
+This method does not require access to the source code.
+
+### Building a container image
+
+If you need to use unreleased changes, but still want to run in a container, it is possible to build an image.
+First, clone this repository:
+
+```sh
+git clone https://github.com/stackhpc/s3-active-storage-rs.git
+cd s3-active-storage-rs
+```
+
+```sh
+make build
+```
+
+The image will be tagged as `s3-active-storage`.
+The image may be pushed to a registry, or deployed locally.
+
+```sh
+make run
+```
+
 ## Build
+
+If you prefer not to run the S3 Active Storage server in a container, it will be necessary to build a binary.
+Building locally may also be preferable during development to take advantage of incremental compilation.
 
 ### Prerequisites
 
