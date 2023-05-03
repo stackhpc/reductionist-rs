@@ -79,6 +79,8 @@ with a JSON payload of the form:
 
 The currently supported reducers are `max`, `min`, `mean`, `sum`, `select` and `count`. All reducers return the result using the same datatype as specified in the request except for `count` which always returns the result as `int64`.
 
+The proxy adds two custom headers `x-activestorage-dtype` and `x-activestrorage-shape` to the HTTP response to allow the numeric result to be reconstructed from the binary content of the response.
+
 [//]: <> (TODO: No OpenAPI support yet).
 [//]: <> (For a running instance of the proxy server, the full OpenAPI specification is browsable as a web page at the `{proxy-address}/redoc/` endpoint or in raw JSON form at `{proxy-address}/openapi.json`.)
 
@@ -97,7 +99,7 @@ In particular, the following are known limitations which we intend to address:
 ### Prerequisites
 
 This project is written in Rust, and as such requires a Rust toolchain to be installed in order to build it.
-The Minimum Supported Rust Version (MSRV) is 1.62.1, due to a dependency on the [AWS SDK](https://github.com/awslabs/aws-sdk-rust).
+The Minimum Supported Rust Version (MSRV) is 1.66.1, due to a dependency on the [AWS SDK](https://github.com/awslabs/aws-sdk-rust).
 It may be necessary to use [rustup](https://rustup.rs/) rather than the OS provided Rust toolchain to meet this requirement.
 See the [Rust book](https://doc.rust-lang.org/book/ch01-01-installation.html) for toolchain installation.
 
@@ -125,7 +127,7 @@ cargo run --release
 Or installed to the system:
 
 ```sh
-cargo install
+cargo install --path . --locked
 ```
 
 Then run:
@@ -161,7 +163,7 @@ In a separate terminal, set up the Python virtualenv then upload some sample dat
 
 ```sh
 # Create a virtualenv
-python -m venv ./venv
+python3 -m venv ./venv
 # Activate the virtualenv
 source ./venv/bin/activate
 # Install dependencies
@@ -178,33 +180,22 @@ Proxy functionality can be tested using the [S3 active storage compliance suite]
 
 Request authentication is implemented using [Basic Auth](https://en.wikipedia.org/wiki/Basic_access_authentication) with the username and password consisting of your S3 Access Key ID and Secret Access Key, respectively. These credentials are then used internally to authenticate with the upstream S3 source using [standard AWS authentication methods](https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-auth-using-authorization-header.html)
 
-A request to an active storage proxy running on localhost with Minio as the S3 source is as simple as:
+A basic Python client is provided in `scripts/client.py`.
+First install dependencies in a Python virtual environment:
 
-```python
-import json
-import numpy as np
-import requests
-
-request_data = {
-  'source': 'http://localhost:9000',
-  'bucket': 'sample-data',
-  'object': 'data-float32.dat',
-  'dtype': 'float32',
-  # All other fields assume their default values
-}
-
-reducer = 'sum'
-response = requests.post(
-  f'http://localhost:8000/v1/{reducer}',
-  json=request_data, 
-  auth=('minioadmin', 'minioadmin')
-)
-shape = json.loads(response.headers['x-activestorage-shape'])
-sum_result = np.frombuffer(response.content, dtype=response.headers['x-activestorage-dtype'])
-sum_result = sum_result.reshape(shape)
+```sh
+# Create a virtualenv
+python3 -m venv ./venv
+# Activate the virtualenv
+source ./venv/bin/activate
+# Install dependencies
+pip install scripts/requirements.txt
 ```
 
-The proxy adds two custom headers `x-activestorage-dtype` and `x-activestrorage-shape` to the HTTP response to allow the numeric result to be reconstructed from the binary content of the response.
+Then use the client to make a request:
+```sh
+venv/bin/python ./scripts/client.py sum --server http://localhost:8080 --source http://localhost:9000 --username minioadmin --password minioadmin --bucket sample-data --object data-uint32.dat --dtype uint32
+```
 
 ---
 
