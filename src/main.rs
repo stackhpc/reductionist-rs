@@ -26,8 +26,8 @@ mod app;
 mod array;
 mod cli;
 mod error;
-mod models;
 mod metrics;
+mod models;
 mod operation;
 mod operations;
 mod s3_client;
@@ -40,6 +40,7 @@ mod validated_json;
 async fn main() {
     let args = cli::parse();
     tracing::init_tracing();
+    metrics::register_metrics();
     let service = app::service();
     server::serve(&args, service).await;
 }
