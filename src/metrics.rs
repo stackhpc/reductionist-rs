@@ -71,7 +71,6 @@ pub fn record_response_metrics<B>(
     _span: &Span,
 ) {
     let status_code = response.status();
-    // let http_method
     // Record http status code
     RESPONSE_CODE_COLLECTOR
         .with_label_values(&[status_code.as_str()])
