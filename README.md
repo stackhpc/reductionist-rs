@@ -79,6 +79,8 @@ with a JSON payload of the form:
 
 The currently supported reducers are `max`, `min`, `mean`, `sum`, `select` and `count`. All reducers return the result using the same datatype as specified in the request except for `count` which always returns the result as `int64`.
 
+The proxy adds two custom headers `x-activestorage-dtype` and `x-activestrorage-shape` to the HTTP response to allow the numeric result to be reconstructed from the binary content of the response.
+
 [//]: <> (TODO: No OpenAPI support yet).
 [//]: <> (For a running instance of the proxy server, the full OpenAPI specification is browsable as a web page at the `{proxy-address}/redoc/` endpoint or in raw JSON form at `{proxy-address}/openapi.json`.)
 
@@ -92,12 +94,53 @@ In particular, the following are known limitations which we intend to address:
   * No support for missing data
   * No support for compressed or encrypted objects
 
+## Running
+
+There are various ways to run the S3 Active Storage server.
+
+### Running in a container
+
+The simplest method is to run it in a container using a pre-built image:
+
+```sh
+docker run -it --detach --rm --net=host --name s3-active-storage ghcr.io/stackhpc/s3-active-storage-rs:latest
+```
+
+Images are published to [GitHub Container Registry](https://github.com/stackhpc/s3-active-storage-rs/pkgs/container/s3-active-storage-rs) when the project is released.
+The `latest` tag corresponds to the most recent release, or you can use a specific release e.g. `0.1.0`.
+
+This method does not require access to the source code.
+
+### Building a container image
+
+If you need to use unreleased changes, but still want to run in a container, it is possible to build an image.
+First, clone this repository:
+
+```sh
+git clone https://github.com/stackhpc/s3-active-storage-rs.git
+cd s3-active-storage-rs
+```
+
+```sh
+make build
+```
+
+The image will be tagged as `s3-active-storage`.
+The image may be pushed to a registry, or deployed locally.
+
+```sh
+make run
+```
+
 ## Build
+
+If you prefer not to run the S3 Active Storage server in a container, it will be necessary to build a binary.
+Building locally may also be preferable during development to take advantage of incremental compilation.
 
 ### Prerequisites
 
 This project is written in Rust, and as such requires a Rust toolchain to be installed in order to build it.
-The Minimum Supported Rust Version (MSRV) is 1.62.1, due to a dependency on the [AWS SDK](https://github.com/awslabs/aws-sdk-rust).
+The Minimum Supported Rust Version (MSRV) is 1.66.1, due to a dependency on the [AWS SDK](https://github.com/awslabs/aws-sdk-rust).
 It may be necessary to use [rustup](https://rustup.rs/) rather than the OS provided Rust toolchain to meet this requirement.
 See the [Rust book](https://doc.rust-lang.org/book/ch01-01-installation.html) for toolchain installation.
 
@@ -125,7 +168,7 @@ cargo run --release
 Or installed to the system:
 
 ```sh
-cargo install
+cargo install --path . --locked
 ```
 
 Then run:
@@ -143,11 +186,16 @@ For simple testing purposes Minio is a convenient object storage server.
 Start a local [Minio](https://min.io/) server which serves the test data:
 
 ```sh
-chmod +x ./scripts/minio-run
-./scripts/minio-run
+./scripts/minio-start
 ```
 
-The Minio server will run until it is stopped using `Ctrl+C`.
+The Minio server will run in a detached container and may be stopped:
+
+```sh
+./scripts/minio-stop
+```
+
+Note that object data is not preserved when the container is stopped.
 
 ### Upload some test data
 
@@ -156,7 +204,7 @@ In a separate terminal, set up the Python virtualenv then upload some sample dat
 
 ```sh
 # Create a virtualenv
-python -m venv ./venv
+python3 -m venv ./venv
 # Activate the virtualenv
 source ./venv/bin/activate
 # Install dependencies
@@ -173,33 +221,22 @@ Proxy functionality can be tested using the [S3 active storage compliance suite]
 
 Request authentication is implemented using [Basic Auth](https://en.wikipedia.org/wiki/Basic_access_authentication) with the username and password consisting of your S3 Access Key ID and Secret Access Key, respectively. These credentials are then used internally to authenticate with the upstream S3 source using [standard AWS authentication methods](https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-auth-using-authorization-header.html)
 
-A request to an active storage proxy running on localhost with Minio as the S3 source is as simple as:
+A basic Python client is provided in `scripts/client.py`.
+First install dependencies in a Python virtual environment:
 
-```python
-import json
-import numpy as np
-import requests
-
-request_data = {
-  'source': 'http://localhost:9000',
-  'bucket': 'sample-data',
-  'object': 'data-float32.dat',
-  'dtype': 'float32',
-  # All other fields assume their default values
-}
-
-reducer = 'sum'
-response = requests.post(
-  f'http://localhost:8000/v1/{reducer}',
-  json=request_data, 
-  auth=('minioadmin', 'minioadmin')
-)
-shape = json.loads(response.headers['x-activestorage-shape'])
-sum_result = np.frombuffer(response.content, dtype=response.headers['x-activestorage-dtype'])
-sum_result = sum_result.reshape(shape)
+```sh
+# Create a virtualenv
+python3 -m venv ./venv
+# Activate the virtualenv
+source ./venv/bin/activate
+# Install dependencies
+pip install scripts/requirements.txt
 ```
 
-The proxy adds two custom headers `x-activestorage-dtype` and `x-activestrorage-shape` to the HTTP response to allow the numeric result to be reconstructed from the binary content of the response.
+Then use the client to make a request:
+```sh
+venv/bin/python ./scripts/client.py sum --server http://localhost:8080 --source http://localhost:9000 --username minioadmin --password minioadmin --bucket sample-data --object data-uint32.dat --dtype uint32
+```
 
 ---
 

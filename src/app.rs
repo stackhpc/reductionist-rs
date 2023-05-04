@@ -20,6 +20,7 @@ use axum::{
     Router, TypedHeader,
 };
 
+use tower::Layer;
 use tower::ServiceBuilder;
 use tower_http::normalize_path::NormalizePathLayer;
 use tower_http::trace::TraceLayer;
@@ -55,9 +56,7 @@ impl IntoResponse for models::Response {
 /// * a [tower_http::trace::TraceLayer] for tracing requests and responses
 /// * a [tower_http::validate_request::ValidateRequestHeaderLayer] for validating authorisation
 ///   headers
-/// * a [tower_http::normalize_path::NormalizePathLayer] for trimming trailing slashes from
-///   requests
-pub fn router() -> Router {
+fn router() -> Router {
     fn v1() -> Router {
         Router::new()
             .route("/count", post(operation_handler::<operations::Count>))
@@ -91,7 +90,29 @@ pub fn router() -> Router {
         .route("/.well-known/s3-active-storage-schema", get(schema))
         .route("/metrics", get(metrics_handler))
         .nest("/v1", v1())
-        .layer(NormalizePathLayer::trim_trailing_slash())
+}
+
+/// S3 Active Storage Server Service type alias
+///
+/// This type implements [tower_service::Service].
+// FIXME: The Service type should be some form of tower_service::Service, but couldn't find the
+// necessary trait bounds.
+pub type Service = tower_http::normalize_path::NormalizePath<Router>;
+
+/// Returns a [crate::app::Service] for the Active Storage server API
+///
+/// The service is populated with all routes as well as the following middleware:
+///
+/// * a [tower_http::trace::TraceLayer] for tracing requests and responses
+/// * a [tower_http::validate_request::ValidateRequestHeaderLayer] for validating authorisation
+///   headers
+/// * a [tower_http::normalize_path::NormalizePathLayer] for trimming trailing slashes from
+///   requests
+pub fn service() -> Service {
+    // Note that any middleware that should affect routing must wrap the router.
+    // See
+    // https://docs.rs/axum/0.6.18/axum/middleware/index.html#rewriting-request-uri-in-middleware.
+    NormalizePathLayer::trim_trailing_slash().layer(router())
 }
 
 /// TODO: Return an OpenAPI schema

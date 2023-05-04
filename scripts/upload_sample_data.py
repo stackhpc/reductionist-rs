@@ -24,7 +24,6 @@ class AllowedDatatypes(str, Enum):
 S3_URL = 'http://localhost:9000'
 
 s3_fs = s3fs.S3FileSystem(key='minioadmin', secret='minioadmin', client_kwargs={'endpoint_url': S3_URL})
-data_dir = pathlib.Path('./testdata')
 bucket = pathlib.Path('sample-data')
 
 #Make sure s3 bucket exists
