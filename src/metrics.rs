@@ -9,7 +9,7 @@ lazy_static! {
     // Simple request counter
     pub static ref INCOMING_REQUESTS: IntCounterVec = IntCounterVec::new(
         Opts::new("incoming_requests", "The number of HTTP requests received"),
-        &["http_method"]
+        &["http_method", "path"]
     ).expect("Prometheus metric initialization failed");
     // Request counter by status code
     pub static ref RESPONSE_CODE_COLLECTOR: IntCounterVec = IntCounterVec::new(
@@ -22,7 +22,7 @@ lazy_static! {
             common_opts: Opts::new("response_time", "The time taken to respond to each request"),
             buckets: prometheus::DEFAULT_BUCKETS.to_vec(), // Change buckets here if desired
         },
-        &[],
+        &["status_code"],
     ).expect("Prometheus metric initialization failed");
 }
 
@@ -44,9 +44,12 @@ pub async fn metrics_handler() -> String {
     let encoder = prometheus::TextEncoder::new();
     let mut buffer = Vec::new();
 
-    encoder.encode(&REGISTRY.gather(), &mut buffer).unwrap();
+    encoder
+        .encode(&REGISTRY.gather(), &mut buffer)
+        .expect("could not encode gathered metrics into temporary buffer");
 
-    let output = String::from_utf8(buffer.clone()).unwrap();
+    let output =
+        String::from_utf8(buffer.clone()).expect("could not convert metrics buffer into string");
     buffer.clear();
 
     output
@@ -55,8 +58,10 @@ pub async fn metrics_handler() -> String {
 /// Gather relevant prometheus metrics on all incoming requests
 pub fn record_request_metrics(request: &Request<Body>, _span: &Span) {
     // Increment request counter
+    let http_method = &request.method().to_string().to_ascii_uppercase();
+    let request_path = &request.uri().to_string();
     INCOMING_REQUESTS
-        .with_label_values(&[&request.method().to_string().to_ascii_uppercase()])
+        .with_label_values(&[http_method, request_path])
         .inc();
 }
 
@@ -66,12 +71,14 @@ pub fn record_response_metrics<B>(
     latency: std::time::Duration,
     _span: &Span,
 ) {
+    let status_code = response.status();
+    // let http_method
     // Record http status code
     RESPONSE_CODE_COLLECTOR
-        .with_label_values(&[response.status().as_str()])
+        .with_label_values(&[status_code.as_str()])
         .inc();
     // Record response time
     RESPONSE_TIME_COLLECTOR
-        .with_label_values(&[])
+        .with_label_values(&[status_code.as_str()])
         .observe(latency.as_secs_f64());
 }
