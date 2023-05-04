@@ -1,6 +1,6 @@
 use axum::{body::Body, http::Request, response::Response};
 use lazy_static::lazy_static;
-use prometheus::{self, Encoder, HistogramOpts, HistogramVec, IntCounterVec, Opts, Registry};
+use prometheus::{self, Encoder, HistogramOpts, HistogramVec, IntCounterVec, Opts};
 use tracing::Span;
 
 lazy_static! {
