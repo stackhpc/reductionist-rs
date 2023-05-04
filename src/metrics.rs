@@ -4,8 +4,6 @@ use prometheus::{self, Encoder, HistogramOpts, HistogramVec, IntCounterVec, Opts
 use tracing::Span;
 
 lazy_static! {
-    // Registry for holding metric state
-    pub static ref REGISTRY: Registry = Registry::new();
     // Simple request counter
     pub static ref INCOMING_REQUESTS: IntCounterVec = IntCounterVec::new(
         Opts::new("incoming_requests", "The number of HTTP requests received"),
@@ -28,13 +26,14 @@ lazy_static! {
 
 /// Registers various prometheus metrics with the global registry
 pub fn register_metrics() {
-    REGISTRY
+    let registry = prometheus::default_registry();
+    registry
         .register(Box::new(INCOMING_REQUESTS.clone()))
         .expect("registering prometheus metrics during initialization failed");
-    REGISTRY
+    registry
         .register(Box::new(RESPONSE_CODE_COLLECTOR.clone()))
         .expect("registering prometheus metrics during initialization failed");
-    REGISTRY
+    registry
         .register(Box::new(RESPONSE_TIME_COLLECTOR.clone()))
         .expect("registering prometheus metrics during initialization failed");
 }
@@ -45,7 +44,7 @@ pub async fn metrics_handler() -> String {
     let mut buffer = Vec::new();
 
     encoder
-        .encode(&REGISTRY.gather(), &mut buffer)
+        .encode(&prometheus::gather(), &mut buffer)
         .expect("could not encode gathered metrics into temporary buffer");
 
     let output =
