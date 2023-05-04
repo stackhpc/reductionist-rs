@@ -1,7 +1,8 @@
-use axum::{body::Body, http::Request, response::Response};
+use std::time::Instant;
+
+use axum::{http::Request, middleware::Next, response::IntoResponse};
 use lazy_static::lazy_static;
 use prometheus::{self, Encoder, HistogramOpts, HistogramVec, IntCounterVec, Opts};
-use tracing::Span;
 
 lazy_static! {
     // Simple request counter
@@ -12,7 +13,7 @@ lazy_static! {
     // Request counter by status code
     pub static ref RESPONSE_CODE_COLLECTOR: IntCounterVec = IntCounterVec::new(
         Opts::new("outgoing_response", "The number of responses sent"),
-        &["status_code"]
+        &["status_code", "http_method", "path"]
     ).expect("Prometheus metric initialization failed");
     // Response histogram by response time
     pub static ref RESPONSE_TIME_COLLECTOR: HistogramVec = HistogramVec::new(
@@ -20,7 +21,7 @@ lazy_static! {
             common_opts: Opts::new("response_time", "The time taken to respond to each request"),
             buckets: prometheus::DEFAULT_BUCKETS.to_vec(), // Change buckets here if desired
         },
-        &["status_code"],
+        &["status_code", "http_method", "path"],
     ).expect("Prometheus metric initialization failed");
 }
 
@@ -54,29 +55,33 @@ pub async fn metrics_handler() -> String {
     output
 }
 
-/// Gather relevant prometheus metrics on all incoming requests
-pub fn record_request_metrics(request: &Request<Body>, _span: &Span) {
-    // Increment request counter
+pub async fn track_metrics<B>(request: Request<B>, next: Next<B>) -> impl IntoResponse {
+    // Extract some useful quantities
+    let timer = Instant::now();
     let http_method = &request.method().to_string().to_ascii_uppercase();
-    let request_path = &request.uri().path();
-    INCOMING_REQUESTS
-        .with_label_values(&[http_method, request_path])
-        .inc();
-}
+    let request_path = request.uri().path().to_string();
 
-/// Gather relevant prometheus metrics on all outgoing responses
-pub fn record_response_metrics<B>(
-    response: &Response<B>,
-    latency: std::time::Duration,
-    _span: &Span,
-) {
-    let status_code = response.status();
-    // Record http status code
-    RESPONSE_CODE_COLLECTOR
-        .with_label_values(&[status_code.as_str()])
+    // Increment request counter
+    INCOMING_REQUESTS
+        .with_label_values(&[http_method, &request_path])
         .inc();
-    // Record response time
+
+    // Pass request onto next layer
+    let response = next.run(request).await;
+    let status_code = response.status();
+    // Due to 'concentric shell model' for axum layers,
+    // latency is time taken to traverse all inner
+    // layers (including primary reduction operation)
+    // and then back up the layer stack.
+    let latency = timer.elapsed().as_secs_f64();
+
+    // Record response metrics
+    RESPONSE_CODE_COLLECTOR
+        .with_label_values(&[status_code.as_str(), http_method, &request_path])
+        .inc();
     RESPONSE_TIME_COLLECTOR
-        .with_label_values(&[status_code.as_str()])
-        .observe(latency.as_secs_f64());
+        .with_label_values(&[status_code.as_str(), http_method, &request_path])
+        .observe(latency);
+
+    response
 }

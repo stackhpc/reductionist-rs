@@ -1,13 +1,14 @@
 //! Active Storage server API
 
 use crate::error::ActiveStorageError;
-use crate::metrics::{metrics_handler, record_request_metrics, record_response_metrics};
+use crate::metrics::{metrics_handler, track_metrics};
 use crate::models;
 use crate::operation;
 use crate::operations;
 use crate::s3_client;
 use crate::validated_json::ValidatedJson;
 
+use axum::middleware;
 use axum::{
     body::{Body, Bytes},
     extract::Path,
@@ -67,16 +68,18 @@ fn router() -> Router {
             .route("/sum", post(operation_handler::<operations::Sum>))
             .route("/:operation", post(unknown_operation_handler))
             .layer(
-                ServiceBuilder::new().layer(ValidateRequestHeaderLayer::custom(
-                    // Validate that an authorization header has been provided.
-                    |request: &mut Request<Body>| {
-                        if request.headers().contains_key(header::AUTHORIZATION) {
-                            Ok(())
-                        } else {
-                            Err(StatusCode::UNAUTHORIZED.into_response())
-                        }
-                    },
-                )),
+                ServiceBuilder::new()
+                    .layer(TraceLayer::new_for_http())
+                    .layer(ValidateRequestHeaderLayer::custom(
+                        // Validate that an authorization header has been provided.
+                        |request: &mut Request<Body>| {
+                            if request.headers().contains_key(header::AUTHORIZATION) {
+                                Ok(())
+                            } else {
+                                Err(StatusCode::UNAUTHORIZED.into_response())
+                            }
+                        },
+                    )),
             )
     }
 
@@ -84,11 +87,7 @@ fn router() -> Router {
         .route("/.well-known/s3-active-storage-schema", get(schema))
         .route("/metrics", get(metrics_handler))
         .nest("/v1", v1())
-        .layer(
-            TraceLayer::new_for_http()
-                .on_request(record_request_metrics)
-                .on_response(record_response_metrics),
-        )
+        .route_layer(middleware::from_fn(track_metrics))
 }
 
 /// S3 Active Storage Server Service type alias
