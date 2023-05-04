@@ -67,22 +67,16 @@ fn router() -> Router {
             .route("/sum", post(operation_handler::<operations::Sum>))
             .route("/:operation", post(unknown_operation_handler))
             .layer(
-                ServiceBuilder::new()
-                    .layer(
-                        TraceLayer::new_for_http()
-                            .on_request(record_request_metrics)
-                            .on_response(record_response_metrics),
-                    )
-                    .layer(ValidateRequestHeaderLayer::custom(
-                        // Validate that an authorization header has been provided.
-                        |request: &mut Request<Body>| {
-                            if request.headers().contains_key(header::AUTHORIZATION) {
-                                Ok(())
-                            } else {
-                                Err(StatusCode::UNAUTHORIZED.into_response())
-                            }
-                        },
-                    )),
+                ServiceBuilder::new().layer(ValidateRequestHeaderLayer::custom(
+                    // Validate that an authorization header has been provided.
+                    |request: &mut Request<Body>| {
+                        if request.headers().contains_key(header::AUTHORIZATION) {
+                            Ok(())
+                        } else {
+                            Err(StatusCode::UNAUTHORIZED.into_response())
+                        }
+                    },
+                )),
             )
     }
 
@@ -90,6 +84,11 @@ fn router() -> Router {
         .route("/.well-known/s3-active-storage-schema", get(schema))
         .route("/metrics", get(metrics_handler))
         .nest("/v1", v1())
+        .layer(
+            TraceLayer::new_for_http()
+                .on_request(record_request_metrics)
+                .on_response(record_response_metrics),
+        )
 }
 
 /// S3 Active Storage Server Service type alias

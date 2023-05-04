@@ -58,7 +58,7 @@ pub async fn metrics_handler() -> String {
 pub fn record_request_metrics(request: &Request<Body>, _span: &Span) {
     // Increment request counter
     let http_method = &request.method().to_string().to_ascii_uppercase();
-    let request_path = &request.uri().to_string();
+    let request_path = &request.uri().path();
     INCOMING_REQUESTS
         .with_label_values(&[http_method, request_path])
         .inc();
