@@ -10,7 +10,6 @@ use crate::operation::{Element, NumOperation};
 
 use axum::body::Bytes;
 use ndarray_stats::{errors::MinMaxError, QuantileExt};
-use num_traits::ToPrimitive;
 // Bring trait into scope to use as_bytes method.
 use zerocopy::AsBytes;
 
@@ -53,10 +52,7 @@ impl NumOperation for Max {
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
         let sliced = array.slice(slice_info);
         // FIXME: Account for missing data?
-        let count = sliced
-            .len()
-            .to_i64()
-            .expect("Count to be convertible to i64");
+        let count = i64::try_from(sliced.len())?;
         // FIXME: endianness?
         let body = sliced
             .max()
@@ -88,10 +84,7 @@ impl NumOperation for Mean {
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
         let sliced = array.slice(slice_info);
         // FIXME: Account for missing data?
-        let count = sliced
-            .len()
-            .to_i64()
-            .expect("Count to be convertible to i64");
+        let count = i64::try_from(sliced.len())?;
         // FIXME: endianness?
         let body = sliced
             .mean()
@@ -120,10 +113,7 @@ impl NumOperation for Min {
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
         let sliced = array.slice(slice_info);
         // FIXME: Account for missing data?
-        let count = sliced
-            .len()
-            .to_i64()
-            .expect("Count to be convertible to i64");
+        let count = i64::try_from(sliced.len())?;
         // FIXME: endianness?
         let body = sliced
             .min()
@@ -155,10 +145,7 @@ impl NumOperation for Select {
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
         let sliced = array.slice(slice_info);
         // FIXME: Account for missing data?
-        let count = sliced
-            .len()
-            .to_i64()
-            .expect("Count to be convertible to i64");
+        let count = i64::try_from(sliced.len())?;
         let shape = sliced.shape().to_vec();
         // Transpose Fortran ordered arrays before iterating.
         let body = if !array.is_standard_layout() {
@@ -193,10 +180,7 @@ impl NumOperation for Sum {
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
         let sliced = array.slice(slice_info);
         // FIXME: Account for missing data?
-        let count = sliced
-            .len()
-            .to_i64()
-            .expect("Count to be convertible to i64");
+        let count = i64::try_from(sliced.len())?;
         // FIXME: endianness?
         let body = sliced.sum();
         let body = body.as_bytes();
