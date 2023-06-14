@@ -174,13 +174,14 @@ mod tests {
             order: None,
             selection: None,
         };
-        let data = [1, 2, 3, 4, 5, 6, 7, 8];
+        let data: [u8; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
         let bytes = Bytes::copy_from_slice(&data);
         let response = Count::execute(&request_data, &bytes).unwrap();
+        // A u8 slice of 8 elements == a u32 slice with 2 elements
         // Count is always i64.
         let expected: i64 = 2;
         assert_eq!(expected.as_bytes(), response.body);
-        assert_eq!(8, response.body.len());
+        assert_eq!(8, response.body.len()); // Assert that count value is 8 bytes (i.e. i64)
         assert_eq!(models::DType::Int64, response.dtype);
         assert_eq!(vec![0; 0], response.shape);
     }
@@ -198,7 +199,12 @@ mod tests {
             order: None,
             selection: None,
         };
-        let data = [1, 2, 3, 4, 5, 6, 7, 8];
+        // data:
+        // A u8 slice of 8 elements == a single i64 value
+        // where each slice element is 2 hexadecimal digits
+        // and the order is reversed on little-endian systems
+        // so [1, 2, 3] is 0x030201 as an i64 in hexadecimal
+        let data: [u8; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
         let bytes = Bytes::copy_from_slice(&data);
         let response = Max::execute(&request_data, &bytes).unwrap();
         let expected: i64 = 0x0807060504030201;
