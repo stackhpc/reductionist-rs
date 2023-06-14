@@ -186,12 +186,19 @@ pub struct Response {
     pub dtype: DType,
     /// Shape of the response
     pub shape: Vec<usize>,
+    /// Number of non-missing elements operated on to generate response
+    pub count: i64,
 }
 
 impl Response {
     /// Return a Response object
-    pub fn new(body: Bytes, dtype: DType, shape: Vec<usize>) -> Response {
-        Response { body, dtype, shape }
+    pub fn new(body: Bytes, dtype: DType, shape: Vec<usize>, count: i64) -> Response {
+        Response {
+            body,
+            dtype,
+            shape,
+            count,
+        }
     }
 }
 
