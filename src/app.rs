@@ -19,6 +19,7 @@ use axum::{
     Router, TypedHeader,
 };
 
+use schemars::schema_for;
 use tower::Layer;
 use tower::ServiceBuilder;
 use tower_http::normalize_path::NormalizePathLayer;
@@ -82,7 +83,14 @@ fn router() -> Router {
     }
 
     Router::new()
-        .route("/.well-known/s3-active-storage-schema", get(schema))
+        .route(
+            "/.well-known/s3-active-storage-request-schema",
+            get(request_schema),
+        )
+        .route(
+            "/.well-known/s3-active-storage-response-schema",
+            get(response_schema),
+        )
         .nest("/v1", v1())
 }
 
@@ -110,8 +118,19 @@ pub fn service() -> Service {
 }
 
 /// TODO: Return an OpenAPI schema
-async fn schema() -> &'static str {
-    "Hello, world!"
+async fn request_schema() -> Result<String, StatusCode> {
+    let result = serde_json::to_string_pretty(&schema_for!(models::RequestData));
+    match result {
+        Ok(json_schema) => Ok(json_schema),
+        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+    }
+}
+async fn response_schema() -> Result<String, StatusCode> {
+    let result = serde_json::to_string_pretty(&schema_for!(models::Response));
+    match result {
+        Ok(json_schema) => Ok(json_schema),
+        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+    }
 }
 
 /// Download an object from S3
