@@ -52,7 +52,7 @@ pub enum Order {
 
 /// A slice of a single dimension of an array
 ///
-/// The API uses NumPy slice semantics:
+/// The API uses NumPy slice (i.e. [start, end, stride]) semantics where:
 ///
 /// When start or end is negative:
 /// * positive_start = start + length
@@ -182,7 +182,7 @@ fn validate_request_data(request_data: &RequestData) -> Result<(), ValidationErr
 /// Response containing the result of a computation and associated metadata.
 #[derive(JsonSchema)]
 pub struct Response {
-    /// Response data. May be a scalar or multi-dimensional array.
+    /// Raw response data as bytes. May represent a scalar or multi-dimensional array.
     pub body: Bytes,
     /// Data type of the response
     pub dtype: DType,
