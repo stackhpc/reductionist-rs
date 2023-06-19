@@ -1,13 +1,14 @@
 //! Data types and associated functions and methods
 
 use axum::body::Bytes;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use strum_macros::Display;
 use url::Url;
 use validator::{Validate, ValidationError};
 
 /// Supported numerical data types
-#[derive(Clone, Copy, Debug, Deserialize, Display, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Display, PartialEq, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum DType {
     /// [i32]
@@ -41,7 +42,7 @@ impl DType {
 /// Array ordering
 ///
 /// Defines an ordering for multi-dimensional arrays.
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, PartialEq, JsonSchema)]
 pub enum Order {
     /// Row-major (C) ordering
     C,
@@ -51,7 +52,7 @@ pub enum Order {
 
 /// A slice of a single dimension of an array
 ///
-/// The API uses NumPy slice semantics:
+/// The API uses NumPy slice (i.e. [start, end, stride]) semantics where:
 ///
 /// When start or end is negative:
 /// * positive_start = start + length
@@ -65,7 +66,7 @@ pub enum Order {
 /// * positive_end <= i < positive_start
 // NOTE: In serde, structs can be deserialised from sequences or maps. This allows us to support
 // the [<start>, <end>, <stride>] API, with the convenience of named fields.
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize, Validate)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize, Validate, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[validate(schema(function = "validate_slice"))]
 pub struct Slice {
@@ -86,7 +87,7 @@ impl Slice {
 }
 
 /// Request data for operations
-#[derive(Debug, Deserialize, PartialEq, Validate)]
+#[derive(Debug, Deserialize, PartialEq, Validate, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[validate(schema(function = "validate_request_data"))]
 pub struct RequestData {
@@ -179,8 +180,9 @@ fn validate_request_data(request_data: &RequestData) -> Result<(), ValidationErr
 }
 
 /// Response containing the result of a computation and associated metadata.
+#[derive(JsonSchema)]
 pub struct Response {
-    /// Response data. May be a scalar or multi-dimensional array.
+    /// Raw response data as bytes. May represent a scalar or multi-dimensional array.
     pub body: Bytes,
     /// Data type of the response
     pub dtype: DType,
