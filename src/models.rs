@@ -85,6 +85,16 @@ impl Slice {
     }
 }
 
+/// Compression algorithm
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum Compression {
+    /// Gzip
+    Gzip,
+    /// Zlib
+    Zlib,
+}
+
 /// Request data for operations
 #[derive(Debug, Deserialize, PartialEq, Validate)]
 #[serde(deny_unknown_fields)]
@@ -118,6 +128,8 @@ pub struct RequestData {
     #[validate]
     #[validate(length(min = 1, message = "selection length must be greater than 0"))]
     pub selection: Option<Vec<Slice>>,
+    /// Compression filter name
+    pub compression: Option<Compression>,
 }
 
 /// Validate an array shape
@@ -218,6 +230,7 @@ mod tests {
             shape: None,
             order: None,
             selection: None,
+            compression: None,
         }
     }
 
@@ -232,6 +245,7 @@ mod tests {
             shape: Some(vec![2, 5]),
             order: Some(Order::C),
             selection: Some(vec![Slice::new(1, 2, 3), Slice::new(4, 5, 6)]),
+            compression: Some(Compression::Gzip),
         }
     }
 
@@ -315,6 +329,13 @@ mod tests {
                 Token::U32(6),
                 Token::SeqEnd,
                 Token::SeqEnd,
+                Token::Str("compression"),
+                Token::Some,
+                Token::Enum {
+                    name: "Compression",
+                },
+                Token::Str("gzip"),
+                Token::Unit,
                 Token::StructEnd,
             ],
         );
@@ -569,6 +590,27 @@ mod tests {
         request_data.selection = Some(vec![Slice::new(1, 2, 1)]);
         request_data.validate().unwrap()
     }
+
+    #[test]
+    fn test_invalid_compression() {
+        assert_de_tokens_error::<RequestData>(
+            &[
+                Token::Struct {
+                    name: "RequestData",
+                    len: 2,
+                },
+                Token::Str("compression"),
+                Token::Some,
+                Token::Enum {
+                    name: "Compression",
+                },
+                Token::Str("foo"),
+                Token::StructEnd,
+            ],
+            "unknown variant `foo`, expected `gzip` or `zlib`",
+        )
+    }
+
     #[test]
     fn test_unknown_field() {
         assert_de_tokens_error::<RequestData>(&[
@@ -576,7 +618,7 @@ mod tests {
             Token::Str("foo"),
             Token::StructEnd
             ],
-            "unknown field `foo`, expected one of `source`, `bucket`, `object`, `dtype`, `offset`, `size`, `shape`, `order`, `selection`"
+            "unknown field `foo`, expected one of `source`, `bucket`, `object`, `dtype`, `offset`, `size`, `shape`, `order`, `selection`, `compression`"
         )
     }
 
@@ -591,7 +633,7 @@ mod tests {
 
     #[test]
     fn test_json_optional_fields() {
-        let json = r#"{"source": "http://example.com", "bucket": "bar", "object": "baz", "dtype": "int32", "offset": 4, "size": 8, "shape": [2, 5], "order": "C", "selection": [[1, 2, 3], [4, 5, 6]]}"#;
+        let json = r#"{"source": "http://example.com", "bucket": "bar", "object": "baz", "dtype": "int32", "offset": 4, "size": 8, "shape": [2, 5], "order": "C", "selection": [[1, 2, 3], [4, 5, 6]], "compression": "gzip"}"#;
         let request_data = serde_json::from_str::<RequestData>(json).unwrap();
         assert_eq!(request_data, get_test_request_data_optional());
     }

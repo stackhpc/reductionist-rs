@@ -48,7 +48,7 @@ pub async fn metrics_handler() -> String {
         .encode(&prometheus::gather(), &mut buffer)
         .expect("could not encode gathered metrics into temporary buffer");
 
-        String::from_utf8(buffer).expect("could not convert metrics buffer into string")
+    String::from_utf8(buffer).expect("could not convert metrics buffer into string")
 }
 
 pub async fn track_metrics<B>(request: Request<B>, next: Next<B>) -> impl IntoResponse {

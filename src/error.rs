@@ -22,6 +22,10 @@ use tracing::{event, Level};
 /// Each variant may result in a different API error response.
 #[derive(Debug, Error)]
 pub enum ActiveStorageError {
+    /// Error decompressing data
+    #[error("failed to decompress data")]
+    Decompression(#[from] std::io::Error),
+
     /// Attempt to perform an invalid operation on an empty array or selection
     #[error("cannot perform {operation} on empty array or selection")]
     EmptyArray { operation: &'static str },
@@ -174,7 +178,8 @@ impl From<ActiveStorageError> for ErrorResponse {
     fn from(error: ActiveStorageError) -> Self {
         let response = match &error {
             // Bad request
-            ActiveStorageError::EmptyArray { operation: _ }
+            ActiveStorageError::Decompression(_)
+            | ActiveStorageError::EmptyArray { operation: _ }
             | ActiveStorageError::RequestDataJsonRejection(_)
             | ActiveStorageError::RequestDataValidation(_)
             | ActiveStorageError::ShapeInvalid(_) => Self::bad_request(&error),
@@ -307,6 +312,15 @@ mod tests {
         // Map Vec items from str to String
         let caused_by = caused_by.map(|cb| cb.iter().map(|s| s.to_string()).collect());
         assert_eq!(caused_by, error_response.error.caused_by);
+    }
+
+    #[tokio::test]
+    async fn decompression_error() {
+        let io_error = std::io::Error::new(std::io::ErrorKind::InvalidInput, "decompression error");
+        let error = ActiveStorageError::Decompression(io_error);
+        let message = "failed to decompress data";
+        let caused_by = Some(vec!["decompression error"]);
+        test_active_storage_error(error, StatusCode::BAD_REQUEST, message, caused_by).await;
     }
 
     #[tokio::test]

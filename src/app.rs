@@ -1,6 +1,7 @@
 //! Active Storage server API
 
 use crate::error::ActiveStorageError;
+use crate::filter_pipeline;
 use crate::metrics::{metrics_handler, track_metrics};
 use crate::models;
 use crate::operation;
@@ -159,6 +160,7 @@ async fn operation_handler<T: operation::Operation>(
     ValidatedJson(request_data): ValidatedJson<models::RequestData>,
 ) -> Result<models::Response, ActiveStorageError> {
     let data = download_object(&auth, &request_data).await?;
+    let data = filter_pipeline::filter_pipeline(&request_data, &data)?;
     T::execute(&request_data, &data)
 }
 

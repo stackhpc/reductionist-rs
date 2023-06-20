@@ -73,7 +73,11 @@ with a JSON payload of the form:
     "selection": [
         [0, 19, 2],
         [1, 3, 1]
-    ]
+    ],
+
+    // Algorithm used to compress the data
+    // - optional, defaults to no compression
+    "compression": "gzip|zlib"
 }
 ```
 
@@ -92,7 +96,7 @@ In particular, the following are known limitations which we intend to address:
 
   * Error handling and reporting is minimal
   * No support for missing data
-  * No support for compressed or encrypted objects
+  * No support for encrypted objects
 
 ## Running
 
