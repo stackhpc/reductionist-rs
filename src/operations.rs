@@ -13,8 +13,6 @@ use ndarray_stats::{errors::MinMaxError, QuantileExt};
 // Bring trait into scope to use as_bytes method.
 use zerocopy::AsBytes;
 
-// TODO: Remove count method from API once count-as-response-header is implemented
-
 /// Return the number of selected elements in the array.
 pub struct Count {}
 
