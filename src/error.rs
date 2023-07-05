@@ -213,9 +213,9 @@ impl From<ActiveStorageError> for ErrorResponse {
                                     Some("NoSuchBucket") => Self::bad_request(&error),
 
                                     // Unauthorised
-                                    Some("InvalidAccessKeyId") | Some("SignatureDoesNotMatch") => {
-                                        Self::unauthorised(&error)
-                                    }
+                                    Some("InvalidAccessKeyId")
+                                    | Some("SignatureDoesNotMatch")
+                                    | Some("AccessDenied") => Self::unauthorised(&error),
 
                                     // Internal server error
                                     _ => Self::internal_server_error(&error),
@@ -411,6 +411,23 @@ mod tests {
             "service error",
             "unhandled error",
             "Error { code: \"SignatureDoesNotMatch\", message: \"fake smithy error\" }",
+        ]);
+        test_s3_get_object_error(sdk_error, StatusCode::UNAUTHORIZED, caused_by).await;
+    }
+
+    #[tokio::test]
+    async fn s3_get_object_access_denied_error() {
+        // Jump through hoops to create an SdkError.
+        let smithy_error = SmithyError::builder()
+            .message("fake smithy error")
+            .code("AccessDenied")
+            .build();
+        let get_object_error = GetObjectError::generic(smithy_error);
+        let sdk_error = SdkError::service_error(get_object_error, get_smithy_response());
+        let caused_by = Some(vec![
+            "service error",
+            "unhandled error",
+            "Error { code: \"AccessDenied\", message: \"fake smithy error\" }",
         ]);
         test_s3_get_object_error(sdk_error, StatusCode::UNAUTHORIZED, caused_by).await;
     }
