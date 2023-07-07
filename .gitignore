@@ -19,3 +19,5 @@
 
 # Python venv for running helper scripts
 /scripts/venv/
+
+.vscode
