@@ -1,0 +1,22 @@
+# NOTE: This should only be used for explicitly testing the prometheus metrics
+# since it builds the Rust project from scratch within the container each time
+# so is very slow and inefficient for regular development work.
+services:
+  active-storage-proxy:
+    build: ../.
+    ports:
+      - "8080:8080"
+  minio:
+    image: minio/minio
+    command: ["server", "data", "--console-address", ":9001"]
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - type: bind
+        source: ./prometheus.yml
+        target: /etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
