@@ -31,6 +31,8 @@ use tower_http::validate_request::ValidateRequestHeaderLayer;
 static HEADER_DTYPE: header::HeaderName = header::HeaderName::from_static("x-activestorage-dtype");
 /// `x-activestorage-shape` header definition
 static HEADER_SHAPE: header::HeaderName = header::HeaderName::from_static("x-activestorage-shape");
+/// `x-activestorage-count` header definition
+static HEADER_COUNT: header::HeaderName = header::HeaderName::from_static("x-activestorage-count");
 
 impl IntoResponse for models::Response {
     /// Convert a [crate::models::Response] into a [axum::response::Response].
@@ -43,6 +45,7 @@ impl IntoResponse for models::Response {
                 ),
                 (&HEADER_DTYPE, self.dtype.to_string().to_lowercase()),
                 (&HEADER_SHAPE, serde_json::to_string(&self.shape).unwrap()),
+                (&HEADER_COUNT, serde_json::to_string(&self.count).unwrap()),
             ],
             self.body,
         )

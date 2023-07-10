@@ -17,7 +17,6 @@
 # Dev TLS certs
 .certs/
 
-# Python venv for running helper scripts
-/scripts/venv/
-
+# Others
+scripts/venv
 .vscode

@@ -29,7 +29,12 @@ impl NumOperation for Count {
         let body = len.to_le_bytes();
         // Need to copy to provide ownership to caller.
         let body = Bytes::copy_from_slice(&body);
-        Ok(models::Response::new(body, models::DType::Int64, vec![]))
+        Ok(models::Response::new(
+            body,
+            models::DType::Int64,
+            vec![],
+            len,
+        ))
     }
 }
 
@@ -44,6 +49,8 @@ impl NumOperation for Max {
         let array = array::build_array::<T>(request_data, data)?;
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
         let sliced = array.slice(slice_info);
+        // FIXME: Account for missing data?
+        let count = i64::try_from(sliced.len())?;
         // FIXME: endianness?
         let body = sliced
             .max()
@@ -54,7 +61,12 @@ impl NumOperation for Max {
             .as_bytes();
         // Need to copy to provide ownership to caller.
         let body = Bytes::copy_from_slice(body);
-        Ok(models::Response::new(body, request_data.dtype, vec![]))
+        Ok(models::Response::new(
+            body,
+            request_data.dtype,
+            vec![],
+            count,
+        ))
     }
 }
 
@@ -69,6 +81,8 @@ impl NumOperation for Mean {
         let array = array::build_array::<T>(request_data, data)?;
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
         let sliced = array.slice(slice_info);
+        // FIXME: Account for missing data?
+        let count = i64::try_from(sliced.len())?;
         // FIXME: endianness?
         let body = sliced
             .mean()
@@ -76,7 +90,12 @@ impl NumOperation for Mean {
         let body = body.as_bytes();
         // Need to copy to provide ownership to caller.
         let body = Bytes::copy_from_slice(body);
-        Ok(models::Response::new(body, request_data.dtype, vec![]))
+        Ok(models::Response::new(
+            body,
+            request_data.dtype,
+            vec![],
+            count,
+        ))
     }
 }
 
@@ -91,6 +110,8 @@ impl NumOperation for Min {
         let array = array::build_array::<T>(request_data, data)?;
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
         let sliced = array.slice(slice_info);
+        // FIXME: Account for missing data?
+        let count = i64::try_from(sliced.len())?;
         // FIXME: endianness?
         let body = sliced
             .min()
@@ -101,7 +122,12 @@ impl NumOperation for Min {
             .as_bytes();
         // Need to copy to provide ownership to caller.
         let body = Bytes::copy_from_slice(body);
-        Ok(models::Response::new(body, request_data.dtype, vec![]))
+        Ok(models::Response::new(
+            body,
+            request_data.dtype,
+            vec![],
+            count,
+        ))
     }
 }
 
@@ -116,6 +142,8 @@ impl NumOperation for Select {
         let array = array::build_array::<T>(request_data, data)?;
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
         let sliced = array.slice(slice_info);
+        // FIXME: Account for missing data?
+        let count = i64::try_from(sliced.len())?;
         let shape = sliced.shape().to_vec();
         // Transpose Fortran ordered arrays before iterating.
         let body = if !array.is_standard_layout() {
@@ -129,7 +157,12 @@ impl NumOperation for Select {
         let body = body.as_bytes();
         // Need to copy to provide ownership to caller.
         let body = Bytes::copy_from_slice(body);
-        Ok(models::Response::new(body, request_data.dtype, shape))
+        Ok(models::Response::new(
+            body,
+            request_data.dtype,
+            shape,
+            count,
+        ))
     }
 }
 
@@ -144,12 +177,19 @@ impl NumOperation for Sum {
         let array = array::build_array::<T>(request_data, data)?;
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
         let sliced = array.slice(slice_info);
+        // FIXME: Account for missing data?
+        let count = i64::try_from(sliced.len())?;
         // FIXME: endianness?
         let body = sliced.sum();
         let body = body.as_bytes();
         // Need to copy to provide ownership to caller.
         let body = Bytes::copy_from_slice(body);
-        Ok(models::Response::new(body, request_data.dtype, vec![]))
+        Ok(models::Response::new(
+            body,
+            request_data.dtype,
+            vec![],
+            count,
+        ))
     }
 }
 
@@ -174,15 +214,17 @@ mod tests {
             order: None,
             selection: None,
         };
-        let data = [1, 2, 3, 4, 5, 6, 7, 8];
+        let data: [u8; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
         let bytes = Bytes::copy_from_slice(&data);
         let response = Count::execute(&request_data, &bytes).unwrap();
+        // A u8 slice of 8 elements == a u32 slice with 2 elements
         // Count is always i64.
         let expected: i64 = 2;
         assert_eq!(expected.as_bytes(), response.body);
-        assert_eq!(8, response.body.len());
+        assert_eq!(8, response.body.len()); // Assert that count value is 8 bytes (i.e. i64)
         assert_eq!(models::DType::Int64, response.dtype);
         assert_eq!(vec![0; 0], response.shape);
+        assert_eq!(expected, response.count);
     }
 
     #[test]
@@ -198,7 +240,12 @@ mod tests {
             order: None,
             selection: None,
         };
-        let data = [1, 2, 3, 4, 5, 6, 7, 8];
+        // data:
+        // A u8 slice of 8 elements == a single i64 value
+        // where each slice element is 2 hexadecimal digits
+        // and the order is reversed on little-endian systems
+        // so [1, 2, 3] is 0x030201 as an i64 in hexadecimal
+        let data: [u8; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
         let bytes = Bytes::copy_from_slice(&data);
         let response = Max::execute(&request_data, &bytes).unwrap();
         let expected: i64 = 0x0807060504030201;
@@ -206,6 +253,7 @@ mod tests {
         assert_eq!(8, response.body.len());
         assert_eq!(models::DType::Int64, response.dtype);
         assert_eq!(vec![0; 0], response.shape);
+        assert_eq!(1, response.count);
     }
 
     #[test]
@@ -229,6 +277,7 @@ mod tests {
         assert_eq!(4, response.body.len());
         assert_eq!(models::DType::Uint32, response.dtype);
         assert_eq!(vec![0; 0], response.shape);
+        assert_eq!(2, response.count);
     }
 
     #[test]
@@ -252,6 +301,7 @@ mod tests {
         assert_eq!(8, response.body.len());
         assert_eq!(models::DType::Uint64, response.dtype);
         assert_eq!(vec![0; 0], response.shape);
+        assert_eq!(1, response.count);
     }
 
     #[test]
@@ -275,6 +325,7 @@ mod tests {
         assert_eq!(8, response.body.len());
         assert_eq!(models::DType::Float32, response.dtype);
         assert_eq!(vec![2], response.shape);
+        assert_eq!(2, response.count);
     }
 
     #[test]
@@ -298,6 +349,7 @@ mod tests {
         assert_eq!(16, response.body.len());
         assert_eq!(models::DType::Float64, response.dtype);
         assert_eq!(vec![2, 1], response.shape);
+        assert_eq!(2, response.count);
     }
 
     #[test]
@@ -327,6 +379,7 @@ mod tests {
         assert_eq!(8, response.body.len());
         assert_eq!(models::DType::Float32, response.dtype);
         assert_eq!(vec![2, 1], response.shape);
+        assert_eq!(2, response.count);
     }
 
     #[test]
@@ -350,5 +403,6 @@ mod tests {
         assert_eq!(4, response.body.len());
         assert_eq!(models::DType::Uint32, response.dtype);
         assert_eq!(vec![0; 0], response.shape);
+        assert_eq!(2, response.count);
     }
 }
