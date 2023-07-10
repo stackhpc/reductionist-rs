@@ -26,7 +26,7 @@ pub enum DType {
 
 impl DType {
     /// Returns the size of the associated type in bytes.
-    fn size_of(self) -> usize {
+    pub fn size_of(self) -> usize {
         match self {
             Self::Int32 => std::mem::size_of::<i32>(),
             Self::Int64 => std::mem::size_of::<i64>(),
@@ -164,16 +164,47 @@ fn validate_shape_selection(
     Ok(())
 }
 
+/// Validate raw data size against data type and shape.
+///
+/// # Arguments
+///
+/// * `raw_size`: Raw (uncompressed) size of the data in bytes.
+/// * `dtype`: Data type
+/// * `shape`: Optional shape of the multi-dimensional array
+pub fn validate_raw_size(
+    raw_size: usize,
+    dtype: DType,
+    shape: &Option<Vec<usize>>,
+) -> Result<(), ValidationError> {
+    let dtype_size = dtype.size_of();
+    if let Some(shape) = shape {
+        let expected_size = shape.iter().product::<usize>() * dtype_size;
+        if raw_size != expected_size {
+            let mut error =
+                ValidationError::new("Raw data size must be equal to the product of shape indices and dtype size in bytes");
+            error.add_param("raw size".into(), &raw_size);
+            error.add_param("dtype size".into(), &dtype_size);
+            error.add_param("expected size".into(), &expected_size);
+            return Err(error);
+        }
+    } else if raw_size % dtype_size != 0 {
+        let mut error =
+            ValidationError::new("Raw data size must be a multiple of dtype size in bytes");
+        error.add_param("raw size".into(), &raw_size);
+        error.add_param("dtype size".into(), &dtype_size);
+        return Err(error);
+    }
+    Ok(())
+}
+
 /// Validate request data
 fn validate_request_data(request_data: &RequestData) -> Result<(), ValidationError> {
     // Validation of multiple fields in RequestData.
     if let Some(size) = &request_data.size {
-        let dtype_size = request_data.dtype.size_of();
-        if size % dtype_size != 0 {
-            let mut error = ValidationError::new("Size must be a multiple of dtype size in bytes");
-            error.add_param("size".into(), &size);
-            error.add_param("dtype size".into(), &dtype_size);
-            return Err(error);
+        // If the data is compressed then the size refers to the size of the compressed data, so we
+        // can't validate it at this point.
+        if request_data.compression.is_none() {
+            validate_raw_size(*size, request_data.dtype, &request_data.shape)?;
         }
     };
     match (&request_data.shape, &request_data.selection) {
@@ -531,10 +562,21 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Size must be a multiple of dtype size in bytes")]
+    #[should_panic(expected = "Raw data size must be a multiple of dtype size in bytes")]
     fn test_invalid_size_for_dtype() {
         let mut request_data = get_test_request_data();
         request_data.size = Some(1);
+        request_data.validate().unwrap()
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Raw data size must be equal to the product of shape indices and dtype size in bytes"
+    )]
+    fn test_invalid_size_for_shape() {
+        let mut request_data = get_test_request_data();
+        request_data.size = Some(4);
+        request_data.shape = Some(vec![1, 2]);
         request_data.validate().unwrap()
     }
 

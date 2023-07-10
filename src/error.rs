@@ -38,7 +38,11 @@ pub enum ActiveStorageError {
     #[error("request data is not valid")]
     RequestDataJsonRejection(#[from] JsonRejection),
 
-    /// Error validating RequestData
+    /// Error validating RequestData (single error)
+    #[error("request data is not valid")]
+    RequestDataValidationSingle(#[from] validator::ValidationError),
+
+    /// Error validating RequestData (multiple errors)
     #[error("request data is not valid")]
     RequestDataValidation(#[from] validator::ValidationErrors),
 
@@ -181,6 +185,7 @@ impl From<ActiveStorageError> for ErrorResponse {
             ActiveStorageError::Decompression(_)
             | ActiveStorageError::EmptyArray { operation: _ }
             | ActiveStorageError::RequestDataJsonRejection(_)
+            | ActiveStorageError::RequestDataValidationSingle(_)
             | ActiveStorageError::RequestDataValidation(_)
             | ActiveStorageError::ShapeInvalid(_) => Self::bad_request(&error),
 
@@ -338,6 +343,15 @@ mod tests {
         let caused_by = None;
         test_active_storage_error(error, StatusCode::INTERNAL_SERVER_ERROR, message, caused_by)
             .await;
+    }
+
+    #[tokio::test]
+    async fn request_data_validation_single() {
+        let validation_error = validator::ValidationError::new("foo");
+        let error = ActiveStorageError::RequestDataValidationSingle(validation_error);
+        let message = "request data is not valid";
+        let caused_by = Some(vec!["Validation error: foo [{}]"]);
+        test_active_storage_error(error, StatusCode::BAD_REQUEST, message, caused_by).await;
     }
 
     #[tokio::test]

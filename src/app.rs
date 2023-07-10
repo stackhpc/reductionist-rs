@@ -161,6 +161,10 @@ async fn operation_handler<T: operation::Operation>(
 ) -> Result<models::Response, ActiveStorageError> {
     let data = download_object(&auth, &request_data).await?;
     let data = filter_pipeline::filter_pipeline(&request_data, &data)?;
+    if request_data.compression.is_some() || request_data.size.is_none() {
+        // Validate the raw uncompressed data size now that we know it.
+        models::validate_raw_size(data.len(), request_data.dtype, &request_data.shape)?;
+    }
     T::execute(&request_data, &data)
 }
 
