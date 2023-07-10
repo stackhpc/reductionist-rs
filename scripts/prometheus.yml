@@ -1,0 +1,7 @@
+global:
+  scrape_interval: 5s
+scrape_configs:
+  - job_name: active-storage-proxy
+    static_configs:
+      - targets: 
+        - "active-storage-proxy:8080"

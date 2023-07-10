@@ -1,12 +1,14 @@
 //! Active Storage server API
 
 use crate::error::ActiveStorageError;
+use crate::metrics::{metrics_handler, track_metrics};
 use crate::models;
 use crate::operation;
 use crate::operations;
 use crate::s3_client;
 use crate::validated_json::ValidatedJson;
 
+use axum::middleware;
 use axum::{
     body::{Body, Bytes},
     extract::Path,
@@ -86,7 +88,9 @@ fn router() -> Router {
 
     Router::new()
         .route("/.well-known/s3-active-storage-schema", get(schema))
+        .route("/metrics", get(metrics_handler))
         .nest("/v1", v1())
+        .route_layer(middleware::from_fn(track_metrics))
 }
 
 /// S3 Active Storage Server Service type alias
