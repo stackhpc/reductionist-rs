@@ -16,3 +16,7 @@
 
 # Dev TLS certs
 .certs/
+
+# Others
+scripts/venv
+.vscode

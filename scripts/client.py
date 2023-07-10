@@ -36,6 +36,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--shape", type=str)
     parser.add_argument("--order", default="C") #, choices=["C", "F"]) allow invalid for testing
     parser.add_argument("--selection", type=str)
+    parser.add_argument("--show-response-headers", action=argparse.BooleanOptionalAction)
     return parser.parse_args()
 
 
@@ -65,13 +66,17 @@ def request(url: str, username: str, password: str, request_data: dict):
     return response
 
 
-def display(response):
+def display(response, show_headers=False):
     #print(response.content)
     dtype = response.headers['x-activestorage-dtype']
     shape = json.loads(response.headers['x-activestorage-shape'])
     result = np.frombuffer(response.content, dtype=dtype)
     result = result.reshape(shape)
-    print(result)
+    if show_headers:
+        print("\nResponse headers:", response.headers)
+        print("\nResult:", result)
+    else:
+        print(result)
 
 
 def display_error(response):
@@ -88,7 +93,7 @@ def main():
     url = f'{args.server}/v1/{args.operation}/'
     response = request(url, args.username, args.password, request_data)
     if response.ok:
-        display(response)
+        display(response, show_headers=args.show_response_headers)
     else:
         display_error(response)
         sys.exit(1)
