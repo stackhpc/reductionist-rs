@@ -1,5 +1,6 @@
 from enum import Enum
 import gzip
+import numcodecs
 import numpy as np
 import pathlib
 import s3fs
@@ -8,6 +9,7 @@ import zlib
 NUM_ITEMS = 10
 OBJECT_PREFIX = "data"
 COMPRESSION_ALGS = [None, "gzip", "zlib"]
+FILTER_ALGS = [None, "shuffle"]
 
 #Use enum which also subclasses string type so that 
 # auto-generated OpenAPI schema can determine allowed dtypes
@@ -38,14 +40,18 @@ except FileExistsError:
 # Create numpy arrays and upload to S3 as bytes
 for compression in COMPRESSION_ALGS:
     compression_suffix = f"-{compression}" if compression else ""
-    for d in AllowedDatatypes.__members__.keys():
-        obj_name = f'{OBJECT_PREFIX}-{d}{compression_suffix}.dat'
-        with s3_fs.open(bucket / obj_name, 'wb') as s3_file:
-            data = np.arange(NUM_ITEMS, dtype=d).tobytes()
-            if compression == "gzip":
-                data = gzip.compress(data)
-            elif compression == "zlib":
-                data = zlib.compress(data)
-            s3_file.write(data)
+    for filter in FILTER_ALGS:
+        filter_suffix = f"-{filter}" if filter else ""
+        for d in AllowedDatatypes:
+            obj_name = f'{OBJECT_PREFIX}-{d}{compression_suffix}{filter_suffix}.dat'
+            with s3_fs.open(bucket / obj_name, 'wb') as s3_file:
+                data = np.arange(NUM_ITEMS, dtype=d).tobytes()
+                if filter == "shuffle":
+                    data = numcodecs.Shuffle(d.n_bytes()).encode(data)
+                if compression == "gzip":
+                    data = gzip.compress(data)
+                elif compression == "zlib":
+                    data = zlib.compress(data)
+                s3_file.write(data)
 
-print("Data upload successful. \nBucket contents:\n", s3_fs.ls(bucket))
+print("Data upload successful. \nBucket contents:\n", "\n".join(s3_fs.ls(bucket)))
