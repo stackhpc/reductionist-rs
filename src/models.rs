@@ -88,6 +88,7 @@ impl Slice {
 /// Compression algorithm
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
+#[serde(tag = "id")]
 pub enum Compression {
     /// Gzip
     Gzip,
@@ -362,11 +363,10 @@ mod tests {
                 Token::SeqEnd,
                 Token::Str("compression"),
                 Token::Some,
-                Token::Enum {
-                    name: "Compression",
-                },
+                Token::Map { len: None },
+                Token::Str("id"),
                 Token::Str("gzip"),
-                Token::Unit,
+                Token::MapEnd,
                 Token::StructEnd,
             ],
         );
@@ -643,11 +643,10 @@ mod tests {
                 },
                 Token::Str("compression"),
                 Token::Some,
-                Token::Enum {
-                    name: "Compression",
-                },
+                Token::Map { len: None },
+                Token::Str("id"),
                 Token::Str("foo"),
-                Token::StructEnd,
+                Token::MapEnd,
             ],
             "unknown variant `foo`, expected `gzip` or `zlib`",
         )
@@ -675,7 +674,7 @@ mod tests {
 
     #[test]
     fn test_json_optional_fields() {
-        let json = r#"{"source": "http://example.com", "bucket": "bar", "object": "baz", "dtype": "int32", "offset": 4, "size": 8, "shape": [2, 5], "order": "C", "selection": [[1, 2, 3], [4, 5, 6]], "compression": "gzip"}"#;
+        let json = r#"{"source": "http://example.com", "bucket": "bar", "object": "baz", "dtype": "int32", "offset": 4, "size": 8, "shape": [2, 5], "order": "C", "selection": [[1, 2, 3], [4, 5, 6]], "compression": {"id": "gzip"}}"#;
         let request_data = serde_json::from_str::<RequestData>(json).unwrap();
         assert_eq!(request_data, get_test_request_data_optional());
     }
