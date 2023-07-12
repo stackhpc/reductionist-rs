@@ -88,7 +88,7 @@ impl<T: NumOperation> Operation for T {
 mod tests {
     use super::*;
 
-    use url::Url;
+    use crate::test_utils;
 
     struct TestOp {}
 
@@ -109,18 +109,8 @@ mod tests {
 
     #[test]
     fn operation_u32() {
-        let request_data = models::RequestData {
-            source: Url::parse("http://example.com").unwrap(),
-            bucket: "bar".to_string(),
-            object: "baz".to_string(),
-            dtype: models::DType::Uint32,
-            offset: None,
-            size: None,
-            shape: None,
-            order: None,
-            selection: None,
-            compression: None,
-        };
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.dtype = models::DType::Uint32;
         let data = [1, 2, 3, 4];
         let bytes = Bytes::copy_from_slice(&data);
         let response = TestOp::execute(&request_data, &bytes).unwrap();
@@ -150,18 +140,8 @@ mod tests {
 
     #[test]
     fn num_operation_i64() {
-        let request_data = models::RequestData {
-            source: Url::parse("http://example.com").unwrap(),
-            bucket: "bar".to_string(),
-            object: "baz".to_string(),
-            dtype: models::DType::Int64,
-            offset: None,
-            size: None,
-            shape: None,
-            order: None,
-            selection: None,
-            compression: None,
-        };
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.dtype = models::DType::Int64;
         let data = [1, 2, 3, 4];
         let bytes = Bytes::copy_from_slice(&data);
         let response = TestNumOp::execute(&request_data, &bytes).unwrap();

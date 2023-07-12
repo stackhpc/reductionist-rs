@@ -198,23 +198,11 @@ mod tests {
     use super::*;
 
     use crate::operation::Operation;
-
-    use url::Url;
+    use crate::test_utils;
 
     #[test]
     fn count_i32_1d() {
-        let request_data = models::RequestData {
-            source: Url::parse("http://example.com").unwrap(),
-            bucket: "bar".to_string(),
-            object: "baz".to_string(),
-            dtype: models::DType::Int32,
-            offset: None,
-            size: None,
-            shape: None,
-            order: None,
-            selection: None,
-            compression: None,
-        };
+        let request_data = test_utils::get_test_request_data();
         let data: [u8; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
         let bytes = Bytes::copy_from_slice(&data);
         let response = Count::execute(&request_data, &bytes).unwrap();
@@ -230,18 +218,8 @@ mod tests {
 
     #[test]
     fn max_i64_1d() {
-        let request_data = models::RequestData {
-            source: Url::parse("http://example.com").unwrap(),
-            bucket: "bar".to_string(),
-            object: "baz".to_string(),
-            dtype: models::DType::Int64,
-            offset: None,
-            size: None,
-            shape: None,
-            order: None,
-            selection: None,
-            compression: None,
-        };
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.dtype = models::DType::Int64;
         // data:
         // A u8 slice of 8 elements == a single i64 value
         // where each slice element is 2 hexadecimal digits
@@ -260,18 +238,8 @@ mod tests {
 
     #[test]
     fn mean_u32_1d() {
-        let request_data = models::RequestData {
-            source: Url::parse("http://example.com").unwrap(),
-            bucket: "bar".to_string(),
-            object: "baz".to_string(),
-            dtype: models::DType::Uint32,
-            offset: None,
-            size: None,
-            shape: None,
-            order: None,
-            selection: None,
-            compression: None,
-        };
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.dtype = models::DType::Uint32;
         let data = [1, 2, 3, 4, 5, 6, 7, 8];
         let bytes = Bytes::copy_from_slice(&data);
         let response = Mean::execute(&request_data, &bytes).unwrap();
@@ -285,18 +253,8 @@ mod tests {
 
     #[test]
     fn min_u64_1d() {
-        let request_data = models::RequestData {
-            source: Url::parse("http://example.com").unwrap(),
-            bucket: "bar".to_string(),
-            object: "baz".to_string(),
-            dtype: models::DType::Uint64,
-            offset: None,
-            size: None,
-            shape: None,
-            order: None,
-            selection: None,
-            compression: None,
-        };
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.dtype = models::DType::Uint64;
         let data = [1, 2, 3, 4, 5, 6, 7, 8];
         let bytes = Bytes::copy_from_slice(&data);
         let response = Min::execute(&request_data, &bytes).unwrap();
@@ -310,18 +268,8 @@ mod tests {
 
     #[test]
     fn select_f32_1d() {
-        let request_data = models::RequestData {
-            source: Url::parse("http://example.com").unwrap(),
-            bucket: "bar".to_string(),
-            object: "baz".to_string(),
-            dtype: models::DType::Float32,
-            offset: None,
-            size: None,
-            shape: None,
-            order: None,
-            selection: None,
-            compression: None,
-        };
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.dtype = models::DType::Float32;
         let data = [1, 2, 3, 4, 5, 6, 7, 8];
         let bytes = Bytes::copy_from_slice(&data);
         let response = Select::execute(&request_data, &bytes).unwrap();
@@ -335,18 +283,9 @@ mod tests {
 
     #[test]
     fn select_f64_2d() {
-        let request_data = models::RequestData {
-            source: Url::parse("http://example.com").unwrap(),
-            bucket: "bar".to_string(),
-            object: "baz".to_string(),
-            dtype: models::DType::Float64,
-            offset: None,
-            size: None,
-            shape: Some(vec![2, 1]),
-            order: None,
-            selection: None,
-            compression: None,
-        };
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.dtype = models::DType::Float64;
+        request_data.shape = Some(vec![2, 1]);
         let data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
         let bytes = Bytes::copy_from_slice(&data);
         let response = Select::execute(&request_data, &bytes).unwrap();
@@ -360,21 +299,13 @@ mod tests {
 
     #[test]
     fn select_f32_2d_with_selection() {
-        let request_data = models::RequestData {
-            source: Url::parse("http://example.com").unwrap(),
-            bucket: "bar".to_string(),
-            object: "baz".to_string(),
-            dtype: models::DType::Float32,
-            offset: None,
-            size: None,
-            shape: Some(vec![2, 2]),
-            order: None,
-            selection: Some(vec![
-                models::Slice::new(0, 2, 1),
-                models::Slice::new(1, 2, 1),
-            ]),
-            compression: None,
-        };
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.dtype = models::DType::Float32;
+        request_data.shape = Some(vec![2, 2]);
+        request_data.selection = Some(vec![
+            models::Slice::new(0, 2, 1),
+            models::Slice::new(1, 2, 1),
+        ]);
         // 2x2 array, select second row of each column.
         // [[0x04030201, 0x08070605], [0x12111009, 0x16151413]]
         let data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
@@ -391,18 +322,8 @@ mod tests {
 
     #[test]
     fn sum_u32_1d() {
-        let request_data = models::RequestData {
-            source: Url::parse("http://example.com").unwrap(),
-            bucket: "bar".to_string(),
-            object: "baz".to_string(),
-            dtype: models::DType::Uint32,
-            offset: None,
-            size: None,
-            shape: None,
-            order: None,
-            selection: None,
-            compression: None,
-        };
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.dtype = models::DType::Uint32;
         let data = [1, 2, 3, 4, 5, 6, 7, 8];
         let bytes = Bytes::copy_from_slice(&data);
         let response = Sum::execute(&request_data, &bytes).unwrap();

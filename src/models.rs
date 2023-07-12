@@ -249,44 +249,15 @@ impl Response {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils;
     use serde_test::{assert_de_tokens, assert_de_tokens_error, Token};
-
-    fn get_test_request_data() -> RequestData {
-        RequestData {
-            source: Url::parse("http://example.com").unwrap(),
-            bucket: "bar".to_string(),
-            object: "baz".to_string(),
-            dtype: DType::Int32,
-            offset: None,
-            size: None,
-            shape: None,
-            order: None,
-            selection: None,
-            compression: None,
-        }
-    }
-
-    fn get_test_request_data_optional() -> RequestData {
-        RequestData {
-            source: Url::parse("http://example.com").unwrap(),
-            bucket: "bar".to_string(),
-            object: "baz".to_string(),
-            dtype: DType::Int32,
-            offset: Some(4),
-            size: Some(8),
-            shape: Some(vec![2, 5]),
-            order: Some(Order::C),
-            selection: Some(vec![Slice::new(1, 2, 3), Slice::new(4, 5, 6)]),
-            compression: Some(Compression::Gzip),
-        }
-    }
 
     // The following tests use serde_test to validate the correct function of the deserialiser.
     // The validations are also tested.
 
     #[test]
     fn test_required_fields() {
-        let request_data = get_test_request_data();
+        let request_data = test_utils::get_test_request_data();
         assert_de_tokens(
             &request_data,
             &[
@@ -312,7 +283,7 @@ mod tests {
 
     #[test]
     fn test_optional_fields() {
-        let request_data = get_test_request_data_optional();
+        let request_data = test_utils::get_test_request_data_optional();
         assert_de_tokens(
             &request_data,
             &[
@@ -422,7 +393,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "bucket must not be empty")]
     fn test_invalid_bucket() {
-        let mut request_data = get_test_request_data();
+        let mut request_data = test_utils::get_test_request_data();
         request_data.bucket = "".to_string();
         request_data.validate().unwrap()
     }
@@ -448,7 +419,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "object must not be empty")]
     fn test_invalid_object() {
-        let mut request_data = get_test_request_data();
+        let mut request_data = test_utils::get_test_request_data();
         request_data.object = "".to_string();
         request_data.validate().unwrap()
     }
@@ -489,7 +460,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "size must be greater than 0")]
     fn test_invalid_size() {
-        let mut request_data = get_test_request_data();
+        let mut request_data = test_utils::get_test_request_data();
         request_data.size = Some(0);
         request_data.validate().unwrap()
     }
@@ -497,7 +468,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "shape length must be greater than 0")]
     fn test_invalid_shape() {
-        let mut request_data = get_test_request_data();
+        let mut request_data = test_utils::get_test_request_data();
         request_data.shape = Some(vec![]);
         request_data.validate().unwrap()
     }
@@ -505,7 +476,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "shape indices must be greater than 0")]
     fn test_invalid_shape_indices() {
-        let mut request_data = get_test_request_data();
+        let mut request_data = test_utils::get_test_request_data();
         request_data.shape = Some(vec![0]);
         request_data.validate().unwrap()
     }
@@ -531,7 +502,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "selection length must be greater than 0")]
     fn test_invalid_selection() {
-        let mut request_data = get_test_request_data();
+        let mut request_data = test_utils::get_test_request_data();
         request_data.selection = Some(vec![]);
         request_data.validate().unwrap()
     }
@@ -539,7 +510,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "Selection stride must not be equal to zero")]
     fn test_invalid_selection2() {
-        let mut request_data = get_test_request_data();
+        let mut request_data = test_utils::get_test_request_data();
         request_data.selection = Some(vec![Slice::new(1, 2, 0)]);
         request_data.validate().unwrap()
     }
@@ -547,7 +518,7 @@ mod tests {
     #[test]
     fn test_selection_end_lt_start() {
         // Numpy sementics: start >= end yields an empty array
-        let mut request_data = get_test_request_data();
+        let mut request_data = test_utils::get_test_request_data();
         request_data.shape = Some(vec![1]);
         request_data.selection = Some(vec![Slice::new(1, 0, 1)]);
         request_data.validate().unwrap()
@@ -555,7 +526,7 @@ mod tests {
 
     #[test]
     fn test_selection_negative_stride() {
-        let mut request_data = get_test_request_data();
+        let mut request_data = test_utils::get_test_request_data();
         request_data.shape = Some(vec![1]);
         request_data.selection = Some(vec![Slice::new(1, 0, -1)]);
         request_data.validate().unwrap()
@@ -564,7 +535,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "Raw data size must be a multiple of dtype size in bytes")]
     fn test_invalid_size_for_dtype() {
-        let mut request_data = get_test_request_data();
+        let mut request_data = test_utils::get_test_request_data();
         request_data.size = Some(1);
         request_data.validate().unwrap()
     }
@@ -574,7 +545,7 @@ mod tests {
         expected = "Raw data size must be equal to the product of shape indices and dtype size in bytes"
     )]
     fn test_invalid_size_for_shape() {
-        let mut request_data = get_test_request_data();
+        let mut request_data = test_utils::get_test_request_data();
         request_data.size = Some(4);
         request_data.shape = Some(vec![1, 2]);
         request_data.validate().unwrap()
@@ -583,7 +554,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "Shape and selection must have the same length")]
     fn test_shape_selection_mismatch() {
-        let mut request_data = get_test_request_data();
+        let mut request_data = test_utils::get_test_request_data();
         request_data.shape = Some(vec![1, 2]);
         request_data.selection = Some(vec![Slice::new(1, 2, 1)]);
         request_data.validate().unwrap()
@@ -592,7 +563,7 @@ mod tests {
     #[test]
     fn test_selection_start_gt_shape() {
         // Numpy sementics: start > length yields an empty array
-        let mut request_data = get_test_request_data();
+        let mut request_data = test_utils::get_test_request_data();
         request_data.shape = Some(vec![4]);
         request_data.selection = Some(vec![Slice::new(5, 5, 1)]);
         request_data.validate().unwrap()
@@ -601,7 +572,7 @@ mod tests {
     #[test]
     fn test_selection_start_lt_negative_shape() {
         // Numpy sementics: start < -length gets clamped to zero
-        let mut request_data = get_test_request_data();
+        let mut request_data = test_utils::get_test_request_data();
         request_data.shape = Some(vec![4]);
         request_data.selection = Some(vec![Slice::new(-5, 5, 1)]);
         request_data.validate().unwrap()
@@ -610,7 +581,7 @@ mod tests {
     #[test]
     fn test_selection_end_gt_shape() {
         // Numpy semantics: end > length gets clamped to length
-        let mut request_data = get_test_request_data();
+        let mut request_data = test_utils::get_test_request_data();
         request_data.shape = Some(vec![4]);
         request_data.selection = Some(vec![Slice::new(1, 5, 1)]);
         request_data.validate().unwrap()
@@ -619,7 +590,7 @@ mod tests {
     #[test]
     fn test_selection_end_lt_negative_shape() {
         // Numpy semantics: end < -length gets clamped to zero
-        let mut request_data = get_test_request_data();
+        let mut request_data = test_utils::get_test_request_data();
         request_data.shape = Some(vec![4]);
         request_data.selection = Some(vec![Slice::new(1, -5, 1)]);
         request_data.validate().unwrap()
@@ -628,7 +599,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "Selection requires shape to be specified")]
     fn test_selection_without_shape() {
-        let mut request_data = get_test_request_data();
+        let mut request_data = test_utils::get_test_request_data();
         request_data.selection = Some(vec![Slice::new(1, 2, 1)]);
         request_data.validate().unwrap()
     }
@@ -669,13 +640,13 @@ mod tests {
     fn test_json_required_fields() {
         let json = r#"{"source": "http://example.com", "bucket": "bar", "object": "baz", "dtype": "int32"}"#;
         let request_data = serde_json::from_str::<RequestData>(json).unwrap();
-        assert_eq!(request_data, get_test_request_data());
+        assert_eq!(request_data, test_utils::get_test_request_data());
     }
 
     #[test]
     fn test_json_optional_fields() {
         let json = r#"{"source": "http://example.com", "bucket": "bar", "object": "baz", "dtype": "int32", "offset": 4, "size": 8, "shape": [2, 5], "order": "C", "selection": [[1, 2, 3], [4, 5, 6]], "compression": {"id": "gzip"}}"#;
         let request_data = serde_json::from_str::<RequestData>(json).unwrap();
-        assert_eq!(request_data, get_test_request_data_optional());
+        assert_eq!(request_data, test_utils::get_test_request_data_optional());
     }
 }
