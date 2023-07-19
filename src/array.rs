@@ -236,6 +236,7 @@ mod tests {
                 shape: None,
                 order: None,
                 selection: None,
+                compression: None,
             },
         );
         assert_eq!([42], shape.raw_dim().as_array_view().as_slice().unwrap());
@@ -255,6 +256,7 @@ mod tests {
                 shape: Some(vec![1, 2, 3]),
                 order: None,
                 selection: None,
+                compression: None,
             },
         );
         assert_eq!(
@@ -458,6 +460,7 @@ mod tests {
             shape: None,
             order: None,
             selection: None,
+            compression: None,
         };
         let bytes = Bytes::copy_from_slice(&data);
         let array = build_array::<u32>(&request_data, &bytes).unwrap();
@@ -477,6 +480,7 @@ mod tests {
             shape: Some(vec![2, 1]),
             order: None,
             selection: None,
+            compression: None,
         };
         let bytes = Bytes::copy_from_slice(&data);
         let array = build_array::<i64>(&request_data, &bytes).unwrap();
@@ -496,6 +500,7 @@ mod tests {
             shape: None,
             order: None,
             selection: None,
+            compression: None,
         };
         let bytes = Bytes::copy_from_slice(&data);
         let array = build_array::<u32>(&request_data, &bytes).unwrap();

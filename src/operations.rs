@@ -213,6 +213,7 @@ mod tests {
             shape: None,
             order: None,
             selection: None,
+            compression: None,
         };
         let data: [u8; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
         let bytes = Bytes::copy_from_slice(&data);
@@ -239,6 +240,7 @@ mod tests {
             shape: None,
             order: None,
             selection: None,
+            compression: None,
         };
         // data:
         // A u8 slice of 8 elements == a single i64 value
@@ -268,6 +270,7 @@ mod tests {
             shape: None,
             order: None,
             selection: None,
+            compression: None,
         };
         let data = [1, 2, 3, 4, 5, 6, 7, 8];
         let bytes = Bytes::copy_from_slice(&data);
@@ -292,6 +295,7 @@ mod tests {
             shape: None,
             order: None,
             selection: None,
+            compression: None,
         };
         let data = [1, 2, 3, 4, 5, 6, 7, 8];
         let bytes = Bytes::copy_from_slice(&data);
@@ -316,6 +320,7 @@ mod tests {
             shape: None,
             order: None,
             selection: None,
+            compression: None,
         };
         let data = [1, 2, 3, 4, 5, 6, 7, 8];
         let bytes = Bytes::copy_from_slice(&data);
@@ -340,6 +345,7 @@ mod tests {
             shape: Some(vec![2, 1]),
             order: None,
             selection: None,
+            compression: None,
         };
         let data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
         let bytes = Bytes::copy_from_slice(&data);
@@ -367,6 +373,7 @@ mod tests {
                 models::Slice::new(0, 2, 1),
                 models::Slice::new(1, 2, 1),
             ]),
+            compression: None,
         };
         // 2x2 array, select second row of each column.
         // [[0x04030201, 0x08070605], [0x12111009, 0x16151413]]
@@ -394,6 +401,7 @@ mod tests {
             shape: None,
             order: None,
             selection: None,
+            compression: None,
         };
         let data = [1, 2, 3, 4, 5, 6, 7, 8];
         let bytes = Bytes::copy_from_slice(&data);

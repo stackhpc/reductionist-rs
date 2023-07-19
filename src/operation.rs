@@ -119,6 +119,7 @@ mod tests {
             shape: None,
             order: None,
             selection: None,
+            compression: None,
         };
         let data = [1, 2, 3, 4];
         let bytes = Bytes::copy_from_slice(&data);
@@ -159,6 +160,7 @@ mod tests {
             shape: None,
             order: None,
             selection: None,
+            compression: None,
         };
         let data = [1, 2, 3, 4];
         let bytes = Bytes::copy_from_slice(&data);

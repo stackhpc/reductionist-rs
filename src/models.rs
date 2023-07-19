@@ -26,7 +26,7 @@ pub enum DType {
 
 impl DType {
     /// Returns the size of the associated type in bytes.
-    fn size_of(self) -> usize {
+    pub fn size_of(self) -> usize {
         match self {
             Self::Int32 => std::mem::size_of::<i32>(),
             Self::Int64 => std::mem::size_of::<i64>(),
@@ -85,6 +85,17 @@ impl Slice {
     }
 }
 
+/// Compression algorithm
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+#[serde(tag = "id")]
+pub enum Compression {
+    /// Gzip
+    Gzip,
+    /// Zlib
+    Zlib,
+}
+
 /// Request data for operations
 #[derive(Debug, Deserialize, PartialEq, Validate)]
 #[serde(deny_unknown_fields)]
@@ -118,6 +129,8 @@ pub struct RequestData {
     #[validate]
     #[validate(length(min = 1, message = "selection length must be greater than 0"))]
     pub selection: Option<Vec<Slice>>,
+    /// Compression filter name
+    pub compression: Option<Compression>,
 }
 
 /// Validate an array shape
@@ -152,16 +165,47 @@ fn validate_shape_selection(
     Ok(())
 }
 
+/// Validate raw data size against data type and shape.
+///
+/// # Arguments
+///
+/// * `raw_size`: Raw (uncompressed) size of the data in bytes.
+/// * `dtype`: Data type
+/// * `shape`: Optional shape of the multi-dimensional array
+pub fn validate_raw_size(
+    raw_size: usize,
+    dtype: DType,
+    shape: &Option<Vec<usize>>,
+) -> Result<(), ValidationError> {
+    let dtype_size = dtype.size_of();
+    if let Some(shape) = shape {
+        let expected_size = shape.iter().product::<usize>() * dtype_size;
+        if raw_size != expected_size {
+            let mut error =
+                ValidationError::new("Raw data size must be equal to the product of shape indices and dtype size in bytes");
+            error.add_param("raw size".into(), &raw_size);
+            error.add_param("dtype size".into(), &dtype_size);
+            error.add_param("expected size".into(), &expected_size);
+            return Err(error);
+        }
+    } else if raw_size % dtype_size != 0 {
+        let mut error =
+            ValidationError::new("Raw data size must be a multiple of dtype size in bytes");
+        error.add_param("raw size".into(), &raw_size);
+        error.add_param("dtype size".into(), &dtype_size);
+        return Err(error);
+    }
+    Ok(())
+}
+
 /// Validate request data
 fn validate_request_data(request_data: &RequestData) -> Result<(), ValidationError> {
     // Validation of multiple fields in RequestData.
     if let Some(size) = &request_data.size {
-        let dtype_size = request_data.dtype.size_of();
-        if size % dtype_size != 0 {
-            let mut error = ValidationError::new("Size must be a multiple of dtype size in bytes");
-            error.add_param("size".into(), &size);
-            error.add_param("dtype size".into(), &dtype_size);
-            return Err(error);
+        // If the data is compressed then the size refers to the size of the compressed data, so we
+        // can't validate it at this point.
+        if request_data.compression.is_none() {
+            validate_raw_size(*size, request_data.dtype, &request_data.shape)?;
         }
     };
     match (&request_data.shape, &request_data.selection) {
@@ -218,6 +262,7 @@ mod tests {
             shape: None,
             order: None,
             selection: None,
+            compression: None,
         }
     }
 
@@ -232,6 +277,7 @@ mod tests {
             shape: Some(vec![2, 5]),
             order: Some(Order::C),
             selection: Some(vec![Slice::new(1, 2, 3), Slice::new(4, 5, 6)]),
+            compression: Some(Compression::Gzip),
         }
     }
 
@@ -315,6 +361,12 @@ mod tests {
                 Token::U32(6),
                 Token::SeqEnd,
                 Token::SeqEnd,
+                Token::Str("compression"),
+                Token::Some,
+                Token::Map { len: None },
+                Token::Str("id"),
+                Token::Str("gzip"),
+                Token::MapEnd,
                 Token::StructEnd,
             ],
         );
@@ -510,10 +562,21 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Size must be a multiple of dtype size in bytes")]
+    #[should_panic(expected = "Raw data size must be a multiple of dtype size in bytes")]
     fn test_invalid_size_for_dtype() {
         let mut request_data = get_test_request_data();
         request_data.size = Some(1);
+        request_data.validate().unwrap()
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Raw data size must be equal to the product of shape indices and dtype size in bytes"
+    )]
+    fn test_invalid_size_for_shape() {
+        let mut request_data = get_test_request_data();
+        request_data.size = Some(4);
+        request_data.shape = Some(vec![1, 2]);
         request_data.validate().unwrap()
     }
 
@@ -569,6 +632,26 @@ mod tests {
         request_data.selection = Some(vec![Slice::new(1, 2, 1)]);
         request_data.validate().unwrap()
     }
+
+    #[test]
+    fn test_invalid_compression() {
+        assert_de_tokens_error::<RequestData>(
+            &[
+                Token::Struct {
+                    name: "RequestData",
+                    len: 2,
+                },
+                Token::Str("compression"),
+                Token::Some,
+                Token::Map { len: None },
+                Token::Str("id"),
+                Token::Str("foo"),
+                Token::MapEnd,
+            ],
+            "unknown variant `foo`, expected `gzip` or `zlib`",
+        )
+    }
+
     #[test]
     fn test_unknown_field() {
         assert_de_tokens_error::<RequestData>(&[
@@ -576,7 +659,7 @@ mod tests {
             Token::Str("foo"),
             Token::StructEnd
             ],
-            "unknown field `foo`, expected one of `source`, `bucket`, `object`, `dtype`, `offset`, `size`, `shape`, `order`, `selection`"
+            "unknown field `foo`, expected one of `source`, `bucket`, `object`, `dtype`, `offset`, `size`, `shape`, `order`, `selection`, `compression`"
         )
     }
 
@@ -591,7 +674,7 @@ mod tests {
 
     #[test]
     fn test_json_optional_fields() {
-        let json = r#"{"source": "http://example.com", "bucket": "bar", "object": "baz", "dtype": "int32", "offset": 4, "size": 8, "shape": [2, 5], "order": "C", "selection": [[1, 2, 3], [4, 5, 6]]}"#;
+        let json = r#"{"source": "http://example.com", "bucket": "bar", "object": "baz", "dtype": "int32", "offset": 4, "size": 8, "shape": [2, 5], "order": "C", "selection": [[1, 2, 3], [4, 5, 6]], "compression": {"id": "gzip"}}"#;
         let request_data = serde_json::from_str::<RequestData>(json).unwrap();
         assert_eq!(request_data, get_test_request_data_optional());
     }

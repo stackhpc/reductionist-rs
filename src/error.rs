@@ -22,6 +22,10 @@ use tracing::{event, Level};
 /// Each variant may result in a different API error response.
 #[derive(Debug, Error)]
 pub enum ActiveStorageError {
+    /// Error decompressing data
+    #[error("failed to decompress data")]
+    Decompression(#[from] std::io::Error),
+
     /// Attempt to perform an invalid operation on an empty array or selection
     #[error("cannot perform {operation} on empty array or selection")]
     EmptyArray { operation: &'static str },
@@ -34,7 +38,11 @@ pub enum ActiveStorageError {
     #[error("request data is not valid")]
     RequestDataJsonRejection(#[from] JsonRejection),
 
-    /// Error validating RequestData
+    /// Error validating RequestData (single error)
+    #[error("request data is not valid")]
+    RequestDataValidationSingle(#[from] validator::ValidationError),
+
+    /// Error validating RequestData (multiple errors)
     #[error("request data is not valid")]
     RequestDataValidation(#[from] validator::ValidationErrors),
 
@@ -174,8 +182,10 @@ impl From<ActiveStorageError> for ErrorResponse {
     fn from(error: ActiveStorageError) -> Self {
         let response = match &error {
             // Bad request
-            ActiveStorageError::EmptyArray { operation: _ }
+            ActiveStorageError::Decompression(_)
+            | ActiveStorageError::EmptyArray { operation: _ }
             | ActiveStorageError::RequestDataJsonRejection(_)
+            | ActiveStorageError::RequestDataValidationSingle(_)
             | ActiveStorageError::RequestDataValidation(_)
             | ActiveStorageError::ShapeInvalid(_) => Self::bad_request(&error),
 
@@ -310,6 +320,15 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn decompression_error() {
+        let io_error = std::io::Error::new(std::io::ErrorKind::InvalidInput, "decompression error");
+        let error = ActiveStorageError::Decompression(io_error);
+        let message = "failed to decompress data";
+        let caused_by = Some(vec!["decompression error"]);
+        test_active_storage_error(error, StatusCode::BAD_REQUEST, message, caused_by).await;
+    }
+
+    #[tokio::test]
     async fn empty_array_op_error() {
         let error = ActiveStorageError::EmptyArray { operation: "foo" };
         let message = "cannot perform foo on empty array or selection";
@@ -324,6 +343,15 @@ mod tests {
         let caused_by = None;
         test_active_storage_error(error, StatusCode::INTERNAL_SERVER_ERROR, message, caused_by)
             .await;
+    }
+
+    #[tokio::test]
+    async fn request_data_validation_single() {
+        let validation_error = validator::ValidationError::new("foo");
+        let error = ActiveStorageError::RequestDataValidationSingle(validation_error);
+        let message = "request data is not valid";
+        let caused_by = Some(vec!["Validation error: foo [{}]"]);
+        test_active_storage_error(error, StatusCode::BAD_REQUEST, message, caused_by).await;
     }
 
     #[tokio::test]
