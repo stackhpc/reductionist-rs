@@ -100,3 +100,6 @@ jobs:
 
       - name: Dependency Review
         uses: actions/dependency-review-action@v3
+        with:
+          # https://github.com/advisories/GHSA-g98v-hv3f-hcfr atty potential unaligned read on Windows
+          allow-ghsas: GHSA-g98v-hv3f-hcfr
