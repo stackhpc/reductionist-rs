@@ -7,11 +7,43 @@ use crate::array;
 use crate::error::ActiveStorageError;
 use crate::models;
 use crate::operation::{Element, NumOperation};
+use crate::types::Missing;
 
 use axum::body::Bytes;
+use ndarray::ArrayView;
 use ndarray_stats::{errors::MinMaxError, QuantileExt};
 // Bring trait into scope to use as_bytes method.
 use zerocopy::AsBytes;
+
+/// Returns a filter function that can be used with the Iterator trait's filter() method to filter
+/// out missing data.
+///
+/// # Arguments
+///
+/// * `missing`: Missing data description.
+fn missing_filter<'a, T: Element>(missing: &'a Missing<T>) -> Box<dyn Fn(&T) -> bool + 'a> {
+    match missing {
+        Missing::MissingValue(value) => Box::new(move |x: &T| *x != *value),
+        Missing::MissingValues(values) => Box::new(move |x: &T| !values.contains(x)),
+        Missing::ValidMin(min) => Box::new(move |x: &T| *x >= *min),
+        Missing::ValidMax(max) => Box::new(move |x: &T| *x <= *max),
+        Missing::ValidRange(min, max) => Box::new(move |x: &T| *x >= *min && *x <= *max),
+    }
+}
+
+/// Count the non-missing elements in an array with missing data.
+///
+/// # Arguments
+///
+/// * `array`: The array to count
+/// * `request_data`: RequestData object for the request
+fn count_non_missing<T: Element>(
+    array: &ArrayView<T, ndarray::Dim<ndarray::IxDynImpl>>,
+    missing: &Missing<T>,
+) -> Result<usize, ActiveStorageError> {
+    let filter = missing_filter(missing);
+    Ok(array.iter().copied().filter(filter).count())
+}
 
 /// Return the number of selected elements in the array.
 pub struct Count {}
@@ -25,15 +57,21 @@ impl NumOperation for Count {
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
         let sliced = array.slice(slice_info);
         // FIXME: endianness?
-        let len = i64::try_from(sliced.len())?;
-        let body = len.to_le_bytes();
+        let count = if let Some(missing) = &request_data.missing {
+            let missing = Missing::<T>::try_from(missing)?;
+            count_non_missing(&sliced, &missing)?
+        } else {
+            sliced.len()
+        };
+        let count = i64::try_from(count)?;
+        let body = count.to_le_bytes();
         // Need to copy to provide ownership to caller.
         let body = Bytes::copy_from_slice(&body);
         Ok(models::Response::new(
             body,
             models::DType::Int64,
             vec![],
-            len,
+            count,
         ))
     }
 }
@@ -49,16 +87,28 @@ impl NumOperation for Max {
         let array = array::build_array::<T>(request_data, data)?;
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
         let sliced = array.slice(slice_info);
-        // FIXME: Account for missing data?
-        let count = i64::try_from(sliced.len())?;
-        // FIXME: endianness?
-        let body = sliced
-            .max()
-            .map_err(|err| match err {
+        let (max, count) = if let Some(missing) = &request_data.missing {
+            let missing = Missing::<T>::try_from(missing)?;
+            // FIXME: endianness?
+            // FIXME: unwrap
+            let max = sliced
+                .iter()
+                .copied()
+                .filter(missing_filter(&missing))
+                .max_by(|a, b| a.partial_cmp(b).unwrap())
+                .ok_or(ActiveStorageError::EmptyArray { operation: "max" })?;
+            let count = count_non_missing(&sliced, &missing)?;
+            (max, count)
+        } else {
+            let max = *sliced.max().map_err(|err| match err {
                 MinMaxError::EmptyInput => ActiveStorageError::EmptyArray { operation: "max" },
                 MinMaxError::UndefinedOrder => panic!("unexpected undefined order error for max"),
-            })?
-            .as_bytes();
+            })?;
+            let count = sliced.len();
+            (max, count)
+        };
+        let count = i64::try_from(count)?;
+        let body = max.as_bytes();
         // Need to copy to provide ownership to caller.
         let body = Bytes::copy_from_slice(body);
         Ok(models::Response::new(
@@ -81,16 +131,28 @@ impl NumOperation for Min {
         let array = array::build_array::<T>(request_data, data)?;
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
         let sliced = array.slice(slice_info);
-        // FIXME: Account for missing data?
-        let count = i64::try_from(sliced.len())?;
-        // FIXME: endianness?
-        let body = sliced
-            .min()
-            .map_err(|err| match err {
+        let (min, count) = if let Some(missing) = &request_data.missing {
+            // FIXME: endianness?
+            // FIXME: unwrap
+            let missing = Missing::<T>::try_from(missing)?;
+            let min = sliced
+                .iter()
+                .copied()
+                .filter(missing_filter(&missing))
+                .min_by(|a, b| a.partial_cmp(b).unwrap())
+                .ok_or(ActiveStorageError::EmptyArray { operation: "min" })?;
+            let count = count_non_missing(&sliced, &missing)?;
+            (min, count)
+        } else {
+            let min = *sliced.min().map_err(|err| match err {
                 MinMaxError::EmptyInput => ActiveStorageError::EmptyArray { operation: "min" },
                 MinMaxError::UndefinedOrder => panic!("unexpected undefined order error for min"),
-            })?
-            .as_bytes();
+            })?;
+            let count = sliced.len();
+            (min, count)
+        };
+        let count = i64::try_from(count)?;
+        let body = min.as_bytes();
         // Need to copy to provide ownership to caller.
         let body = Bytes::copy_from_slice(body);
         Ok(models::Response::new(
@@ -113,8 +175,13 @@ impl NumOperation for Select {
         let array = array::build_array::<T>(request_data, data)?;
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
         let sliced = array.slice(slice_info);
-        // FIXME: Account for missing data?
-        let count = i64::try_from(sliced.len())?;
+        let count = if let Some(missing) = &request_data.missing {
+            let missing = Missing::<T>::try_from(missing)?;
+            count_non_missing(&sliced, &missing)?
+        } else {
+            sliced.len()
+        };
+        let count = i64::try_from(count)?;
         let shape = sliced.shape().to_vec();
         // Transpose Fortran ordered arrays before iterating.
         let body = if !array.is_standard_layout() {
@@ -148,11 +215,21 @@ impl NumOperation for Sum {
         let array = array::build_array::<T>(request_data, data)?;
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
         let sliced = array.slice(slice_info);
-        // FIXME: Account for missing data?
-        let count = i64::try_from(sliced.len())?;
-        // FIXME: endianness?
-        let body = sliced.sum();
-        let body = body.as_bytes();
+        let (sum, count) = if let Some(missing) = &request_data.missing {
+            let missing = Missing::<T>::try_from(missing)?;
+            // FIXME: endianness?
+            let sum = sliced
+                .iter()
+                .copied()
+                .filter(missing_filter(&missing))
+                .sum();
+            let count = count_non_missing(&sliced, &missing)?;
+            (sum, count)
+        } else {
+            (sliced.sum(), sliced.len())
+        };
+        let count = i64::try_from(count)?;
+        let body = sum.as_bytes();
         // Need to copy to provide ownership to caller.
         let body = Bytes::copy_from_slice(body);
         Ok(models::Response::new(

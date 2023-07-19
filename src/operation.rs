@@ -2,6 +2,7 @@
 
 use crate::error::ActiveStorageError;
 use crate::models;
+use crate::types::dvalue::TryFromDValue;
 
 use axum::body::Bytes;
 
@@ -12,9 +13,12 @@ pub trait Element:
     + PartialOrd
     + num_traits::FromPrimitive
     + num_traits::Zero
+    + std::convert::From<u16>
     + std::fmt::Debug
+    + std::iter::Sum
     + std::ops::Add<Output = Self>
     + std::ops::Div<Output = Self>
+    + TryFromDValue
     + zerocopy::AsBytes
     + zerocopy::FromBytes
 {
@@ -28,9 +32,12 @@ impl<T> Element for T where
         + num_traits::FromPrimitive
         + num_traits::One
         + num_traits::Zero
+        + std::convert::From<u16>
         + std::fmt::Debug
+        + std::iter::Sum
         + std::ops::Add<Output = Self>
         + std::ops::Div<Output = Self>
+        + TryFromDValue
         + zerocopy::AsBytes
         + zerocopy::FromBytes
 {

@@ -16,6 +16,8 @@ use std::error::Error;
 use thiserror::Error;
 use tracing::{event, Level};
 
+use crate::types::DValue;
+
 /// Active Storage server error type
 ///
 /// This type encapsulates the various errors that may occur.
@@ -33,6 +35,9 @@ pub enum ActiveStorageError {
     /// Error converting from bytes to a type
     #[error("failed to convert from bytes to {type_name}")]
     FromBytes { type_name: &'static str },
+
+    #[error("Incompatible value {0} for missing")]
+    IncompatibleMissing(DValue),
 
     /// Error deserialising request data into RequestData
     #[error("request data is not valid")]
@@ -184,6 +189,7 @@ impl From<ActiveStorageError> for ErrorResponse {
             // Bad request
             ActiveStorageError::Decompression(_)
             | ActiveStorageError::EmptyArray { operation: _ }
+            | ActiveStorageError::IncompatibleMissing(_)
             | ActiveStorageError::RequestDataJsonRejection(_)
             | ActiveStorageError::RequestDataValidationSingle(_)
             | ActiveStorageError::RequestDataValidation(_)
@@ -343,6 +349,15 @@ mod tests {
         let caused_by = None;
         test_active_storage_error(error, StatusCode::INTERNAL_SERVER_ERROR, message, caused_by)
             .await;
+    }
+
+    #[tokio::test]
+    async fn incompatible_missing() {
+        let value = 32.into();
+        let error = ActiveStorageError::IncompatibleMissing(value);
+        let message = "Incompatible value 32 for missing";
+        let caused_by = None;
+        test_active_storage_error(error, StatusCode::BAD_REQUEST, message, caused_by).await;
     }
 
     #[tokio::test]
