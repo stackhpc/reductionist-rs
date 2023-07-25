@@ -37,7 +37,8 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--order", default="C") #, choices=["C", "F"]) allow invalid for testing
     parser.add_argument("--selection", type=str)
     parser.add_argument("--compression", type=str)
-    parser.add_argument("--show-response-headers", action=argparse.BooleanOptionalAction)
+    parser.add_argument("--shuffle", action=argparse.BooleanOptionalAction)
+    parser.add_argument("--verbose", action=argparse.BooleanOptionalAction)
     return parser.parse_args()
 
 
@@ -56,6 +57,14 @@ def build_request_data(args: argparse.Namespace) -> dict:
         request_data["shape"] = json.loads(args.shape)
     if args.selection:
         request_data["selection"] = json.loads(args.selection)
+    if args.compression:
+        request_data["compression"] = {"id": args.compression}
+    filters = []
+    if args.shuffle:
+        element_size = 4 if "32" in args.dtype else 8
+        filters.append({"id": "shuffle", "element_size": element_size})
+    if filters:
+        request_data["filters"] = filters
     return {k: v for k, v in request_data.items() if v is not None}
 
 
@@ -68,13 +77,13 @@ def request(url: str, username: str, password: str, request_data: dict):
     return response
 
 
-def display(response, show_headers=False):
+def display(response, verbose=False):
     #print(response.content)
     dtype = response.headers['x-activestorage-dtype']
     shape = json.loads(response.headers['x-activestorage-shape'])
     result = np.frombuffer(response.content, dtype=dtype)
     result = result.reshape(shape)
-    if show_headers:
+    if verbose:
         print("\nResponse headers:", response.headers)
         print("\nResult:", result)
     else:
@@ -92,10 +101,12 @@ def display_error(response):
 def main():
     args = get_args()
     request_data = build_request_data(args)
+    if args.verbose:
+        print("\nRequest data:", request_data)
     url = f'{args.server}/v1/{args.operation}/'
     response = request(url, args.username, args.password, request_data)
     if response.ok:
-        display(response, show_headers=args.show_response_headers)
+        display(response, verbose=args.verbose)
     else:
         display_error(response)
         sys.exit(1)

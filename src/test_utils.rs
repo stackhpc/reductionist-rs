@@ -15,6 +15,7 @@ pub(crate) fn get_test_request_data() -> RequestData {
         order: None,
         selection: None,
         compression: None,
+        filters: None,
     }
 }
 
@@ -31,5 +32,6 @@ pub(crate) fn get_test_request_data_optional() -> RequestData {
         order: Some(Order::C),
         selection: Some(vec![Slice::new(1, 2, 3), Slice::new(4, 5, 6)]),
         compression: Some(Compression::Gzip),
+        filters: Some(vec![Filter::Shuffle { element_size: 4 }]),
     }
 }

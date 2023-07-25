@@ -1,3 +1,4 @@
+numcodecs
 numpy
 requests
 s3fs

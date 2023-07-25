@@ -77,7 +77,11 @@ with a JSON payload of the form:
 
     // Algorithm used to compress the data
     // - optional, defaults to no compression
-    "compression": "gzip|zlib"
+    "compression": {"id": "gzip|zlib"},
+
+    // List of algorithms used to filter the data
+    // - optional, defaults to no filters
+    "filters": [{"id": "shuffle", "element_size": 4}],
 }
 ```
 

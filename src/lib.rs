@@ -28,6 +28,7 @@ pub mod cli;
 pub mod compression;
 pub mod error;
 pub mod filter_pipeline;
+pub mod filters;
 pub mod metrics;
 pub mod models;
 pub mod operation;

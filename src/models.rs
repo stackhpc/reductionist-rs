@@ -96,6 +96,15 @@ pub enum Compression {
     Zlib,
 }
 
+/// Filter algorithm
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+#[serde(tag = "id")]
+pub enum Filter {
+    /// Byte shuffle
+    Shuffle { element_size: usize },
+}
+
 /// Request data for operations
 #[derive(Debug, Deserialize, PartialEq, Validate)]
 #[serde(deny_unknown_fields)]
@@ -131,6 +140,8 @@ pub struct RequestData {
     pub selection: Option<Vec<Slice>>,
     /// Compression filter name
     pub compression: Option<Compression>,
+    /// List of filter algorithms
+    pub filters: Option<Vec<Filter>>,
 }
 
 /// Validate an array shape
@@ -338,6 +349,16 @@ mod tests {
                 Token::Str("id"),
                 Token::Str("gzip"),
                 Token::MapEnd,
+                Token::Str("filters"),
+                Token::Some,
+                Token::Seq { len: Some(1) },
+                Token::Map { len: None },
+                Token::Str("id"),
+                Token::Str("shuffle"),
+                Token::Str("element_size"),
+                Token::U32(4),
+                Token::MapEnd,
+                Token::SeqEnd,
                 Token::StructEnd,
             ],
         );
@@ -624,13 +645,33 @@ mod tests {
     }
 
     #[test]
+    fn test_invalid_filter() {
+        assert_de_tokens_error::<RequestData>(
+            &[
+                Token::Struct {
+                    name: "RequestData",
+                    len: 2,
+                },
+                Token::Str("filters"),
+                Token::Some,
+                Token::Seq { len: Some(1) },
+                Token::Map { len: None },
+                Token::Str("id"),
+                Token::Str("foo"),
+                Token::MapEnd,
+            ],
+            "unknown variant `foo`, expected `shuffle`",
+        )
+    }
+
+    #[test]
     fn test_unknown_field() {
         assert_de_tokens_error::<RequestData>(&[
             Token::Struct { name: "RequestData", len: 2 },
             Token::Str("foo"),
             Token::StructEnd
             ],
-            "unknown field `foo`, expected one of `source`, `bucket`, `object`, `dtype`, `offset`, `size`, `shape`, `order`, `selection`, `compression`"
+            "unknown field `foo`, expected one of `source`, `bucket`, `object`, `dtype`, `offset`, `size`, `shape`, `order`, `selection`, `compression`, `filters`"
         )
     }
 
@@ -645,7 +686,7 @@ mod tests {
 
     #[test]
     fn test_json_optional_fields() {
-        let json = r#"{"source": "http://example.com", "bucket": "bar", "object": "baz", "dtype": "int32", "offset": 4, "size": 8, "shape": [2, 5], "order": "C", "selection": [[1, 2, 3], [4, 5, 6]], "compression": {"id": "gzip"}}"#;
+        let json = r#"{"source": "http://example.com", "bucket": "bar", "object": "baz", "dtype": "int32", "offset": 4, "size": 8, "shape": [2, 5], "order": "C", "selection": [[1, 2, 3], [4, 5, 6]], "compression": {"id": "gzip"}, "filters": [{"id": "shuffle", "element_size": 4}]}"#;
         let request_data = serde_json::from_str::<RequestData>(json).unwrap();
         assert_eq!(request_data, test_utils::get_test_request_data_optional());
     }
