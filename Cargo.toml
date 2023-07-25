@@ -1,6 +1,6 @@
 [package]
 name = "s3-active-storage"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 # Due to AWS SDK.
 rust-version = "1.66.1"
