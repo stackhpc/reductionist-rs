@@ -148,8 +148,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    use url::Url;
+    use crate::test_utils;
 
     #[test]
     fn from_bytes_u32() {
@@ -224,41 +223,15 @@ mod tests {
 
     #[test]
     fn get_shape_without_shape() {
-        let shape = get_shape(
-            42,
-            &models::RequestData {
-                source: Url::parse("http://example.com").unwrap(),
-                bucket: "bar".to_string(),
-                object: "baz".to_string(),
-                dtype: models::DType::Int32,
-                offset: None,
-                size: None,
-                shape: None,
-                order: None,
-                selection: None,
-                compression: None,
-            },
-        );
+        let shape = get_shape(42, &test_utils::get_test_request_data());
         assert_eq!([42], shape.raw_dim().as_array_view().as_slice().unwrap());
     }
 
     #[test]
     fn get_shape_with_shape() {
-        let shape = get_shape(
-            42,
-            &models::RequestData {
-                source: Url::parse("http://example.com").unwrap(),
-                bucket: "bar".to_string(),
-                object: "baz".to_string(),
-                dtype: models::DType::Int32,
-                offset: None,
-                size: None,
-                shape: Some(vec![1, 2, 3]),
-                order: None,
-                selection: None,
-                compression: None,
-            },
-        );
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.shape = Some(vec![1, 2, 3]);
+        let shape = get_shape(42, &request_data);
         assert_eq!(
             [1, 2, 3],
             shape.raw_dim().as_array_view().as_slice().unwrap()
@@ -450,18 +423,8 @@ mod tests {
     #[test]
     fn build_array_1d_u32() {
         let data = [1, 2, 3, 4, 5, 6, 7, 8];
-        let request_data = models::RequestData {
-            source: Url::parse("http://example.com").unwrap(),
-            bucket: "bar".to_string(),
-            object: "baz".to_string(),
-            dtype: models::DType::Uint32,
-            offset: None,
-            size: None,
-            shape: None,
-            order: None,
-            selection: None,
-            compression: None,
-        };
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.dtype = models::DType::Uint32;
         let bytes = Bytes::copy_from_slice(&data);
         let array = build_array::<u32>(&request_data, &bytes).unwrap();
         assert_eq!(array![0x04030201_u32, 0x08070605_u32].into_dyn(), array);
@@ -470,18 +433,9 @@ mod tests {
     #[test]
     fn build_array_2d_i64() {
         let data = [1, 2, 3, 4, 0, 0, 0, 0, 5, 6, 7, 8, 0, 0, 0, 0];
-        let request_data = models::RequestData {
-            source: Url::parse("http://example.com").unwrap(),
-            bucket: "bar".to_string(),
-            object: "baz".to_string(),
-            dtype: models::DType::Int64,
-            offset: None,
-            size: None,
-            shape: Some(vec![2, 1]),
-            order: None,
-            selection: None,
-            compression: None,
-        };
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.dtype = models::DType::Int64;
+        request_data.shape = Some(vec![2, 1]);
         let bytes = Bytes::copy_from_slice(&data);
         let array = build_array::<i64>(&request_data, &bytes).unwrap();
         assert_eq!(array![[0x04030201_i64], [0x08070605_i64]].into_dyn(), array);
@@ -490,18 +444,8 @@ mod tests {
     // Helper function for tests that slice an array using a selection.
     fn test_selection(slice: models::Slice, expected: Array1<u32>) {
         let data = [1, 2, 3, 4, 5, 6, 7, 8];
-        let request_data = models::RequestData {
-            source: Url::parse("http://example.com").unwrap(),
-            bucket: "bar".to_string(),
-            object: "baz".to_string(),
-            dtype: models::DType::Uint32,
-            offset: None,
-            size: None,
-            shape: None,
-            order: None,
-            selection: None,
-            compression: None,
-        };
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.dtype = models::DType::Uint32;
         let bytes = Bytes::copy_from_slice(&data);
         let array = build_array::<u32>(&request_data, &bytes).unwrap();
         let shape = vec![2];

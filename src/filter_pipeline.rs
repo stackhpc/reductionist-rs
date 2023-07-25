@@ -29,10 +29,10 @@ pub fn filter_pipeline(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils;
     use flate2::read::GzEncoder;
     use flate2::Compression;
     use std::io::Read;
-    use url::Url;
 
     fn compress_gzip(data: &[u8]) -> Bytes {
         // Adapated from flate2 documentation.
@@ -46,18 +46,7 @@ mod tests {
     fn test_filter_pipeline_noop() {
         let data = [1, 2, 3, 4];
         let bytes = Bytes::copy_from_slice(&data);
-        let request_data = models::RequestData {
-            source: Url::parse("http://example.com").unwrap(),
-            bucket: "bar".to_string(),
-            object: "baz".to_string(),
-            dtype: models::DType::Int32,
-            offset: None,
-            size: None,
-            shape: None,
-            order: None,
-            selection: None,
-            compression: None,
-        };
+        let request_data = test_utils::get_test_request_data();
         let result = filter_pipeline(&request_data, &bytes).unwrap();
         assert_eq!(data.as_ref(), result);
     }
@@ -66,18 +55,8 @@ mod tests {
     fn test_filter_pipeline_gzip() {
         let data = [1, 2, 3, 4];
         let bytes = compress_gzip(data.as_ref());
-        let request_data = models::RequestData {
-            source: Url::parse("http://example.com").unwrap(),
-            bucket: "bar".to_string(),
-            object: "baz".to_string(),
-            dtype: models::DType::Int32,
-            offset: None,
-            size: None,
-            shape: None,
-            order: None,
-            selection: None,
-            compression: Some(models::Compression::Gzip),
-        };
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.compression = Some(models::Compression::Gzip);
         let result = filter_pipeline(&request_data, &bytes).unwrap();
         assert_eq!(data.as_ref(), result);
     }
