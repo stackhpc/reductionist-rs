@@ -66,7 +66,6 @@ fn router() -> Router {
         Router::new()
             .route("/count", post(operation_handler::<operations::Count>))
             .route("/max", post(operation_handler::<operations::Max>))
-            .route("/mean", post(operation_handler::<operations::Mean>))
             .route("/min", post(operation_handler::<operations::Min>))
             .route("/select", post(operation_handler::<operations::Select>))
             .route("/sum", post(operation_handler::<operations::Sum>))
