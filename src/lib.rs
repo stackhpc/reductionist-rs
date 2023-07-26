@@ -10,7 +10,7 @@
 //!
 //! This is a performant implementation of the Active Storage Server.
 //! The original Python functional prototype is available
-//! [here](https://github.com/stackhpc/s3-active-storage).
+//! [here](https://github.com/stackhpc/reductionist).
 //!
 //! The Active Storage Server is built on top of a number of open source components.
 //!

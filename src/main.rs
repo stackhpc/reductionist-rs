@@ -1,10 +1,10 @@
-//! This file defines the s3-active-storage binary entry point.
+//! This file defines the reductionist binary entry point.
 
-use s3_active_storage::app;
-use s3_active_storage::cli;
-use s3_active_storage::metrics;
-use s3_active_storage::server;
-use s3_active_storage::tracing;
+use reductionist::app;
+use reductionist::cli;
+use reductionist::metrics;
+use reductionist::server;
+use reductionist::tracing;
 
 /// Application entry point
 #[tokio::main]

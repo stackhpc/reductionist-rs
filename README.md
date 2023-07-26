@@ -1,4 +1,4 @@
-# S3 Active Storage
+# Reductionist
 
 This project implements simple reductions on S3 objects containing numeric binary data.
 By implementing these reductions in the storage system the volume of data that needs to be
@@ -10,7 +10,7 @@ and is done in collaboration with the
 [University of Reading](http://www.reading.ac.uk/).
 
 This is a performant implementation of the active storage server.
-The original Python functional prototype is available [here](https://github.com/stackhpc/s3-active-storage).
+The original Python functional prototype is available [here](https://github.com/stackhpc/reductionist).
 
 ## Concepts
 
@@ -104,17 +104,17 @@ In particular, the following are known limitations which we intend to address:
 
 ## Running
 
-There are various ways to run the S3 Active Storage server.
+There are various ways to run the Reductionist server.
 
 ### Running in a container
 
 The simplest method is to run it in a container using a pre-built image:
 
 ```sh
-docker run -it --detach --rm --net=host --name s3-active-storage ghcr.io/stackhpc/s3-active-storage-rs:latest
+docker run -it --detach --rm --net=host --name reductionist ghcr.io/stackhpc/reductionist-rs:latest
 ```
 
-Images are published to [GitHub Container Registry](https://github.com/stackhpc/s3-active-storage-rs/pkgs/container/s3-active-storage-rs) when the project is released.
+Images are published to [GitHub Container Registry](https://github.com/stackhpc/reductionist-rs/pkgs/container/reductionist-rs) when the project is released.
 The `latest` tag corresponds to the most recent release, or you can use a specific release e.g. `0.1.0`.
 
 This method does not require access to the source code.
@@ -125,15 +125,15 @@ If you need to use unreleased changes, but still want to run in a container, it 
 First, clone this repository:
 
 ```sh
-git clone https://github.com/stackhpc/s3-active-storage-rs.git
-cd s3-active-storage-rs
+git clone https://github.com/stackhpc/reductionist-rs.git
+cd reductionist-rs
 ```
 
 ```sh
 make build
 ```
 
-The image will be tagged as `s3-active-storage`.
+The image will be tagged as `reductionist`.
 The image may be pushed to a registry, or deployed locally.
 
 ```sh
@@ -142,7 +142,7 @@ make run
 
 ## Build
 
-If you prefer not to run the S3 Active Storage server in a container, it will be necessary to build a binary.
+If you prefer not to run the Reductionist server in a container, it will be necessary to build a binary.
 Building locally may also be preferable during development to take advantage of incremental compilation.
 
 ### Prerequisites
@@ -157,8 +157,8 @@ See the [Rust book](https://doc.rust-lang.org/book/ch01-01-installation.html) fo
 First, clone this repository:
 
 ```sh
-git clone https://github.com/stackhpc/s3-active-storage-rs.git
-cd s3-active-storage-rs
+git clone https://github.com/stackhpc/reductionist-rs.git
+cd reductionist-rs
 ```
 
 Next, use Cargo to build the package:
@@ -182,7 +182,7 @@ cargo install --path . --locked
 Then run:
 
 ```sh
-s3-active-storage
+reductionist
 ```
 
 ## Testing
@@ -223,7 +223,7 @@ python ./scripts/upload_sample_data.py
 
 ### Compliance test suite
 
-Proxy functionality can be tested using the [S3 active storage compliance suite](https://github.com/stackhpc/s3-active-storage-compliance-suite).
+Proxy functionality can be tested using the [S3 active storage compliance suite](https://github.com/stackhpc/reductionist-compliance-suite).
 
 ### Making requests to active storage endpoints
 
@@ -251,15 +251,15 @@ venv/bin/python ./scripts/client.py sum --server http://localhost:8080 --source 
 ## Documentation
 
 The source code is documented using [rustdoc](https://doc.rust-lang.org/rustdoc/what-is-rustdoc.html).
-Currently the `s3-active-storage` crate is not uploaded to https://crates.io, so we do not benefit from hosted documentation on https://docs.rs.
+Currently the `reductionist` crate is not uploaded to https://crates.io, so we do not benefit from hosted documentation on https://docs.rs.
 It is however possible to build the documentation locally:
 
 ```sh
 cargo doc
 ```
 
-Cargo builds documentation for the `s3-active-storage` crate and all of its dependencies.
-The resulting documentation is available under `target/doc`, and may be viewed in a web browser using file:///path/to/s3-active-storage/target/doc/s3-active-storage/index.html.
+Cargo builds documentation for the `reductionist` crate and all of its dependencies.
+The resulting documentation is available under `target/doc`, and may be viewed in a web browser using file:///path/to/reductionist/target/doc/reductionist/index.html.
 
 ## Contributing
 
