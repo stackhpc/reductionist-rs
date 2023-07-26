@@ -37,7 +37,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         (models::Compression::Zlib, "zlib"),
     ];
     for (compression, name) in compression_algs {
-        for size_k in [64, 256, 1024] {
+        for size_k in [64, 256, 1024, 4096] {
             let size = size_k * 1024;
             let data: Vec<u8> = (0_u32..size)
                 .map(|i| u8::try_from(i % 256).unwrap())
