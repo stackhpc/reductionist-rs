@@ -88,16 +88,25 @@ impl NumOperation for Max {
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
         let sliced = array.slice(slice_info);
         let (max, count) = if let Some(missing) = &request_data.missing {
-            let missing = Missing::<T>::try_from(missing)?;
             // FIXME: endianness?
-            // FIXME: unwrap
-            let max = sliced
+            let missing = Missing::<T>::try_from(missing)?;
+            // Use a fold to simultaneously max and count the non-missing data.
+            // TODO: separate float impl?
+            // TODO: inifinite/NaN
+            let (max, count) = sliced
                 .iter()
                 .copied()
                 .filter(missing_filter(&missing))
-                .max_by(|a, b| a.partial_cmp(b).unwrap())
-                .ok_or(ActiveStorageError::EmptyArray { operation: "max" })?;
-            let count = count_non_missing(&sliced, &missing)?;
+                .fold((None, 0), |(a, count), b| {
+                    let max = match (a, b) {
+                        (None, b) => Some(b), //FIXME: if b.is_finite() { Some(b) } else { None },
+                        (a, b) => Some(std::cmp::max_by(a.unwrap(), b, |x, y| {
+                            x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Greater)
+                        })),
+                    };
+                    (max, count + 1)
+                });
+            let max = max.ok_or(ActiveStorageError::EmptyArray { operation: "max" })?;
             (max, count)
         } else {
             let max = *sliced.max().map_err(|err| match err {
@@ -133,15 +142,24 @@ impl NumOperation for Min {
         let sliced = array.slice(slice_info);
         let (min, count) = if let Some(missing) = &request_data.missing {
             // FIXME: endianness?
-            // FIXME: unwrap
             let missing = Missing::<T>::try_from(missing)?;
-            let min = sliced
+            // Use a fold to simultaneously min and count the non-missing data.
+            // TODO: separate float impl?
+            // TODO: inifinite/NaN
+            let (min, count) = sliced
                 .iter()
                 .copied()
                 .filter(missing_filter(&missing))
-                .min_by(|a, b| a.partial_cmp(b).unwrap())
-                .ok_or(ActiveStorageError::EmptyArray { operation: "min" })?;
-            let count = count_non_missing(&sliced, &missing)?;
+                .fold((None, 0), |(a, count), b| {
+                    let min = match (a, b) {
+                        (None, b) => Some(b), //FIXME: if b.is_finite() { Some(b) } else { None },
+                        (a, b) => Some(std::cmp::min_by(a.unwrap(), b, |x, y| {
+                            x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Less)
+                        })),
+                    };
+                    (min, count + 1)
+                });
+            let min = min.ok_or(ActiveStorageError::EmptyArray { operation: "min" })?;
             (min, count)
         } else {
             let min = *sliced.min().map_err(|err| match err {
@@ -218,13 +236,12 @@ impl NumOperation for Sum {
         let (sum, count) = if let Some(missing) = &request_data.missing {
             let missing = Missing::<T>::try_from(missing)?;
             // FIXME: endianness?
-            let sum = sliced
+            // Use a fold to simultaneously sum and count the non-missing data.
+            sliced
                 .iter()
                 .copied()
                 .filter(missing_filter(&missing))
-                .sum();
-            let count = count_non_missing(&sliced, &missing)?;
-            (sum, count)
+                .fold((T::zero(), 0), |(a, count), b| (a + b, count + 1))
         } else {
             (sliced.sum(), sliced.len())
         };
@@ -247,6 +264,7 @@ mod tests {
 
     use crate::operation::Operation;
     use crate::test_utils;
+    use crate::types::DValue;
 
     #[test]
     fn count_i32_1d() {
@@ -257,6 +275,24 @@ mod tests {
         // A u8 slice of 8 elements == a u32 slice with 2 elements
         // Count is always i64.
         let expected: i64 = 2;
+        assert_eq!(expected.as_bytes(), response.body);
+        assert_eq!(8, response.body.len()); // Assert that count value is 8 bytes (i.e. i64)
+        assert_eq!(models::DType::Int64, response.dtype);
+        assert_eq!(vec![0; 0], response.shape);
+        assert_eq!(expected, response.count);
+    }
+
+    #[test]
+    fn count_u32_1d_missing_value() {
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.dtype = models::DType::Uint32;
+        request_data.missing = Some(Missing::MissingValue(0x04030201.into()));
+        let data: [u8; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
+        let bytes = Bytes::copy_from_slice(&data);
+        let response = Count::execute(&request_data, &bytes).unwrap();
+        // A u8 slice of 8 elements == a u32 slice with 2 elements
+        // Count is always i64.
+        let expected: i64 = 1;
         assert_eq!(expected.as_bytes(), response.body);
         assert_eq!(8, response.body.len()); // Assert that count value is 8 bytes (i.e. i64)
         assert_eq!(models::DType::Int64, response.dtype);
@@ -285,6 +321,59 @@ mod tests {
     }
 
     #[test]
+    fn max_i64_1d_missing_values() {
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.dtype = models::DType::Int64;
+        request_data.missing = Some(Missing::MissingValues(vec![0x0807060504030201_i64.into()]));
+        // data:
+        // A u8 slice of 16 elements == two i64 values
+        // where each slice element is 2 hexadecimal digits
+        // and the order is reversed on little-endian systems
+        // so [1, 2, 3] is 0x030201 as an i64 in hexadecimal
+        let data: [u8; 16] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+        let bytes = Bytes::copy_from_slice(&data);
+        let response = Max::execute(&request_data, &bytes).unwrap();
+        let expected: i64 = 0x100f0e0d0c0b0a09;
+        assert_eq!(expected.as_bytes(), response.body);
+        assert_eq!(8, response.body.len());
+        assert_eq!(models::DType::Int64, response.dtype);
+        assert_eq!(vec![0; 0], response.shape);
+        assert_eq!(1, response.count);
+    }
+
+    #[test]
+    fn max_f32_1d_infinity() {
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.dtype = models::DType::Float32;
+        let floats = [1.0, f32::INFINITY];
+        let data = floats.as_bytes();
+        let bytes = Bytes::copy_from_slice(data);
+        let response = Max::execute(&request_data, &bytes).unwrap();
+        let expected = f32::INFINITY;
+        assert_eq!(expected.as_bytes(), response.body);
+        assert_eq!(4, response.body.len());
+        assert_eq!(models::DType::Float32, response.dtype);
+        assert_eq!(vec![0; 0], response.shape);
+        assert_eq!(2, response.count);
+    }
+
+    #[test]
+    fn max_f32_1d_infinity_first() {
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.dtype = models::DType::Float32;
+        let floats = [f32::INFINITY, 1.0];
+        let data = floats.as_bytes();
+        let bytes = Bytes::copy_from_slice(data);
+        let response = Max::execute(&request_data, &bytes).unwrap();
+        let expected = f32::INFINITY;
+        assert_eq!(expected.as_bytes(), response.body);
+        assert_eq!(4, response.body.len());
+        assert_eq!(models::DType::Float32, response.dtype);
+        assert_eq!(vec![0; 0], response.shape);
+        assert_eq!(2, response.count);
+    }
+
+    #[test]
     fn min_u64_1d() {
         let mut request_data = test_utils::get_test_request_data();
         request_data.dtype = models::DType::Uint64;
@@ -297,6 +386,129 @@ mod tests {
         assert_eq!(models::DType::Uint64, response.dtype);
         assert_eq!(vec![0; 0], response.shape);
         assert_eq!(1, response.count);
+    }
+
+    #[test]
+    fn min_i64_1d_valid_min() {
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.dtype = models::DType::Int64;
+        // Minimum is one greater than smallest element.
+        request_data.missing = Some(Missing::ValidMin(0x0807060504030202_i64.into()));
+        // data:
+        // A u8 slice of 16 elements == two i64 values
+        // where each slice element is 2 hexadecimal digits
+        // and the order is reversed on little-endian systems
+        // so [1, 2, 3] is 0x030201 as an i64 in hexadecimal
+        let data: [u8; 16] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+        let bytes = Bytes::copy_from_slice(&data);
+        let response = Min::execute(&request_data, &bytes).unwrap();
+        let expected: i64 = 0x100f0e0d0c0b0a09;
+        assert_eq!(expected.as_bytes(), response.body);
+        assert_eq!(8, response.body.len());
+        assert_eq!(models::DType::Int64, response.dtype);
+        assert_eq!(vec![0; 0], response.shape);
+        assert_eq!(1, response.count);
+    }
+
+    #[test]
+    fn min_f32_1d_infinity() {
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.dtype = models::DType::Float32;
+        let floats = [1.0, f32::INFINITY];
+        let data = floats.as_bytes();
+        let bytes = Bytes::copy_from_slice(data);
+        let response = Min::execute(&request_data, &bytes).unwrap();
+        let expected = 1.0_f32;
+        assert_eq!(expected.as_bytes(), response.body);
+        assert_eq!(4, response.body.len());
+        assert_eq!(models::DType::Float32, response.dtype);
+        assert_eq!(vec![0; 0], response.shape);
+        assert_eq!(2, response.count);
+    }
+
+    #[test]
+    fn min_f32_1d_infinity_first() {
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.dtype = models::DType::Float32;
+        let floats = [f32::INFINITY, 1.0];
+        let data = floats.as_bytes();
+        let bytes = Bytes::copy_from_slice(data);
+        let response = Min::execute(&request_data, &bytes).unwrap();
+        let expected = 1.0_f32;
+        assert_eq!(expected.as_bytes(), response.body);
+        assert_eq!(4, response.body.len());
+        assert_eq!(models::DType::Float32, response.dtype);
+        assert_eq!(vec![0; 0], response.shape);
+        assert_eq!(2, response.count);
+    }
+
+    #[test]
+    #[should_panic(expected = "unexpected undefined order error for min")]
+    fn min_f32_1d_nan() {
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.dtype = models::DType::Float32;
+        let floats = [1.0, f32::NAN];
+        let data = floats.as_bytes();
+        let bytes = Bytes::copy_from_slice(data);
+        let response = Min::execute(&request_data, &bytes).unwrap();
+        let expected = 1.0_f32;
+        assert_eq!(expected.as_bytes(), response.body);
+        assert_eq!(4, response.body.len());
+        assert_eq!(models::DType::Float32, response.dtype);
+        assert_eq!(vec![0; 0], response.shape);
+        assert_eq!(2, response.count);
+    }
+
+    #[test]
+    #[should_panic(expected = "unexpected undefined order error for min")]
+    fn min_f32_1d_nan_first() {
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.dtype = models::DType::Float32;
+        let floats = [f32::NAN, 1.0];
+        let data = floats.as_bytes();
+        let bytes = Bytes::copy_from_slice(data);
+        let response = Min::execute(&request_data, &bytes).unwrap();
+        let expected = 1.0_f32;
+        assert_eq!(expected.as_bytes(), response.body);
+        assert_eq!(4, response.body.len());
+        assert_eq!(models::DType::Float32, response.dtype);
+        assert_eq!(vec![0; 0], response.shape);
+        assert_eq!(2, response.count);
+    }
+
+    #[test]
+    fn min_f32_1d_nan_missing_value() {
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.dtype = models::DType::Float32;
+        request_data.missing = Some(Missing::MissingValue(DValue::from_f64(42.0).unwrap()));
+        let floats = [1.0, f32::NAN];
+        let data = floats.as_bytes();
+        let bytes = Bytes::copy_from_slice(data);
+        let response = Min::execute(&request_data, &bytes).unwrap();
+        let expected = 1.0_f32;
+        assert_eq!(expected.as_bytes(), response.body);
+        assert_eq!(4, response.body.len());
+        assert_eq!(models::DType::Float32, response.dtype);
+        assert_eq!(vec![0; 0], response.shape);
+        assert_eq!(2, response.count);
+    }
+
+    #[test]
+    fn min_f32_1d_nan_first_missing_value() {
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.dtype = models::DType::Float32;
+        request_data.missing = Some(Missing::MissingValue(DValue::from_f64(42.0).unwrap()));
+        let floats = [f32::NAN, 1.0];
+        let data = floats.as_bytes();
+        let bytes = Bytes::copy_from_slice(data);
+        let response = Min::execute(&request_data, &bytes).unwrap();
+        // FIXME: Ignore NANs?
+        let expected = f32::NAN; //1.0_f32;
+        assert_eq!(expected.as_bytes(), response.body);
+        assert_eq!(4, response.body.len());
+        assert_eq!(models::DType::Float32, response.dtype);
+        assert_eq!(vec![0; 0], response.shape);
+        assert_eq!(2, response.count);
     }
 
     #[test]
@@ -366,5 +578,66 @@ mod tests {
         assert_eq!(models::DType::Uint32, response.dtype);
         assert_eq!(vec![0; 0], response.shape);
         assert_eq!(2, response.count);
+    }
+
+    #[test]
+    fn sum_u32_1d_valid_max() {
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.dtype = models::DType::Uint32;
+        request_data.missing = Some(Missing::ValidMax((0x08070605 - 1).into()));
+        let data = [1, 2, 3, 4, 5, 6, 7, 8];
+        let bytes = Bytes::copy_from_slice(&data);
+        let response = Sum::execute(&request_data, &bytes).unwrap();
+        let expected: u32 = 0x04030201;
+        assert_eq!(expected.as_bytes(), response.body);
+        assert_eq!(4, response.body.len());
+        assert_eq!(models::DType::Uint32, response.dtype);
+        assert_eq!(vec![0; 0], response.shape);
+        assert_eq!(1, response.count);
+    }
+
+    #[test]
+    fn sum_f32_1d_infinity() {
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.dtype = models::DType::Float32;
+        let floats = [1.0, f32::INFINITY];
+        let data = floats.as_bytes();
+        let bytes = Bytes::copy_from_slice(data);
+        let response = Sum::execute(&request_data, &bytes).unwrap();
+        let expected = f32::INFINITY;
+        assert_eq!(expected.as_bytes(), response.body);
+        assert_eq!(4, response.body.len());
+        assert_eq!(models::DType::Float32, response.dtype);
+        assert_eq!(vec![0; 0], response.shape);
+        assert_eq!(2, response.count);
+    }
+
+    #[test]
+    fn sum_f64_1d_nan() {
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.dtype = models::DType::Float64;
+        let floats = [f64::NAN, 1.0];
+        let data = floats.as_bytes();
+        let bytes = Bytes::copy_from_slice(data);
+        let response = Sum::execute(&request_data, &bytes).unwrap();
+        let expected = f64::NAN;
+        assert_eq!(expected.as_bytes(), response.body);
+        assert_eq!(8, response.body.len());
+        assert_eq!(models::DType::Float64, response.dtype);
+        assert_eq!(vec![0; 0], response.shape);
+        assert_eq!(2, response.count);
+    }
+
+    #[test]
+    fn partial_cmp_behaviour() {
+        assert_eq!(
+            f64::INFINITY.partial_cmp(&1.0),
+            Some(std::cmp::Ordering::Greater)
+        );
+        assert_eq!(f64::NAN.partial_cmp(&1.0), None);
+        assert_eq!(
+            f64::INFINITY.partial_cmp(&f64::NEG_INFINITY),
+            Some(std::cmp::Ordering::Greater)
+        );
     }
 }
