@@ -14,9 +14,9 @@ The original Python functional prototype is available [here](https://github.com/
 
 ## Concepts
 
-The S3 active storage proxy supports the application of reductions to S3 objects that contain numeric binary data. These reductions are specified by making a HTTP post request to the active storage proxy service.
+The Reductionist server supports the application of reductions to S3 objects that contain numeric binary data. These reductions are specified by making a HTTP post request to the active storage proxy service.
 
-The S3 active storage proxy does not attempt to infer the datatype - it must be told the datatype to use based on knowledge that the client already has about the S3 object.
+The Reductionist server does not attempt to infer the datatype - it must be told the datatype to use based on knowledge that the client already has about the S3 object.
 
 For example, if the original object has the following URL:
 
@@ -24,7 +24,7 @@ For example, if the original object has the following URL:
 http[s]://s3.example.org/my-bucket/path/to/object
 ```
 
-Then S3 active storage proxy could be used by making post requests to specfic reducer endpoints:
+Then Reductionist server could be used by making post requests to specfic reducer endpoints:
 
 ```
 http[s]://s3-proxy.example.org/v1/{reducer}/
@@ -152,7 +152,7 @@ The Minimum Supported Rust Version (MSRV) is 1.66.1, due to a dependency on the 
 It may be necessary to use [rustup](https://rustup.rs/) rather than the OS provided Rust toolchain to meet this requirement.
 See the [Rust book](https://doc.rust-lang.org/book/ch01-01-installation.html) for toolchain installation.
 
-### Build and run S3 active storage
+### Build and run Reductionist
 
 First, clone this repository:
 
@@ -263,7 +263,7 @@ The resulting documentation is available under `target/doc`, and may be viewed i
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for information about contributing to S3 active storage.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for information about contributing to Reductionist.
 
 ## License
 
