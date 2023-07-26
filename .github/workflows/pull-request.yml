@@ -63,7 +63,7 @@ jobs:
 
       - name: Wait for active storage server to start
         run: |
-          until curl -if http://localhost:8080/.well-known/s3-active-storage-schema; do
+          until curl -if http://localhost:8080/.well-known/reductionist-schema; do
             sleep 1;
           done
 
@@ -74,7 +74,7 @@ jobs:
         run: pytest -s > artifacts/pytest.log
 
       - name: Get active storage logs
-        run: docker logs s3-active-storage > artifacts/s3-active-storage.log
+        run: docker logs reductionist > artifacts/reductionist.log
         if: always()
 
       - name: Upload artifacts

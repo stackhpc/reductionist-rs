@@ -1,6 +1,6 @@
 /// Benchmarks for the byte shuffle filter implementation.
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use s3_active_storage::filters::shuffle;
+use reductionist::filters::shuffle;
 
 fn criterion_benchmark(c: &mut Criterion) {
     for size_k in [64, 256, 1024] {

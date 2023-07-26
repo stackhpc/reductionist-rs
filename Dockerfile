@@ -21,5 +21,5 @@ FROM debian:bullseye-slim
 RUN apt update \
     && apt install -y --no-install-recommends ca-certificates \
     && update-ca-certificates
-COPY --from=builder /usr/local/cargo/bin/s3-active-storage /usr/local/bin/s3-active-storage
-CMD ["s3-active-storage"]
+COPY --from=builder /usr/local/cargo/bin/reductionist /usr/local/bin/reductionist
+CMD ["reductionist"]

@@ -9,7 +9,7 @@ use axum_server::{tls_rustls::RustlsConfig, Handle};
 use expanduser::expanduser;
 use tokio::signal;
 
-/// Serve the S3 Active Storage service
+/// Serve the Reductionist service
 ///
 /// # Arguments
 ///
