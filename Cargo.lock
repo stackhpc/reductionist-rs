@@ -1916,7 +1916,7 @@ checksum = "1ad4cc8da4ef723ed60bced201181d83791ad433213d8c24efffda1eec85d741"
 
 [[package]]
 name = "s3-active-storage"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "aws-credential-types",
