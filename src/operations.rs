@@ -70,35 +70,6 @@ impl NumOperation for Max {
     }
 }
 
-/// Return the mean of selected elements in the array.
-pub struct Mean {}
-
-impl NumOperation for Mean {
-    fn execute_t<T: Element>(
-        request_data: &models::RequestData,
-        data: &Bytes,
-    ) -> Result<models::Response, ActiveStorageError> {
-        let array = array::build_array::<T>(request_data, data)?;
-        let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
-        let sliced = array.slice(slice_info);
-        // FIXME: Account for missing data?
-        let count = i64::try_from(sliced.len())?;
-        // FIXME: endianness?
-        let body = sliced
-            .mean()
-            .ok_or(ActiveStorageError::EmptyArray { operation: "mean" })?;
-        let body = body.as_bytes();
-        // Need to copy to provide ownership to caller.
-        let body = Bytes::copy_from_slice(body);
-        Ok(models::Response::new(
-            body,
-            request_data.dtype,
-            vec![],
-            count,
-        ))
-    }
-}
-
 /// Return the minimum of selected elements in the array.
 pub struct Min {}
 
@@ -234,21 +205,6 @@ mod tests {
         assert_eq!(models::DType::Int64, response.dtype);
         assert_eq!(vec![0; 0], response.shape);
         assert_eq!(1, response.count);
-    }
-
-    #[test]
-    fn mean_u32_1d() {
-        let mut request_data = test_utils::get_test_request_data();
-        request_data.dtype = models::DType::Uint32;
-        let data = [1, 2, 3, 4, 5, 6, 7, 8];
-        let bytes = Bytes::copy_from_slice(&data);
-        let response = Mean::execute(&request_data, &bytes).unwrap();
-        let expected: i32 = (0x08070605 + 0x04030201) / 2;
-        assert_eq!(expected.as_bytes(), response.body);
-        assert_eq!(4, response.body.len());
-        assert_eq!(models::DType::Uint32, response.dtype);
-        assert_eq!(vec![0; 0], response.shape);
-        assert_eq!(2, response.count);
     }
 
     #[test]
