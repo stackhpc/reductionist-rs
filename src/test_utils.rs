@@ -1,4 +1,5 @@
 use crate::models::*;
+use crate::types::Missing;
 
 use url::Url;
 
@@ -16,6 +17,7 @@ pub(crate) fn get_test_request_data() -> RequestData {
         selection: None,
         compression: None,
         filters: None,
+        missing: None,
     }
 }
 
@@ -33,5 +35,6 @@ pub(crate) fn get_test_request_data_optional() -> RequestData {
         selection: Some(vec![Slice::new(1, 2, 3), Slice::new(4, 5, 6)]),
         compression: Some(Compression::Gzip),
         filters: Some(vec![Filter::Shuffle { element_size: 4 }]),
+        missing: Some(Missing::MissingValue(42.into())),
     }
 }

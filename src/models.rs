@@ -6,6 +6,8 @@ use strum_macros::Display;
 use url::Url;
 use validator::{Validate, ValidationError};
 
+use crate::types::{DValue, Missing};
+
 /// Supported numerical data types
 #[derive(Clone, Copy, Debug, Deserialize, Display, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -14,11 +16,11 @@ pub enum DType {
     Int32,
     /// [i64]
     Int64,
-    /// [u64]
+    /// [u32]
     Uint32,
     /// [u64]
     Uint64,
-    /// [f64]
+    /// [f32]
     Float32,
     /// [f64]
     Float64,
@@ -142,6 +144,8 @@ pub struct RequestData {
     pub compression: Option<Compression>,
     /// List of filter algorithms
     pub filters: Option<Vec<Filter>>,
+    /// Missing data
+    pub missing: Option<Missing<DValue>>,
 }
 
 /// Validate an array shape
@@ -229,6 +233,9 @@ fn validate_request_data(request_data: &RequestData) -> Result<(), ValidationErr
             ));
         }
         _ => (),
+    };
+    if let Some(missing) = &request_data.missing {
+        missing.validate(request_data.dtype)?;
     };
     Ok(())
 }
@@ -359,6 +366,11 @@ mod tests {
                 Token::U32(4),
                 Token::MapEnd,
                 Token::SeqEnd,
+                Token::Str("missing"),
+                Token::Some,
+                Token::Enum { name: "Missing" },
+                Token::Str("missing_value"),
+                Token::I32(42),
                 Token::StructEnd,
             ],
         );
@@ -665,13 +677,39 @@ mod tests {
     }
 
     #[test]
+    fn test_invalid_missing() {
+        assert_de_tokens_error::<RequestData>(
+            &[
+                Token::Struct {
+                    name: "RequestData",
+                    len: 2,
+                },
+                Token::Str("missing"),
+                Token::Some,
+                Token::Enum { name: "Missing" },
+                Token::Str("foo"),
+                Token::StructEnd
+            ],
+            "unknown variant `foo`, expected one of `missing_value`, `missing_values`, `valid_min`, `valid_max`, `valid_range`",
+        )
+    }
+
+    #[test]
+    #[should_panic(expected = "Incompatible value 9223372036854775807 for missing")]
+    fn test_missing_invalid_value_for_dtype() {
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.missing = Some(Missing::MissingValue(i64::max_value().into()));
+        request_data.validate().unwrap()
+    }
+
+    #[test]
     fn test_unknown_field() {
         assert_de_tokens_error::<RequestData>(&[
             Token::Struct { name: "RequestData", len: 2 },
             Token::Str("foo"),
             Token::StructEnd
             ],
-            "unknown field `foo`, expected one of `source`, `bucket`, `object`, `dtype`, `offset`, `size`, `shape`, `order`, `selection`, `compression`, `filters`"
+            "unknown field `foo`, expected one of `source`, `bucket`, `object`, `dtype`, `offset`, `size`, `shape`, `order`, `selection`, `compression`, `filters`, `missing`"
         )
     }
 
@@ -686,8 +724,82 @@ mod tests {
 
     #[test]
     fn test_json_optional_fields() {
-        let json = r#"{"source": "http://example.com", "bucket": "bar", "object": "baz", "dtype": "int32", "offset": 4, "size": 8, "shape": [2, 5], "order": "C", "selection": [[1, 2, 3], [4, 5, 6]], "compression": {"id": "gzip"}, "filters": [{"id": "shuffle", "element_size": 4}]}"#;
+        let json = r#"{
+                        "source": "http://example.com",
+                        "bucket": "bar",
+                        "object": "baz",
+                        "dtype": "int32",
+                        "offset": 4,
+                        "size": 8,
+                        "shape": [2, 5],
+                        "order": "C",
+                        "selection": [[1, 2, 3], [4, 5, 6]],
+                        "compression": {"id": "gzip"},
+                        "filters": [{"id": "shuffle", "element_size": 4}],
+                        "missing": {"missing_value": 42}
+                      }"#;
         let request_data = serde_json::from_str::<RequestData>(json).unwrap();
         assert_eq!(request_data, test_utils::get_test_request_data_optional());
+    }
+
+    #[test]
+    fn test_json_optional_fields2() {
+        let json = r#"{
+                        "source": "http://example.com",
+                        "bucket": "bar",
+                        "object": "baz",
+                        "dtype": "float64",
+                        "offset": 4,
+                        "size": 8,
+                        "shape": [2, 5, 10],
+                        "order": "F",
+                        "selection": [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+                        "compression": {"id": "zlib"},
+                        "filters": [{"id": "shuffle", "element_size": 8}],
+                        "missing": {"valid_range": [-1.0, 999.0]}
+                      }"#;
+        let request_data = serde_json::from_str::<RequestData>(json).unwrap();
+        let mut expected = test_utils::get_test_request_data_optional();
+        expected.dtype = DType::Float64;
+        expected.shape = Some(vec![2, 5, 10]);
+        expected.order = Some(Order::F);
+        expected.selection = Some(vec![
+            Slice::new(1, 2, 3),
+            Slice::new(4, 5, 6),
+            Slice::new(7, 8, 9),
+        ]);
+        expected.compression = Some(Compression::Zlib);
+        expected.filters = Some(vec![Filter::Shuffle { element_size: 8 }]);
+        expected.missing = Some(Missing::ValidRange(
+            DValue::from_f64(-1.0).unwrap(),
+            DValue::from_f64(999.0).unwrap(),
+        ));
+        assert_eq!(request_data, expected);
+    }
+
+    #[test]
+    fn test_json_optional_fields3() {
+        let json = format!(
+            r#"{{
+                                "source": "http://example.com",
+                                "bucket": "bar",
+                                "object": "baz",
+                                "dtype": "int32",
+                                "missing": {{"missing_values": [{}, -1, 0, 1, {}]}}
+                              }}"#,
+            i64::min_value(),
+            u64::max_value()
+        );
+        let request_data = serde_json::from_str::<RequestData>(&json).unwrap();
+        let mut expected = test_utils::get_test_request_data();
+        expected.dtype = DType::Int32;
+        expected.missing = Some(Missing::MissingValues(vec![
+            i64::min_value().into(),
+            (-1).into(),
+            0.into(),
+            1.into(),
+            u64::max_value().into(),
+        ]));
+        assert_eq!(request_data, expected);
     }
 }

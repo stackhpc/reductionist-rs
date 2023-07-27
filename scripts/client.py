@@ -38,8 +38,21 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--selection", type=str)
     parser.add_argument("--compression", type=str)
     parser.add_argument("--shuffle", action=argparse.BooleanOptionalAction)
+    missing = parser.add_mutually_exclusive_group()
+    missing.add_argument("--missing-value", type=str)
+    missing.add_argument("--missing-values", type=str)
+    missing.add_argument("--valid-min", type=str)
+    missing.add_argument("--valid-max", type=str)
+    missing.add_argument("--valid-range", type=str)
     parser.add_argument("--verbose", action=argparse.BooleanOptionalAction)
     return parser.parse_args()
+
+
+def parse_number(s: str):
+    try:
+        return int(s)
+    except ValueError:
+        return float(s)
 
 
 def build_request_data(args: argparse.Namespace) -> dict:
@@ -65,6 +78,20 @@ def build_request_data(args: argparse.Namespace) -> dict:
         filters.append({"id": "shuffle", "element_size": element_size})
     if filters:
         request_data["filters"] = filters
+    missing = None
+    if args.missing_value:
+        missing = {"missing_value": parse_number(args.missing_value)}
+    if args.missing_values:
+        missing = {"missing_values": [parse_number(n) for n in args.missing_values.split(",")]}
+    if args.valid_min:
+        missing = {"valid_min": parse_number(args.valid_min)}
+    if args.valid_max:
+        missing = {"valid_max": parse_number(args.valid_max)}
+    if args.valid_range:
+        min, max = args.valid_range.split(",")
+        missing = {"valid_range": [parse_number(min), parse_number(max)]}
+    if missing:
+        request_data["missing"] = missing
     return {k: v for k, v in request_data.items() if v is not None}
 
 
