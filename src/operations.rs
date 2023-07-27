@@ -100,7 +100,7 @@ impl NumOperation for Max {
                 .fold((None, 0), |(a, count), b| {
                     let max = match (a, b) {
                         (None, b) => Some(b), //FIXME: if b.is_finite() { Some(b) } else { None },
-                        (a, b) => Some(std::cmp::max_by(a.unwrap(), b, |x, y| {
+                        (Some(a), b) => Some(std::cmp::max_by(a, b, |x, y| {
                             x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Greater)
                         })),
                     };
@@ -153,7 +153,7 @@ impl NumOperation for Min {
                 .fold((None, 0), |(a, count), b| {
                     let min = match (a, b) {
                         (None, b) => Some(b), //FIXME: if b.is_finite() { Some(b) } else { None },
-                        (a, b) => Some(std::cmp::min_by(a.unwrap(), b, |x, y| {
+                        (Some(a), b) => Some(std::cmp::min_by(a, b, |x, y| {
                             x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Less)
                         })),
                     };
