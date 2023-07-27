@@ -10,7 +10,7 @@ and is done in collaboration with the
 [University of Reading](http://www.reading.ac.uk/).
 
 This is a performant implementation of the active storage server.
-The original Python functional prototype is available [here](https://github.com/stackhpc/reductionist).
+The original Python functional prototype is available [here](https://github.com/stackhpc/s3-active-storage-prototype).
 
 ## Concepts
 
@@ -223,7 +223,7 @@ python ./scripts/upload_sample_data.py
 
 ### Compliance test suite
 
-Proxy functionality can be tested using the [S3 active storage compliance suite](https://github.com/stackhpc/reductionist-compliance-suite).
+Proxy functionality can be tested using the [S3 active storage compliance suite](https://github.com/stackhpc/s3-active-storage-compliance-suite).
 
 ### Making requests to active storage endpoints
 
