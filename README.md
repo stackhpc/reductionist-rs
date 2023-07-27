@@ -82,6 +82,18 @@ with a JSON payload of the form:
     // List of algorithms used to filter the data
     // - optional, defaults to no filters
     "filters": [{"id": "shuffle", "element_size": 4}],
+
+    // Missing data description
+    // - optional, defaults to no missing data
+    // - exactly one of the keys below should be specified
+    // - the values should match the data type (dtype)
+    "missing": {
+        "missing_value": 42,
+        "missing_values": [42, -42],
+        "valid_min": 42,
+        "valid_max": 42,
+        "valid_range": [-42, 42],
+    }
 }
 ```
 
