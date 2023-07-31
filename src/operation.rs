@@ -4,14 +4,14 @@ use crate::error::ActiveStorageError;
 use crate::models;
 use crate::types::dvalue::TryFromDValue;
 
-use axum::body::Bytes;
-
 /// Trait for array elements.
 pub trait Element:
     Clone
     + Copy
     + PartialOrd
+    + num_traits::FromBytes<Bytes = <Self as num_traits::ToBytes>::Bytes>
     + num_traits::FromPrimitive
+    + num_traits::ToBytes
     + num_traits::Zero
     + std::convert::From<u16>
     + std::fmt::Debug
@@ -29,8 +29,10 @@ impl<T> Element for T where
     T: Clone
         + Copy
         + PartialOrd
+        + num_traits::FromBytes<Bytes = <T as num_traits::ToBytes>::Bytes>
         + num_traits::FromPrimitive
         + num_traits::One
+        + num_traits::ToBytes
         + num_traits::Zero
         + std::convert::From<u16>
         + std::fmt::Debug
@@ -54,10 +56,10 @@ pub trait Operation {
     /// # Arguments
     ///
     /// * `request_data`: RequestData object for the request
-    /// * `data`: Bytes containing data to operate on.
+    /// * `data`: Vec<u8> containing data to operate on.
     fn execute(
         request_data: &models::RequestData,
-        data: &Bytes,
+        data: Vec<u8>,
     ) -> Result<models::Response, ActiveStorageError>;
 }
 
@@ -67,7 +69,7 @@ pub trait Operation {
 pub trait NumOperation: Operation {
     fn execute_t<T: Element>(
         request_data: &models::RequestData,
-        data: &Bytes,
+        data: Vec<u8>,
     ) -> Result<models::Response, ActiveStorageError>;
 }
 
@@ -77,7 +79,7 @@ impl<T: NumOperation> Operation for T {
     /// This method dispatches to `execute_t` based on the `dtype`.
     fn execute(
         request_data: &models::RequestData,
-        data: &Bytes,
+        data: Vec<u8>,
     ) -> Result<models::Response, ActiveStorageError> {
         // Convert runtime data type into concrete types.
         match request_data.dtype {
@@ -102,11 +104,11 @@ mod tests {
     impl Operation for TestOp {
         fn execute(
             request_data: &models::RequestData,
-            data: &Bytes,
+            data: Vec<u8>,
         ) -> Result<models::Response, ActiveStorageError> {
             // Clone request body into response body.
             Ok(models::Response::new(
-                data.clone(),
+                data.into(),
                 request_data.dtype,
                 vec![3],
                 3,
@@ -118,9 +120,8 @@ mod tests {
     fn operation_u32() {
         let mut request_data = test_utils::get_test_request_data();
         request_data.dtype = models::DType::Uint32;
-        let data = [1, 2, 3, 4];
-        let bytes = Bytes::copy_from_slice(&data);
-        let response = TestOp::execute(&request_data, &bytes).unwrap();
+        let data = vec![1, 2, 3, 4];
+        let response = TestOp::execute(&request_data, data).unwrap();
         assert_eq!(&[1, 2, 3, 4][..], response.body);
         assert_eq!(models::DType::Uint32, response.dtype);
         assert_eq!(vec![3], response.shape);
@@ -132,7 +133,7 @@ mod tests {
     impl NumOperation for TestNumOp {
         fn execute_t<T: Element>(
             request_data: &models::RequestData,
-            _data: &Bytes,
+            _data: Vec<u8>,
         ) -> Result<models::Response, ActiveStorageError> {
             // Write the name of the type parameter to the body.
             let body = std::any::type_name::<T>();
@@ -149,9 +150,8 @@ mod tests {
     fn num_operation_i64() {
         let mut request_data = test_utils::get_test_request_data();
         request_data.dtype = models::DType::Int64;
-        let data = [1, 2, 3, 4];
-        let bytes = Bytes::copy_from_slice(&data);
-        let response = TestNumOp::execute(&request_data, &bytes).unwrap();
+        let data = vec![1, 2, 3, 4];
+        let response = TestNumOp::execute(&request_data, data).unwrap();
         assert_eq!("i64", response.body);
         assert_eq!(models::DType::Int64, response.dtype);
         assert_eq!(vec![1, 2], response.shape);

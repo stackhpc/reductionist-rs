@@ -2,26 +2,28 @@
 
 use crate::error::ActiveStorageError;
 use crate::models;
+use crate::types::NON_NATIVE_BYTE_ORDER;
 
-use axum::body::Bytes;
-use core::convert::TryFrom;
 use ndarray::prelude::*;
+use std::convert::TryFrom;
 
-/// Convert from Bytes to `&[T]`.
+/// Convert from data bytes to `&[T]`.
 ///
 /// Zerocopy provides a mechanism for converting between types.
 /// Correct alignment of the data is necessary.
 ///
 /// # Arguments
 ///
-/// * `data`: Bytes containing data to convert.
-fn from_bytes<T: zerocopy::FromBytes>(data: &Bytes) -> Result<&[T], ActiveStorageError> {
-    let layout = zerocopy::LayoutVerified::<_, [T]>::new_slice(&data[..]).ok_or(
+/// * `data`: Slice of bytes containing data to convert.
+fn from_bytes<T: zerocopy::AsBytes + zerocopy::FromBytes>(
+    data: &mut [u8],
+) -> Result<&mut [T], ActiveStorageError> {
+    let layout = zerocopy::LayoutVerified::<_, [T]>::new_slice(&mut data[..]).ok_or(
         ActiveStorageError::FromBytes {
             type_name: std::any::type_name::<T>(),
         },
     )?;
-    Ok(layout.into_slice())
+    Ok(layout.into_mut_slice())
 }
 
 /// Returns an [ndarray] Shape corresponding to the data in the request.
@@ -44,7 +46,8 @@ fn get_shape(
     }
 }
 
-/// Returns an [ndarray::ArrayView](ndarray::ArrayView) corresponding to the data in the request.
+/// Returns an [ndarray::ArrayView](ndarray::ArrayView) corresponding to the data in the
+/// request.
 ///
 /// The array view borrows the data, so no copying takes place.
 ///
@@ -55,8 +58,24 @@ fn get_shape(
 fn build_array_from_shape<T>(
     shape: ndarray::Shape<Dim<ndarray::IxDynImpl>>,
     data: &[T],
-) -> Result<ArrayView<T, ndarray::Dim<ndarray::IxDynImpl>>, ActiveStorageError> {
+) -> Result<ArrayViewD<T>, ActiveStorageError> {
     ArrayView::<T, _>::from_shape(shape, data).map_err(ActiveStorageError::ShapeInvalid)
+}
+
+/// Returns a mutable [ndarray::ArrayViewMut](ndarray::ArrayViewMut) corresponding to the data in
+/// the request.
+///
+/// The array view borrows the data, so no copying takes place.
+///
+/// # Arguments
+///
+/// * `shape`: The shape of the array
+/// * `data`: A slice of type `&mut [T]` containing the data to be consumed by the array view.
+fn build_array_mut_from_shape<T>(
+    shape: ndarray::Shape<Dim<ndarray::IxDynImpl>>,
+    data: &mut [T],
+) -> Result<ArrayViewMutD<T>, ActiveStorageError> {
+    ArrayViewMut::<T, _>::from_shape(shape, data).map_err(ActiveStorageError::ShapeInvalid)
 }
 
 /// Returns an array index in numpy semantics to an index with ndarray semantics.
@@ -124,23 +143,66 @@ pub fn build_slice_info<T>(
     }
 }
 
-/// Build an [ndarray::ArrayView](ndarray::ArrayView) object corresponding to the request and data Bytes.
+/// Reverse the byte order of an array element.
+fn reverse_byte_order<T>(element: &mut T)
+where
+    T: Copy
+        + num_traits::FromBytes<Bytes = <T as num_traits::ToBytes>::Bytes>
+        + num_traits::ToBytes,
+{
+    *element = T::from_be_bytes(&element.to_le_bytes());
+}
+
+/// Reverse the byte order of an array.
+///
+/// # Arguments
+///
+/// * `array`: An [ndarray::ArrayViewMutD] containing the data to be converted.
+/// * `selection`: Optional selection. If provided only data in this selection will be converted.
+fn reverse_array_byte_order<T>(
+    array: &mut ArrayViewMutD<T>,
+    selection: &Option<Vec<models::Slice>>,
+) where
+    T: Copy
+        + num_traits::FromBytes<Bytes = <T as num_traits::ToBytes>::Bytes>
+        + num_traits::ToBytes,
+{
+    if selection.is_some() {
+        let slice_info = build_slice_info::<T>(selection, array.shape());
+        let mut sliced = array.slice_mut(slice_info);
+        sliced.map_inplace(reverse_byte_order);
+    } else {
+        array.map_inplace(reverse_byte_order);
+    }
+}
+
+/// Build an [ndarray::ArrayView](ndarray::ArrayView) object corresponding to the request and data bytes.
 ///
 /// The resulting array will contain a reference to `data`.
 ///
 /// # Arguments
 ///
-/// * `data`: Bytes containing data for the array. Must be at least as aligned as an instance of
-///   `T`.
+/// * `data`: Slice of bytes containing data for the array. Must be at least as aligned as an
+///   instance of `T`.
 /// * `request_data`: RequestData object for the request
 pub fn build_array<'a, T>(
     request_data: &'a models::RequestData,
-    data: &'a Bytes,
-) -> Result<ArrayView<'a, T, ndarray::Dim<ndarray::IxDynImpl>>, ActiveStorageError>
+    data: &'a mut [u8],
+) -> Result<ArrayViewD<'a, T>, ActiveStorageError>
 where
-    T: zerocopy::FromBytes,
+    T: Copy
+        + num_traits::FromBytes<Bytes = <T as num_traits::ToBytes>::Bytes>
+        + num_traits::ToBytes
+        + zerocopy::AsBytes
+        + zerocopy::FromBytes,
 {
     let data = from_bytes::<T>(data)?;
+    if let Some(NON_NATIVE_BYTE_ORDER) = request_data.byte_order {
+        // Create a mutable array to change the byte order.
+        let shape = get_shape(data.len(), request_data);
+        let mut array = build_array_mut_from_shape(shape, data)?;
+        reverse_array_byte_order(&mut array, &request_data.selection);
+    }
     let shape = get_shape(data.len(), request_data);
     build_array_from_shape(shape, data)
 }
@@ -149,52 +211,59 @@ where
 mod tests {
     use super::*;
     use crate::test_utils;
+    use num_traits::Float;
 
     #[test]
     fn from_bytes_u32() {
+        let value: u32 = 42;
         assert_eq!(
-            [0x04030201_u32],
-            from_bytes::<u32>(&Bytes::from_static(&[1, 2, 3, 4])).unwrap()
+            [value],
+            from_bytes::<u32>(&mut value.to_ne_bytes()).unwrap()
         );
     }
 
     #[test]
     fn from_bytes_u64() {
+        let value: u64 = u64::max_value();
         assert_eq!(
-            [0x0807060504030201_u64],
-            from_bytes::<u64>(&Bytes::from_static(&[1, 2, 3, 4, 5, 6, 7, 8])).unwrap()
+            [value],
+            from_bytes::<u64>(&mut value.to_ne_bytes()).unwrap()
         );
     }
 
     #[test]
     fn from_bytes_i32() {
+        let value: i32 = -42;
         assert_eq!(
-            [0x04030201_i32],
-            from_bytes::<i32>(&Bytes::from_static(&[1, 2, 3, 4])).unwrap()
+            [value],
+            from_bytes::<i32>(&mut value.to_ne_bytes()).unwrap()
         );
     }
 
     #[test]
     fn from_bytes_i64() {
+        let value: i64 = i64::min_value();
         assert_eq!(
-            [0x0807060504030201_i64],
-            from_bytes::<i64>(&Bytes::from_static(&[1, 2, 3, 4, 5, 6, 7, 8])).unwrap()
+            [value],
+            from_bytes::<i64>(&mut value.to_ne_bytes()).unwrap()
         );
     }
 
     #[test]
     fn from_bytes_f32() {
+        let value: f32 = f32::min_value();
         assert_eq!(
-            [1.5399896e-36_f32],
-            from_bytes::<f32>(&Bytes::from_static(&[1, 2, 3, 4])).unwrap()
+            [value],
+            from_bytes::<f32>(&mut value.to_ne_bytes()).unwrap()
         );
     }
 
     #[test]
     fn from_bytes_f64() {
+        let value: f64 = f64::max_value();
         assert_eq!(
-            [5.447603722011605e-270_f64],
-            from_bytes::<f64>(&Bytes::from_static(&[1, 2, 3, 4, 5, 6, 7, 8])).unwrap()
+            [value],
+            from_bytes::<f64>(&mut value.to_ne_bytes()).unwrap()
         );
     }
 
@@ -207,18 +276,18 @@ mod tests {
 
     #[test]
     fn from_bytes_u32_too_small() {
-        assert_from_bytes_error(from_bytes::<u32>(&Bytes::from_static(&[1, 2, 3])))
+        assert_from_bytes_error(from_bytes::<u32>(&mut [1, 2, 3]))
     }
 
     #[test]
     fn from_bytes_u32_too_big() {
-        assert_from_bytes_error(from_bytes::<u32>(&Bytes::from_static(&[1, 2, 3, 4, 5])))
+        assert_from_bytes_error(from_bytes::<u32>(&mut [1, 2, 3, 4, 5]))
     }
 
     #[test]
     fn from_bytes_u32_unaligned() {
-        static ARRAY: [u8; 5] = [1, 2, 3, 4, 5];
-        assert_from_bytes_error(from_bytes::<u32>(&Bytes::from_static(&ARRAY[1..])))
+        static mut ARRAY: [u8; 5] = [1, 2, 3, 4, 5];
+        unsafe { assert_from_bytes_error(from_bytes::<u32>(&mut ARRAY[1..])) }
     }
 
     #[test]
@@ -421,33 +490,42 @@ mod tests {
     }
 
     #[test]
-    fn build_array_1d_u32() {
-        let data = [1, 2, 3, 4, 5, 6, 7, 8];
+    fn reverse_array_byte_order_u32() {
+        let mut data = [0, 42, u32::max_value()];
         let mut request_data = test_utils::get_test_request_data();
         request_data.dtype = models::DType::Uint32;
-        let bytes = Bytes::copy_from_slice(&data);
-        let array = build_array::<u32>(&request_data, &bytes).unwrap();
+        let shape = get_shape(data.len(), &request_data);
+        let mut array = build_array_mut_from_shape(shape, &mut data).unwrap();
+        reverse_array_byte_order(&mut array, &request_data.selection);
+        // For numbers < 256, LSB becomes MSB == multiply by 2^24
+        assert_eq!([0, 42 << 24, u32::max_value()], data);
+    }
+
+    #[test]
+    fn build_array_1d_u32() {
+        let mut data = [1, 2, 3, 4, 5, 6, 7, 8];
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.dtype = models::DType::Uint32;
+        let array = build_array::<u32>(&request_data, &mut data).unwrap();
         assert_eq!(array![0x04030201_u32, 0x08070605_u32].into_dyn(), array);
     }
 
     #[test]
     fn build_array_2d_i64() {
-        let data = [1, 2, 3, 4, 0, 0, 0, 0, 5, 6, 7, 8, 0, 0, 0, 0];
+        let mut data = [1, 2, 3, 4, 0, 0, 0, 0, 5, 6, 7, 8, 0, 0, 0, 0];
         let mut request_data = test_utils::get_test_request_data();
         request_data.dtype = models::DType::Int64;
         request_data.shape = Some(vec![2, 1]);
-        let bytes = Bytes::copy_from_slice(&data);
-        let array = build_array::<i64>(&request_data, &bytes).unwrap();
+        let array = build_array::<i64>(&request_data, &mut data).unwrap();
         assert_eq!(array![[0x04030201_i64], [0x08070605_i64]].into_dyn(), array);
     }
 
     // Helper function for tests that slice an array using a selection.
     fn test_selection(slice: models::Slice, expected: Array1<u32>) {
-        let data = [1, 2, 3, 4, 5, 6, 7, 8];
+        let mut data = [1, 2, 3, 4, 5, 6, 7, 8];
         let mut request_data = test_utils::get_test_request_data();
         request_data.dtype = models::DType::Uint32;
-        let bytes = Bytes::copy_from_slice(&data);
-        let array = build_array::<u32>(&request_data, &bytes).unwrap();
+        let array = build_array::<u32>(&request_data, &mut data).unwrap();
         let shape = vec![2];
         let slice_info = build_slice_info::<u32>(&Some(vec![slice]), &shape);
         let sliced = array.slice(slice_info);

@@ -6,7 +6,7 @@ use strum_macros::Display;
 use url::Url;
 use validator::{Validate, ValidationError};
 
-use crate::types::{DValue, Missing};
+use crate::types::{ByteOrder, DValue, Missing};
 
 /// Supported numerical data types
 #[derive(Clone, Copy, Debug, Deserialize, Display, PartialEq)]
@@ -123,6 +123,8 @@ pub struct RequestData {
     pub object: String,
     /// Data type
     pub dtype: DType,
+    /// Byte order of data
+    pub byte_order: Option<ByteOrder>,
     /// Offset in bytes of the numerical data within the object
     pub offset: Option<usize>,
     /// Size in bytes of the numerical data from the offset
@@ -319,6 +321,11 @@ mod tests {
                 Token::Enum { name: "DType" },
                 Token::Str("int32"),
                 Token::Unit,
+                Token::Str("byte_order"),
+                Token::Some,
+                Token::Enum { name: "ByteOrder" },
+                Token::Str("little"),
+                Token::Unit,
                 Token::Str("offset"),
                 Token::Some,
                 Token::U32(4),
@@ -487,6 +494,24 @@ mod tests {
             Token::StructEnd
             ],
             "unknown variant `foo`, expected one of `int32`, `int64`, `uint32`, `uint64`, `float32`, `float64`"
+        )
+    }
+
+    #[test]
+    fn test_invalid_byte_order() {
+        assert_de_tokens_error::<RequestData>(
+            &[
+                Token::Struct {
+                    name: "RequestData",
+                    len: 2,
+                },
+                Token::Str("byte_order"),
+                Token::Some,
+                Token::Enum { name: "ByteOrder" },
+                Token::Str("foo"),
+                Token::StructEnd,
+            ],
+            "unknown variant `foo`, expected `big` or `little`",
         )
     }
 
@@ -709,7 +734,7 @@ mod tests {
             Token::Str("foo"),
             Token::StructEnd
             ],
-            "unknown field `foo`, expected one of `source`, `bucket`, `object`, `dtype`, `offset`, `size`, `shape`, `order`, `selection`, `compression`, `filters`, `missing`"
+            "unknown field `foo`, expected one of `source`, `bucket`, `object`, `dtype`, `byte_order`, `offset`, `size`, `shape`, `order`, `selection`, `compression`, `filters`, `missing`"
         )
     }
 
@@ -729,6 +754,7 @@ mod tests {
                         "bucket": "bar",
                         "object": "baz",
                         "dtype": "int32",
+                        "byte_order": "little",
                         "offset": 4,
                         "size": 8,
                         "shape": [2, 5],
@@ -749,6 +775,7 @@ mod tests {
                         "bucket": "bar",
                         "object": "baz",
                         "dtype": "float64",
+                        "byte_order": "big",
                         "offset": 4,
                         "size": 8,
                         "shape": [2, 5, 10],
@@ -761,6 +788,7 @@ mod tests {
         let request_data = serde_json::from_str::<RequestData>(json).unwrap();
         let mut expected = test_utils::get_test_request_data_optional();
         expected.dtype = DType::Float64;
+        expected.byte_order = Some(ByteOrder::Big);
         expected.shape = Some(vec![2, 5, 10]);
         expected.order = Some(Order::F);
         expected.selection = Some(vec![

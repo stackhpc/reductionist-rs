@@ -26,7 +26,7 @@ maligned = "0.2.1"
 mime = "0.3"
 ndarray = "0.15"
 ndarray-stats = "0.5"
-num-traits = "0.2.15"
+num-traits = "0.2.16"
 prometheus = { version = "0.13", features = ["process"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "*"

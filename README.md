@@ -50,6 +50,10 @@ with a JSON payload of the form:
     // - required
     "dtype": "int32|int64|uint32|uint64|float32|float64",
 
+    // The byte order (endianness) of the data
+    // - optional, defaults to native byte order of Reductionist server
+    "byte_order": "big|little",
+
     // The offset in bytes to use when reading data
     // - optional, defaults to zero
     "offset": 0,
@@ -99,7 +103,12 @@ with a JSON payload of the form:
 
 The currently supported reducers are `max`, `min`, `sum`, `select` and `count`. All reducers return the result using the same datatype as specified in the request except for `count` which always returns the result as `int64`.
 
-The proxy adds two custom headers `x-activestorage-dtype` and `x-activestrorage-shape` to the HTTP response to allow the numeric result to be reconstructed from the binary content of the response. An additional `x-activestorage-count` header is also returned which contains the number of array elements operated on while performing the requested reduction. This header is useful, for example, to calculate the mean over multiple requests where the number of items operated on may differ between chunks.
+The proxy returns the following headers to the HTTP response:
+
+* `x-activestorage-dtype`: The data type of the data in the response payload. One of `int32`, `int64`, `uint32`, `uint64`, `float32` or `float64`.
+* `x-activestorage-byte-order`: The byte order of the data in the response payload. Either `big` or `little`.
+* `x-activestrorage-shape`: A JSON-encoded list of numbers describing the shape of the data in the response payload. May be an empty list for a scalar result.
+* `x-activestorage-count`: The number of non-missing array elements operated on while performing the requested reduction. This header is useful, for example, to calculate the mean over multiple requests where the number of items operated on may differ between chunks.
 
 [//]: <> (TODO: No OpenAPI support yet).
 [//]: <> (For a running instance of the proxy server, the full OpenAPI specification is browsable as a web page at the `{proxy-address}/redoc/` endpoint or in raw JSON form at `{proxy-address}/openapi.json`.)

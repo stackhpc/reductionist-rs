@@ -51,12 +51,11 @@ pub struct Count {}
 impl NumOperation for Count {
     fn execute_t<T: Element>(
         request_data: &models::RequestData,
-        data: &Bytes,
+        mut data: Vec<u8>,
     ) -> Result<models::Response, ActiveStorageError> {
-        let array = array::build_array::<T>(request_data, data)?;
+        let array = array::build_array::<T>(request_data, &mut data)?;
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
         let sliced = array.slice(slice_info);
-        // FIXME: endianness?
         let count = if let Some(missing) = &request_data.missing {
             let missing = Missing::<T>::try_from(missing)?;
             count_non_missing(&sliced, &missing)?
@@ -64,7 +63,7 @@ impl NumOperation for Count {
             sliced.len()
         };
         let count = i64::try_from(count)?;
-        let body = count.to_le_bytes();
+        let body = count.to_ne_bytes();
         // Need to copy to provide ownership to caller.
         let body = Bytes::copy_from_slice(&body);
         Ok(models::Response::new(
@@ -82,13 +81,12 @@ pub struct Max {}
 impl NumOperation for Max {
     fn execute_t<T: Element>(
         request_data: &models::RequestData,
-        data: &Bytes,
+        mut data: Vec<u8>,
     ) -> Result<models::Response, ActiveStorageError> {
-        let array = array::build_array::<T>(request_data, data)?;
+        let array = array::build_array::<T>(request_data, &mut data)?;
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
         let sliced = array.slice(slice_info);
         let (max, count) = if let Some(missing) = &request_data.missing {
-            // FIXME: endianness?
             let missing = Missing::<T>::try_from(missing)?;
             // Use a fold to simultaneously max and count the non-missing data.
             // TODO: separate float impl?
@@ -135,13 +133,12 @@ pub struct Min {}
 impl NumOperation for Min {
     fn execute_t<T: Element>(
         request_data: &models::RequestData,
-        data: &Bytes,
+        mut data: Vec<u8>,
     ) -> Result<models::Response, ActiveStorageError> {
-        let array = array::build_array::<T>(request_data, data)?;
+        let array = array::build_array::<T>(request_data, &mut data)?;
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
         let sliced = array.slice(slice_info);
         let (min, count) = if let Some(missing) = &request_data.missing {
-            // FIXME: endianness?
             let missing = Missing::<T>::try_from(missing)?;
             // Use a fold to simultaneously min and count the non-missing data.
             // TODO: separate float impl?
@@ -188,9 +185,9 @@ pub struct Select {}
 impl NumOperation for Select {
     fn execute_t<T: Element>(
         request_data: &models::RequestData,
-        data: &Bytes,
+        mut data: Vec<u8>,
     ) -> Result<models::Response, ActiveStorageError> {
-        let array = array::build_array::<T>(request_data, data)?;
+        let array = array::build_array::<T>(request_data, &mut data)?;
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
         let sliced = array.slice(slice_info);
         let count = if let Some(missing) = &request_data.missing {
@@ -204,10 +201,8 @@ impl NumOperation for Select {
         // Transpose Fortran ordered arrays before iterating.
         let body = if !array.is_standard_layout() {
             let sliced_ordered = sliced.t();
-            // FIXME: endianness?
             sliced_ordered.iter().copied().collect::<Vec<T>>()
         } else {
-            // FIXME: endianness?
             sliced.iter().copied().collect::<Vec<T>>()
         };
         let body = body.as_bytes();
@@ -228,14 +223,13 @@ pub struct Sum {}
 impl NumOperation for Sum {
     fn execute_t<T: Element>(
         request_data: &models::RequestData,
-        data: &Bytes,
+        mut data: Vec<u8>,
     ) -> Result<models::Response, ActiveStorageError> {
-        let array = array::build_array::<T>(request_data, data)?;
+        let array = array::build_array::<T>(request_data, &mut data)?;
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
         let sliced = array.slice(slice_info);
         let (sum, count) = if let Some(missing) = &request_data.missing {
             let missing = Missing::<T>::try_from(missing)?;
-            // FIXME: endianness?
             // Use a fold to simultaneously sum and count the non-missing data.
             sliced
                 .iter()
@@ -269,10 +263,9 @@ mod tests {
     #[test]
     fn count_i32_1d() {
         let request_data = test_utils::get_test_request_data();
-        let data: [u8; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
-        let bytes = Bytes::copy_from_slice(&data);
-        let response = Count::execute(&request_data, &bytes).unwrap();
-        // A u8 slice of 8 elements == a u32 slice with 2 elements
+        let data = vec![1, 2, 3, 4, 5, 6, 7, 8];
+        let response = Count::execute(&request_data, data).unwrap();
+        // A Vec<u8> of 8 elements == a u32 slice with 2 elements
         // Count is always i64.
         let expected: i64 = 2;
         assert_eq!(expected.as_bytes(), response.body);
@@ -287,10 +280,9 @@ mod tests {
         let mut request_data = test_utils::get_test_request_data();
         request_data.dtype = models::DType::Uint32;
         request_data.missing = Some(Missing::MissingValue(0x04030201.into()));
-        let data: [u8; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
-        let bytes = Bytes::copy_from_slice(&data);
-        let response = Count::execute(&request_data, &bytes).unwrap();
-        // A u8 slice of 8 elements == a u32 slice with 2 elements
+        let data = vec![1, 2, 3, 4, 5, 6, 7, 8];
+        let response = Count::execute(&request_data, data).unwrap();
+        // A Vec<u8> of 8 elements == a u32 slice with 2 elements
         // Count is always i64.
         let expected: i64 = 1;
         assert_eq!(expected.as_bytes(), response.body);
@@ -305,13 +297,12 @@ mod tests {
         let mut request_data = test_utils::get_test_request_data();
         request_data.dtype = models::DType::Int64;
         // data:
-        // A u8 slice of 8 elements == a single i64 value
-        // where each slice element is 2 hexadecimal digits
+        // A Vec<u8> of 8 elements == a single i64 value
+        // where each element is 2 hexadecimal digits
         // and the order is reversed on little-endian systems
         // so [1, 2, 3] is 0x030201 as an i64 in hexadecimal
-        let data: [u8; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
-        let bytes = Bytes::copy_from_slice(&data);
-        let response = Max::execute(&request_data, &bytes).unwrap();
+        let data = vec![1, 2, 3, 4, 5, 6, 7, 8];
+        let response = Max::execute(&request_data, data).unwrap();
         let expected: i64 = 0x0807060504030201;
         assert_eq!(expected.as_bytes(), response.body);
         assert_eq!(8, response.body.len());
@@ -326,13 +317,12 @@ mod tests {
         request_data.dtype = models::DType::Int64;
         request_data.missing = Some(Missing::MissingValues(vec![0x0807060504030201_i64.into()]));
         // data:
-        // A u8 slice of 16 elements == two i64 values
-        // where each slice element is 2 hexadecimal digits
+        // A Vec<u8> of 16 elements == two i64 values
+        // where each element is 2 hexadecimal digits
         // and the order is reversed on little-endian systems
         // so [1, 2, 3] is 0x030201 as an i64 in hexadecimal
-        let data: [u8; 16] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
-        let bytes = Bytes::copy_from_slice(&data);
-        let response = Max::execute(&request_data, &bytes).unwrap();
+        let data = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+        let response = Max::execute(&request_data, data).unwrap();
         let expected: i64 = 0x100f0e0d0c0b0a09;
         assert_eq!(expected.as_bytes(), response.body);
         assert_eq!(8, response.body.len());
@@ -347,8 +337,7 @@ mod tests {
         request_data.dtype = models::DType::Float32;
         let floats = [1.0, f32::INFINITY];
         let data = floats.as_bytes();
-        let bytes = Bytes::copy_from_slice(data);
-        let response = Max::execute(&request_data, &bytes).unwrap();
+        let response = Max::execute(&request_data, data.into()).unwrap();
         let expected = f32::INFINITY;
         assert_eq!(expected.as_bytes(), response.body);
         assert_eq!(4, response.body.len());
@@ -363,8 +352,7 @@ mod tests {
         request_data.dtype = models::DType::Float32;
         let floats = [f32::INFINITY, 1.0];
         let data = floats.as_bytes();
-        let bytes = Bytes::copy_from_slice(data);
-        let response = Max::execute(&request_data, &bytes).unwrap();
+        let response = Max::execute(&request_data, data.into()).unwrap();
         let expected = f32::INFINITY;
         assert_eq!(expected.as_bytes(), response.body);
         assert_eq!(4, response.body.len());
@@ -377,9 +365,8 @@ mod tests {
     fn min_u64_1d() {
         let mut request_data = test_utils::get_test_request_data();
         request_data.dtype = models::DType::Uint64;
-        let data = [1, 2, 3, 4, 5, 6, 7, 8];
-        let bytes = Bytes::copy_from_slice(&data);
-        let response = Min::execute(&request_data, &bytes).unwrap();
+        let data = vec![1, 2, 3, 4, 5, 6, 7, 8];
+        let response = Min::execute(&request_data, data).unwrap();
         let expected: u64 = 0x0807060504030201;
         assert_eq!(expected.as_bytes(), response.body);
         assert_eq!(8, response.body.len());
@@ -395,13 +382,12 @@ mod tests {
         // Minimum is one greater than smallest element.
         request_data.missing = Some(Missing::ValidMin(0x0807060504030202_i64.into()));
         // data:
-        // A u8 slice of 16 elements == two i64 values
-        // where each slice element is 2 hexadecimal digits
+        // A Vec<u8> of 16 elements == two i64 values
+        // where each element is 2 hexadecimal digits
         // and the order is reversed on little-endian systems
         // so [1, 2, 3] is 0x030201 as an i64 in hexadecimal
-        let data: [u8; 16] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
-        let bytes = Bytes::copy_from_slice(&data);
-        let response = Min::execute(&request_data, &bytes).unwrap();
+        let data = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+        let response = Min::execute(&request_data, data).unwrap();
         let expected: i64 = 0x100f0e0d0c0b0a09;
         assert_eq!(expected.as_bytes(), response.body);
         assert_eq!(8, response.body.len());
@@ -416,8 +402,7 @@ mod tests {
         request_data.dtype = models::DType::Float32;
         let floats = [1.0, f32::INFINITY];
         let data = floats.as_bytes();
-        let bytes = Bytes::copy_from_slice(data);
-        let response = Min::execute(&request_data, &bytes).unwrap();
+        let response = Min::execute(&request_data, data.into()).unwrap();
         let expected = 1.0_f32;
         assert_eq!(expected.as_bytes(), response.body);
         assert_eq!(4, response.body.len());
@@ -432,8 +417,7 @@ mod tests {
         request_data.dtype = models::DType::Float32;
         let floats = [f32::INFINITY, 1.0];
         let data = floats.as_bytes();
-        let bytes = Bytes::copy_from_slice(data);
-        let response = Min::execute(&request_data, &bytes).unwrap();
+        let response = Min::execute(&request_data, data.into()).unwrap();
         let expected = 1.0_f32;
         assert_eq!(expected.as_bytes(), response.body);
         assert_eq!(4, response.body.len());
@@ -449,8 +433,7 @@ mod tests {
         request_data.dtype = models::DType::Float32;
         let floats = [1.0, f32::NAN];
         let data = floats.as_bytes();
-        let bytes = Bytes::copy_from_slice(data);
-        let response = Min::execute(&request_data, &bytes).unwrap();
+        let response = Min::execute(&request_data, data.into()).unwrap();
         let expected = 1.0_f32;
         assert_eq!(expected.as_bytes(), response.body);
         assert_eq!(4, response.body.len());
@@ -466,8 +449,7 @@ mod tests {
         request_data.dtype = models::DType::Float32;
         let floats = [f32::NAN, 1.0];
         let data = floats.as_bytes();
-        let bytes = Bytes::copy_from_slice(data);
-        let response = Min::execute(&request_data, &bytes).unwrap();
+        let response = Min::execute(&request_data, data.into()).unwrap();
         let expected = 1.0_f32;
         assert_eq!(expected.as_bytes(), response.body);
         assert_eq!(4, response.body.len());
@@ -483,8 +465,7 @@ mod tests {
         request_data.missing = Some(Missing::MissingValue(DValue::from_f64(42.0).unwrap()));
         let floats = [1.0, f32::NAN];
         let data = floats.as_bytes();
-        let bytes = Bytes::copy_from_slice(data);
-        let response = Min::execute(&request_data, &bytes).unwrap();
+        let response = Min::execute(&request_data, data.into()).unwrap();
         let expected = 1.0_f32;
         assert_eq!(expected.as_bytes(), response.body);
         assert_eq!(4, response.body.len());
@@ -500,8 +481,7 @@ mod tests {
         request_data.missing = Some(Missing::MissingValue(DValue::from_f64(42.0).unwrap()));
         let floats = [f32::NAN, 1.0];
         let data = floats.as_bytes();
-        let bytes = Bytes::copy_from_slice(data);
-        let response = Min::execute(&request_data, &bytes).unwrap();
+        let response = Min::execute(&request_data, data.into()).unwrap();
         // FIXME: Ignore NANs?
         let expected = f32::NAN; //1.0_f32;
         assert_eq!(expected.as_bytes(), response.body);
@@ -515,9 +495,8 @@ mod tests {
     fn select_f32_1d() {
         let mut request_data = test_utils::get_test_request_data();
         request_data.dtype = models::DType::Float32;
-        let data = [1, 2, 3, 4, 5, 6, 7, 8];
-        let bytes = Bytes::copy_from_slice(&data);
-        let response = Select::execute(&request_data, &bytes).unwrap();
+        let data = vec![1, 2, 3, 4, 5, 6, 7, 8];
+        let response = Select::execute(&request_data, data).unwrap();
         let expected: [u8; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
         assert_eq!(expected.as_bytes(), response.body);
         assert_eq!(8, response.body.len());
@@ -531,9 +510,8 @@ mod tests {
         let mut request_data = test_utils::get_test_request_data();
         request_data.dtype = models::DType::Float64;
         request_data.shape = Some(vec![2, 1]);
-        let data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
-        let bytes = Bytes::copy_from_slice(&data);
-        let response = Select::execute(&request_data, &bytes).unwrap();
+        let data = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+        let response = Select::execute(&request_data, data).unwrap();
         let expected: [u8; 16] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
         assert_eq!(expected.as_bytes(), response.body);
         assert_eq!(16, response.body.len());
@@ -553,9 +531,8 @@ mod tests {
         ]);
         // 2x2 array, select second row of each column.
         // [[0x04030201, 0x08070605], [0x12111009, 0x16151413]]
-        let data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
-        let bytes = Bytes::copy_from_slice(&data);
-        let response = Select::execute(&request_data, &bytes).unwrap();
+        let data = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+        let response = Select::execute(&request_data, data).unwrap();
         // [[0x08070605], [0x16151413]]
         let expected: [u8; 8] = [5, 6, 7, 8, 13, 14, 15, 16];
         assert_eq!(expected.as_bytes(), response.body);
@@ -569,9 +546,8 @@ mod tests {
     fn sum_u32_1d() {
         let mut request_data = test_utils::get_test_request_data();
         request_data.dtype = models::DType::Uint32;
-        let data = [1, 2, 3, 4, 5, 6, 7, 8];
-        let bytes = Bytes::copy_from_slice(&data);
-        let response = Sum::execute(&request_data, &bytes).unwrap();
+        let data = vec![1, 2, 3, 4, 5, 6, 7, 8];
+        let response = Sum::execute(&request_data, data).unwrap();
         let expected: u32 = 0x04030201 + 0x08070605;
         assert_eq!(expected.as_bytes(), response.body);
         assert_eq!(4, response.body.len());
@@ -585,9 +561,8 @@ mod tests {
         let mut request_data = test_utils::get_test_request_data();
         request_data.dtype = models::DType::Uint32;
         request_data.missing = Some(Missing::ValidMax((0x08070605 - 1).into()));
-        let data = [1, 2, 3, 4, 5, 6, 7, 8];
-        let bytes = Bytes::copy_from_slice(&data);
-        let response = Sum::execute(&request_data, &bytes).unwrap();
+        let data = vec![1, 2, 3, 4, 5, 6, 7, 8];
+        let response = Sum::execute(&request_data, data).unwrap();
         let expected: u32 = 0x04030201;
         assert_eq!(expected.as_bytes(), response.body);
         assert_eq!(4, response.body.len());
@@ -602,8 +577,7 @@ mod tests {
         request_data.dtype = models::DType::Float32;
         let floats = [1.0, f32::INFINITY];
         let data = floats.as_bytes();
-        let bytes = Bytes::copy_from_slice(data);
-        let response = Sum::execute(&request_data, &bytes).unwrap();
+        let response = Sum::execute(&request_data, data.into()).unwrap();
         let expected = f32::INFINITY;
         assert_eq!(expected.as_bytes(), response.body);
         assert_eq!(4, response.body.len());
@@ -618,8 +592,7 @@ mod tests {
         request_data.dtype = models::DType::Float64;
         let floats = [f64::NAN, 1.0];
         let data = floats.as_bytes();
-        let bytes = Bytes::copy_from_slice(data);
-        let response = Sum::execute(&request_data, &bytes).unwrap();
+        let response = Sum::execute(&request_data, data.into()).unwrap();
         let expected = f64::NAN;
         assert_eq!(expected.as_bytes(), response.body);
         assert_eq!(8, response.body.len());
