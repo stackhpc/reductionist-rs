@@ -50,3 +50,7 @@ serde_test = "1.0"
 [[bench]]
 name = "shuffle"
 harness = false
+
+[[bench]]
+name = "compression"
+harness = false
