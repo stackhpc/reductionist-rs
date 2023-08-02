@@ -17,10 +17,8 @@ use axum::body::Bytes;
 /// * `data`: Data [Bytes](axum::body::Bytes) to apply the pipeline to.
 pub fn filter_pipeline(
     request_data: &models::RequestData,
-    data: &Bytes,
+    mut data: Bytes,
 ) -> Result<Bytes, ActiveStorageError> {
-    // Make a mutable shallow copy of the data.
-    let mut data = data.clone();
     // First decompress.
     if let Some(compression) = request_data.compression {
         data = compression::decompress(compression, &data)?
@@ -63,7 +61,7 @@ mod tests {
         let data = [1, 2, 3, 4];
         let bytes = Bytes::copy_from_slice(&data);
         let request_data = test_utils::get_test_request_data();
-        let result = filter_pipeline(&request_data, &bytes).unwrap();
+        let result = filter_pipeline(&request_data, bytes).unwrap();
         assert_eq!(data.as_ref(), result);
     }
 
@@ -73,7 +71,7 @@ mod tests {
         let bytes = compress_gzip(data.as_ref());
         let mut request_data = test_utils::get_test_request_data();
         request_data.compression = Some(models::Compression::Gzip);
-        let result = filter_pipeline(&request_data, &bytes).unwrap();
+        let result = filter_pipeline(&request_data, bytes).unwrap();
         assert_eq!(data.as_ref(), result);
     }
 
@@ -84,7 +82,7 @@ mod tests {
         let shuffled = filters::shuffle::test_utils::shuffle(&bytes, 4);
         let mut request_data = test_utils::get_test_request_data();
         request_data.filters = Some(vec![models::Filter::Shuffle { element_size: 4 }]);
-        let result = filter_pipeline(&request_data, &shuffled).unwrap();
+        let result = filter_pipeline(&request_data, shuffled).unwrap();
         assert_eq!(data.as_ref(), result);
     }
 
@@ -97,7 +95,7 @@ mod tests {
         let mut request_data = test_utils::get_test_request_data();
         request_data.compression = Some(models::Compression::Zlib);
         request_data.filters = Some(vec![models::Filter::Shuffle { element_size: 4 }]);
-        let result = filter_pipeline(&request_data, &bytes).unwrap();
+        let result = filter_pipeline(&request_data, bytes).unwrap();
         assert_eq!(data.as_ref(), result.as_ref());
     }
 
@@ -116,7 +114,7 @@ mod tests {
             models::Filter::Shuffle { element_size: 4 },
             models::Filter::Shuffle { element_size: 2 },
         ]);
-        let result = filter_pipeline(&request_data, &bytes).unwrap();
+        let result = filter_pipeline(&request_data, bytes).unwrap();
         assert_eq!(data.as_ref(), result.as_ref());
     }
 }

@@ -31,6 +31,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--bucket", required=True, type=str)
     parser.add_argument("--object", required=True, type=str)
     parser.add_argument("--dtype", required=True, type=str) #, choices=DTYPES) allow invalid
+    parser.add_argument("--byte-order", type=str, choices=["big", "little"])
     parser.add_argument("--offset", type=int)
     parser.add_argument("--size", type=int)
     parser.add_argument("--shape", type=str)
@@ -66,6 +67,8 @@ def build_request_data(args: argparse.Namespace) -> dict:
         'order': args.order,
         'compression': args.compression,
     }
+    if args.byte_order:
+        request_data["byte_order"] = args.byte_order
     if args.shape:
         request_data["shape"] = json.loads(args.shape)
     if args.selection:

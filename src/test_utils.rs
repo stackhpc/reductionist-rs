@@ -1,5 +1,5 @@
 use crate::models::*;
-use crate::types::Missing;
+use crate::types::{ByteOrder, Missing};
 
 use url::Url;
 
@@ -10,6 +10,7 @@ pub(crate) fn get_test_request_data() -> RequestData {
         bucket: "bar".to_string(),
         object: "baz".to_string(),
         dtype: DType::Int32,
+        byte_order: None,
         offset: None,
         size: None,
         shape: None,
@@ -28,6 +29,7 @@ pub(crate) fn get_test_request_data_optional() -> RequestData {
         bucket: "bar".to_string(),
         object: "baz".to_string(),
         dtype: DType::Int32,
+        byte_order: Some(ByteOrder::Little),
         offset: Some(4),
         size: Some(8),
         shape: Some(vec![2, 5]),

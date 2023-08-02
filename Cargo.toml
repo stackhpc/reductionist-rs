@@ -1,6 +1,6 @@
 [package]
 name = "reductionist"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 # Due to AWS SDK.
 rust-version = "1.66.1"
@@ -26,7 +26,7 @@ maligned = "0.2.1"
 mime = "0.3"
 ndarray = "0.15"
 ndarray-stats = "0.5"
-num-traits = "0.2.15"
+num-traits = "0.2.16"
 prometheus = { version = "0.13", features = ["process"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "*"
@@ -46,6 +46,10 @@ zerocopy = { version = "0.6.1", features = ["alloc", "simd"] }
 criterion = { version = "0.4", features = ["html_reports"] }
 regex = "1"
 serde_test = "1.0"
+
+[[bench]]
+name = "byte_order"
+harness = false
 
 [[bench]]
 name = "shuffle"

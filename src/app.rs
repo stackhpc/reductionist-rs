@@ -7,6 +7,7 @@ use crate::models;
 use crate::operation;
 use crate::operations;
 use crate::s3_client;
+use crate::types::{ByteOrder, NATIVE_BYTE_ORDER};
 use crate::validated_json::ValidatedJson;
 
 use axum::middleware;
@@ -34,6 +35,13 @@ static HEADER_DTYPE: header::HeaderName = header::HeaderName::from_static("x-act
 static HEADER_SHAPE: header::HeaderName = header::HeaderName::from_static("x-activestorage-shape");
 /// `x-activestorage-count` header definition
 static HEADER_COUNT: header::HeaderName = header::HeaderName::from_static("x-activestorage-count");
+/// `x-activestorage-byte-order` header definition
+static HEADER_BYTE_ORDER: header::HeaderName =
+    header::HeaderName::from_static("x-activestorage-byte-order");
+const HEADER_BYTE_ORDER_VALUE: &str = match NATIVE_BYTE_ORDER {
+    ByteOrder::Big => "big",
+    ByteOrder::Little => "little",
+};
 
 impl IntoResponse for models::Response {
     /// Convert a [crate::models::Response] into a [axum::response::Response].
@@ -47,6 +55,7 @@ impl IntoResponse for models::Response {
                 (&HEADER_DTYPE, self.dtype.to_string().to_lowercase()),
                 (&HEADER_SHAPE, serde_json::to_string(&self.shape).unwrap()),
                 (&HEADER_COUNT, serde_json::to_string(&self.count).unwrap()),
+                (&HEADER_BYTE_ORDER, HEADER_BYTE_ORDER_VALUE.to_string()),
             ],
             self.body,
         )
@@ -159,12 +168,22 @@ async fn operation_handler<T: operation::Operation>(
     ValidatedJson(request_data): ValidatedJson<models::RequestData>,
 ) -> Result<models::Response, ActiveStorageError> {
     let data = download_object(&auth, &request_data).await?;
-    let data = filter_pipeline::filter_pipeline(&request_data, &data)?;
+    let ptr = data.as_ptr();
+    let data = filter_pipeline::filter_pipeline(&request_data, data)?;
     if request_data.compression.is_some() || request_data.size.is_none() {
         // Validate the raw uncompressed data size now that we know it.
         models::validate_raw_size(data.len(), request_data.dtype, &request_data.shape)?;
     }
-    T::execute(&request_data, &data)
+    if request_data.compression.is_none() && request_data.filters.is_none() {
+        // Assert that we're using zero-copy.
+        assert_eq!(ptr, data.as_ptr());
+    }
+    // Convert to a mutable vector to allow in-place byte order conversion.
+    let ptr = data.as_ptr();
+    let vec: Vec<u8> = data.into();
+    // Assert that we're using zero-copy.
+    assert_eq!(ptr, vec.as_ptr());
+    T::execute(&request_data, vec)
 }
 
 /// Handler for unknown operations
