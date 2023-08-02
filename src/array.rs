@@ -32,7 +32,7 @@ fn from_bytes<T: zerocopy::AsBytes + zerocopy::FromBytes>(
 ///
 /// * `size`: Number of elements in the array
 /// * `request_data`: RequestData object for the request
-fn get_shape(
+pub fn get_shape(
     size: usize,
     request_data: &models::RequestData,
 ) -> ndarray::Shape<Dim<ndarray::IxDynImpl>> {
@@ -71,7 +71,7 @@ fn build_array_from_shape<T>(
 ///
 /// * `shape`: The shape of the array
 /// * `data`: A slice of type `&mut [T]` containing the data to be consumed by the array view.
-fn build_array_mut_from_shape<T>(
+pub fn build_array_mut_from_shape<T>(
     shape: ndarray::Shape<Dim<ndarray::IxDynImpl>>,
     data: &mut [T],
 ) -> Result<ArrayViewMutD<T>, ActiveStorageError> {
@@ -159,7 +159,7 @@ where
 ///
 /// * `array`: An [ndarray::ArrayViewMutD] containing the data to be converted.
 /// * `selection`: Optional selection. If provided only data in this selection will be converted.
-fn reverse_array_byte_order<T>(
+pub fn reverse_array_byte_order<T>(
     array: &mut ArrayViewMutD<T>,
     selection: &Option<Vec<models::Slice>>,
 ) where
