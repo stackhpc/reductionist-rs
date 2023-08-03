@@ -30,7 +30,8 @@ pub enum Missing<T> {
 }
 
 impl Missing<DValue> {
-    /// Validate a Missing<DValue> object for a given DType.
+    /// Validate a [`Missing<DValue>`](crate::types::Missing) object for a given
+    /// [DType](crate::models::DType).
     pub fn validate(&self, dtype: DType) -> Result<(), ValidationError> {
         match dtype {
             DType::Int32 => Missing::<i32>::validate_dvalue(self),
@@ -44,7 +45,8 @@ impl Missing<DValue> {
 }
 
 impl<T: PartialOrd + Serialize + TryFromDValue> Missing<T> {
-    /// Validate a Missing<DValue> for Missing<T> where T is a supported primitive numeric type.
+    /// Validate a [`Missing<DValue>`](crate::types::Missing) for Missing<T> where T is a supported
+    /// primitive numeric type.
     fn validate_dvalue(missing: &Missing<DValue>) -> Result<(), ValidationError> {
         // Perform a conversion to the primitive based type.
         let missing_primitive = Self::try_from(missing).map_err(|err| {

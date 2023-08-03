@@ -104,8 +104,8 @@ fn router() -> Router {
 
 /// Reductionist Server Service type alias
 ///
-/// This type implements [tower_service::Service].
-// FIXME: The Service type should be some form of tower_service::Service, but couldn't find the
+/// This type implements [tower::Service].
+// FIXME: The Service type should be some form of tower::Service, but couldn't find the
 // necessary trait bounds.
 pub type Service = tower_http::normalize_path::NormalizePath<Router>;
 
