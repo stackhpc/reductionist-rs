@@ -218,10 +218,7 @@ mod tests {
         let value: u32 = 42;
         let mut buf = maligned::align_first::<u8, maligned::A4>(4);
         buf.extend_from_slice(&value.to_ne_bytes());
-        assert_eq!(
-            [value],
-            from_bytes::<u32>(&mut buf).unwrap()
-        );
+        assert_eq!([value], from_bytes::<u32>(&mut buf).unwrap());
     }
 
     #[test]
@@ -229,10 +226,7 @@ mod tests {
         let value: u64 = u64::max_value();
         let mut buf = maligned::align_first::<u8, maligned::A8>(8);
         buf.extend_from_slice(&value.to_ne_bytes());
-        assert_eq!(
-            [value],
-            from_bytes::<u64>(&mut buf).unwrap()
-        );
+        assert_eq!([value], from_bytes::<u64>(&mut buf).unwrap());
     }
 
     #[test]
@@ -240,10 +234,7 @@ mod tests {
         let value: i32 = -42;
         let mut buf = maligned::align_first::<u8, maligned::A4>(4);
         buf.extend_from_slice(&value.to_ne_bytes());
-        assert_eq!(
-            [value],
-            from_bytes::<i32>(&mut buf).unwrap()
-        );
+        assert_eq!([value], from_bytes::<i32>(&mut buf).unwrap());
     }
 
     #[test]
@@ -251,10 +242,7 @@ mod tests {
         let value: i64 = i64::min_value();
         let mut buf = maligned::align_first::<u8, maligned::A8>(8);
         buf.extend_from_slice(&value.to_ne_bytes());
-        assert_eq!(
-            [value],
-            from_bytes::<i64>(&mut buf).unwrap()
-        );
+        assert_eq!([value], from_bytes::<i64>(&mut buf).unwrap());
     }
 
     #[test]
@@ -262,10 +250,7 @@ mod tests {
         let value: f32 = f32::min_value();
         let mut buf = maligned::align_first::<u8, maligned::A4>(4);
         buf.extend_from_slice(&value.to_ne_bytes());
-        assert_eq!(
-            [value],
-            from_bytes::<f32>(&mut buf).unwrap()
-        );
+        assert_eq!([value], from_bytes::<f32>(&mut buf).unwrap());
     }
 
     #[test]
@@ -273,10 +258,7 @@ mod tests {
         let value: f64 = f64::max_value();
         let mut buf = maligned::align_first::<u8, maligned::A8>(8);
         buf.extend_from_slice(&value.to_ne_bytes());
-        assert_eq!(
-            [value],
-            from_bytes::<f64>(&mut buf).unwrap()
-        );
+        assert_eq!([value], from_bytes::<f64>(&mut buf).unwrap());
     }
 
     fn assert_from_bytes_error<T: std::fmt::Debug>(result: Result<T, ActiveStorageError>) {
