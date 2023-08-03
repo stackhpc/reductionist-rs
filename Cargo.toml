@@ -1,9 +1,22 @@
 [package]
 name = "reductionist"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 # Due to AWS SDK.
 rust-version = "1.66.1"
+license = "Apache-2.0"
+description = "S3 Active Storage server"
+homepage = "https://crates.io/crates/reductionist"
+documentation = "https://docs.rs/reductionist"
+repository = "https://github.com/stackhpc/reductionist-rs"
+readme = "README.md"
+authors = ["Mark Goddard <mark@stackhpc.com>", "Scott Davidson <scott@stackhpc.com>"]
+keywords = ["s3", "ndarray"]
+# https://crates.io/category_slugs
+categories = ["mathematics", "science", "simulation"]
+
+[badges]
+maintenance = { status = "actively-developed" }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

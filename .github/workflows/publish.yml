@@ -7,6 +7,27 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 jobs:
+  # Adapted from https://pratikpc.medium.com/publishing-crates-using-github-actions-165ee67780e1
+  publish-crate:
+    name: Publish crate to crates.io
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v3
+
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: 1.66.1
+          override: true
+
+      - name: Publish crate to crates.io
+        run: cargo publish --token ${CRATES_TOKEN}
+        env:
+          CRATES_TOKEN: ${{ secrets.CRATES_TOKEN }}
+
   build-and-push-image:
     name: Build and publish a Docker image
     runs-on: ubuntu-latest
