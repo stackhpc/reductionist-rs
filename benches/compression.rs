@@ -7,6 +7,8 @@ use axum::body::Bytes;
 use flate2::read::{GzEncoder, ZlibEncoder};
 use flate2::Compression;
 use std::io::Read;
+// Bring trait into scope to use as_bytes method.
+use zerocopy::AsBytes;
 
 fn compress_gzip(data: &[u8]) -> Bytes {
     // Adapated from flate2 documentation.
@@ -39,10 +41,9 @@ fn criterion_benchmark(c: &mut Criterion) {
     for (compression, name) in compression_algs {
         for size_k in [64, 256, 1024] {
             let size = size_k * 1024;
-            let data: Vec<u8> = (0_u32..size)
-                .map(|i| u8::try_from(i % 256).unwrap())
-                .collect::<Vec<u8>>();
-            let compressed = compress(compression, data.as_ref());
+            let data: Vec<i64> = (0_i64..size).map(|i| i % 256).collect::<Vec<i64>>();
+            let bytes = Bytes::copy_from_slice(data.as_bytes());
+            let compressed = compress(compression, &bytes);
             let name = format!("decompress({}, {})", name, size);
             c.bench_function(&name, |b| {
                 b.iter(|| {

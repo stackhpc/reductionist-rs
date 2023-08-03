@@ -52,6 +52,10 @@ name = "byte_order"
 harness = false
 
 [[bench]]
+name = "operations"
+harness = false
+
+[[bench]]
 name = "shuffle"
 harness = false
 

@@ -56,7 +56,7 @@ pub trait Operation {
     /// # Arguments
     ///
     /// * `request_data`: RequestData object for the request
-    /// * `data`: Vec<u8> containing data to operate on.
+    /// * `data`: [`Vec<u8>`] containing data to operate on.
     fn execute(
         request_data: &models::RequestData,
         data: Vec<u8>,

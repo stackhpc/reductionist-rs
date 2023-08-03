@@ -23,4 +23,10 @@ then
     exit 1
 fi
 
+if ! RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
+then
+    echo "There are some documentation issues."
+    exit 1
+fi
+
 exit 0
