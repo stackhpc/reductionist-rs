@@ -1,14 +1,18 @@
+//! Byte order (endianness)
+
 use serde::Deserialize;
 
+/// Native byte order of the host running Reductionist.
 #[cfg(target_endian = "big")]
 pub const NATIVE_BYTE_ORDER: ByteOrder = ByteOrder::Big;
-
+/// Native byte order of the host running Reductionist.
 #[cfg(target_endian = "little")]
 pub const NATIVE_BYTE_ORDER: ByteOrder = ByteOrder::Little;
 
+/// Non-native byte order of the host running Reductionist.
 #[cfg(target_endian = "big")]
 pub const NON_NATIVE_BYTE_ORDER: ByteOrder = ByteOrder::Little;
-
+/// Non-native byte order of the host running Reductionist.
 #[cfg(target_endian = "little")]
 pub const NON_NATIVE_BYTE_ORDER: ByteOrder = ByteOrder::Big;
 

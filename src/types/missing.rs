@@ -1,3 +1,14 @@
+//! Missing data descriptors
+//!
+//! Arrays can contain missing data which should be ignored during computation. There are multiple
+//! ways to describe the missing data. Currently we support:
+//!
+//! * A single missing value
+//! * Multiple missing values
+//! * A valid minimum value
+//! * A valid maximum value
+//! * A valid range of values
+
 use serde::{Deserialize, Serialize};
 use validator::ValidationError;
 
