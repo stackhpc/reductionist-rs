@@ -28,6 +28,8 @@ use tower::ServiceBuilder;
 use tower_http::normalize_path::NormalizePathLayer;
 use tower_http::trace::TraceLayer;
 use tower_http::validate_request::ValidateRequestHeaderLayer;
+use tracing::debug_span;
+use tracing::Instrument;
 
 /// `x-activestorage-dtype` header definition
 static HEADER_DTYPE: header::HeaderName = header::HeaderName::from_static("x-activestorage-dtype");
@@ -138,6 +140,7 @@ async fn schema() -> &'static str {
 ///
 /// * `auth`: Basic authentication credentials
 /// * `request_data`: RequestData object for the request
+#[tracing::instrument(level = "DEBUG", skip(auth))]
 async fn download_object(
     auth: &Authorization<Basic>,
     request_data: &models::RequestData,
@@ -167,7 +170,9 @@ async fn operation_handler<T: operation::Operation>(
     TypedHeader(auth): TypedHeader<Authorization<Basic>>,
     ValidatedJson(request_data): ValidatedJson<models::RequestData>,
 ) -> Result<models::Response, ActiveStorageError> {
-    let data = download_object(&auth, &request_data).await?;
+    let data = download_object(&auth, &request_data)
+        .instrument(tracing::Span::current())
+        .await?;
     let ptr = data.as_ptr();
     let data = filter_pipeline::filter_pipeline(&request_data, data)?;
     if request_data.compression.is_some() || request_data.size.is_none() {
@@ -183,7 +188,7 @@ async fn operation_handler<T: operation::Operation>(
     let vec: Vec<u8> = data.into();
     // Assert that we're using zero-copy.
     assert_eq!(ptr, vec.as_ptr());
-    T::execute(&request_data, vec)
+    debug_span!("operation").in_scope(|| T::execute(&request_data, vec))
 }
 
 /// Handler for unknown operations

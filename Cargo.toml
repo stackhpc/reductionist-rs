@@ -29,7 +29,7 @@ aws-smithy-types = "0.55"
 aws-types = "0.55"
 axum = { version = "0.6", features = ["headers"] }
 axum-server = { version = "0.4.7", features = ["tls-rustls"] }
-clap = { version = "4.2", features = ["derive", "env"] }
+clap = { version = "~4.2", features = ["derive", "env"] }
 expanduser = "1.2.2"
 flate2 = "1.0"
 http = "0.2"
@@ -40,6 +40,8 @@ mime = "0.3"
 ndarray = "0.15"
 ndarray-stats = "0.5"
 num-traits = "0.2.16"
+opentelemetry = "0"
+opentelemetry-jaeger = { version = "0", features = ["rt-tokio"] }
 prometheus = { version = "0.13", features = ["process"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -50,6 +52,7 @@ tower = "0.4"
 tower-http = { version = "0.4", features = ["normalize-path", "trace", "validate-request"] }
 tokio-stream = "0.1"
 tracing = "0.1"
+tracing-opentelemetry = "0"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 url = { version = "2", features = ["serde"] }
 validator = { version = "0.16", features = ["derive"] }

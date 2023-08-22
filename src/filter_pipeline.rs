@@ -15,6 +15,7 @@ use axum::body::Bytes;
 ///
 /// * `request_data`: RequestData object for the request
 /// * `data`: Data [Bytes](axum::body::Bytes) to apply the pipeline to.
+#[tracing::instrument(skip(request_data, data))]
 pub fn filter_pipeline(
     request_data: &models::RequestData,
     mut data: Bytes,
