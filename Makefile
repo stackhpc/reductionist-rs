@@ -11,6 +11,8 @@ docs:
 lint:
 	@docker buildx build --build-arg PROFILE=dev --target builder -t reductionist-test .
 	@docker run --rm reductionist-test cargo check --color always
+	@docker run --rm reductionist-test bash -c 'rustup component add rustfmt && cargo fmt -- --color always --check'
+	@docker run --rm reductionist-test bash -c 'rustup component add clippy && cargo clippy --all-targets -- -D warnings'
 
 .PHONY: test
 test:

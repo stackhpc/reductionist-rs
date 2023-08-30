@@ -37,7 +37,7 @@ pub fn get_shape(
     request_data: &models::RequestData,
 ) -> ndarray::Shape<Dim<ndarray::IxDynImpl>> {
     // Use the provided shape, or fall back to a 1D array.
-    let shape = request_data.shape.clone().unwrap_or(vec![size]);
+    let shape = request_data.shape.clone().unwrap_or_else(|| vec![size]);
     // Convert the Vec into a Shape.
     let shape = shape.into_shape();
     match request_data.order {
