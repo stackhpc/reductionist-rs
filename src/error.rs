@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 use thiserror::Error;
 use tracing::{event, Level};
+use zune_inflate::errors::InflateDecodeErrors;
 
 use crate::types::DValue;
 
@@ -26,7 +27,11 @@ use crate::types::DValue;
 pub enum ActiveStorageError {
     /// Error decompressing data
     #[error("failed to decompress data")]
-    Decompression(#[from] std::io::Error),
+    DecompressionFlate2(#[from] std::io::Error),
+
+    /// Error decompressing data
+    #[error("failed to decompress data")]
+    DecompressionZune(#[from] InflateDecodeErrors),
 
     /// Attempt to perform an invalid operation on an empty array or selection
     #[error("cannot perform {operation} on empty array or selection")]
@@ -187,7 +192,8 @@ impl From<ActiveStorageError> for ErrorResponse {
     fn from(error: ActiveStorageError) -> Self {
         let response = match &error {
             // Bad request
-            ActiveStorageError::Decompression(_)
+            ActiveStorageError::DecompressionFlate2(_)
+            | ActiveStorageError::DecompressionZune(_)
             | ActiveStorageError::EmptyArray { operation: _ }
             | ActiveStorageError::IncompatibleMissing(_)
             | ActiveStorageError::RequestDataJsonRejection(_)
@@ -326,11 +332,22 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn decompression_error() {
+    async fn decompression_flate2_error() {
         let io_error = std::io::Error::new(std::io::ErrorKind::InvalidInput, "decompression error");
-        let error = ActiveStorageError::Decompression(io_error);
+        let error = ActiveStorageError::DecompressionFlate2(io_error);
         let message = "failed to decompress data";
         let caused_by = Some(vec!["decompression error"]);
+        test_active_storage_error(error, StatusCode::BAD_REQUEST, message, caused_by).await;
+    }
+
+    #[tokio::test]
+    async fn decompression_zune_error() {
+        let zune_error = InflateDecodeErrors::new_with_error(
+            zune_inflate::errors::DecodeErrorStatus::InsufficientData,
+        );
+        let error = ActiveStorageError::DecompressionZune(zune_error);
+        let message = "failed to decompress data";
+        let caused_by = Some(vec!["Insufficient data\n\n\n"]);
         test_active_storage_error(error, StatusCode::BAD_REQUEST, message, caused_by).await;
     }
 

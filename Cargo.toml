@@ -47,6 +47,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 strum_macros = "0.24"
 thiserror = "1.0"
+time = "= 0.3.23"
 tokio = { version = "1.28", features = ["full"] }
 tower = "0.4"
 tower-http = { version = "0.4", features = ["normalize-path", "trace", "validate-request"] }
@@ -57,6 +58,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 url = { version = "2", features = ["serde"] }
 validator = { version = "0.16", features = ["derive"] }
 zerocopy = { version = "0.6.1", features = ["alloc", "simd"] }
+zune-inflate = "0.2.54"
 
 [dev-dependencies]
 criterion = { version = "0.4", features = ["html_reports"] }
