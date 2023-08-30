@@ -13,7 +13,7 @@ use crate::validated_json::ValidatedJson;
 use axum::middleware;
 use axum::{
     body::{Body, Bytes},
-    extract::Path,
+    extract::{Path, State},
     headers::authorization::{Authorization, Basic},
     http::header,
     http::Request,
@@ -23,6 +23,7 @@ use axum::{
     Router, TypedHeader,
 };
 
+use std::sync::Arc;
 use tower::Layer;
 use tower::ServiceBuilder;
 use tower_http::normalize_path::NormalizePathLayer;
@@ -44,6 +45,24 @@ const HEADER_BYTE_ORDER_VALUE: &str = match NATIVE_BYTE_ORDER {
     ByteOrder::Big => "big",
     ByteOrder::Little => "little",
 };
+
+/// Shared application state passed to each operation request handler.
+struct AppState {
+    /// Map of S3 client objects.
+    s3_client_map: s3_client::S3ClientMap,
+}
+
+impl AppState {
+    /// Create and return an [AppState].
+    fn new() -> Self {
+        Self {
+            s3_client_map: s3_client::S3ClientMap::new(),
+        }
+    }
+}
+
+/// AppState wrapped in an Atomic Reference Count (Arc) to allow multiple references.
+type SharedAppState = Arc<AppState>;
 
 impl IntoResponse for models::Response {
     /// Convert a [crate::models::Response] into a [axum::response::Response].
@@ -74,6 +93,7 @@ impl IntoResponse for models::Response {
 ///   headers
 fn router() -> Router {
     fn v1() -> Router {
+        let state = SharedAppState::new(AppState::new());
         Router::new()
             .route("/count", post(operation_handler::<operations::Count>))
             .route("/max", post(operation_handler::<operations::Max>))
@@ -95,6 +115,7 @@ fn router() -> Router {
                         },
                     )),
             )
+            .with_state(state)
     }
 
     Router::new()
@@ -140,14 +161,13 @@ async fn schema() -> &'static str {
 ///
 /// * `auth`: Basic authentication credentials
 /// * `request_data`: RequestData object for the request
-#[tracing::instrument(level = "DEBUG", skip(auth))]
+#[tracing::instrument(level = "DEBUG", skip(client, request_data))]
 async fn download_object(
-    auth: &Authorization<Basic>,
+    client: &s3_client::S3Client,
     request_data: &models::RequestData,
 ) -> Result<Bytes, ActiveStorageError> {
     let range = s3_client::get_range(request_data.offset, request_data.size);
-    s3_client::S3Client::new(&request_data.source, auth.username(), auth.password())
-        .await
+    client
         .download_object(&request_data.bucket, &request_data.object, range)
         .await
 }
@@ -167,10 +187,16 @@ async fn download_object(
 /// * `auth`: Basic authorization header
 /// * `request_data`: RequestData object for the request
 async fn operation_handler<T: operation::Operation>(
+    State(state): State<SharedAppState>,
     TypedHeader(auth): TypedHeader<Authorization<Basic>>,
     ValidatedJson(request_data): ValidatedJson<models::RequestData>,
 ) -> Result<models::Response, ActiveStorageError> {
-    let data = download_object(&auth, &request_data)
+    let s3_client = state
+        .s3_client_map
+        .get(&request_data.source, auth.username(), auth.password())
+        .instrument(tracing::Span::current())
+        .await;
+    let data = download_object(&s3_client, &request_data)
         .instrument(tracing::Span::current())
         .await?;
     let ptr = data.as_ptr();
