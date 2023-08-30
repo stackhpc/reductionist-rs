@@ -106,7 +106,7 @@ impl ErrorBody {
         let mut caused_by = None;
         let mut current = error.source();
         while let Some(source) = current {
-            let mut causes = caused_by.unwrap_or(vec![]);
+            let mut causes: Vec<String> = caused_by.unwrap_or_default();
             causes.push(source.to_string());
             caused_by = Some(causes);
             current = source.source();
