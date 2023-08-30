@@ -31,6 +31,9 @@ pub struct CommandLineArgs {
     /// Maximum time in seconds to wait for operations to complete upon receiving `ctrl+c` signal.
     #[arg(long, default_value_t = 60, env = "REDUCTIONIST_SHUTDOWN_TIMEOUT")]
     pub graceful_shutdown_timeout: u64,
+    /// Whether to enable sending traces to Jaeger.
+    #[arg(long, default_value_t = false, env = "REDUCTIONIST_ENABLE_JAEGER")]
+    pub enable_jaeger: bool,
 }
 
 /// Returns parsed command line arguments.

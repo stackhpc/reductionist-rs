@@ -8,6 +8,7 @@ use aws_sdk_s3::Client;
 use aws_types::region::Region;
 use axum::body::Bytes;
 use tokio_stream::StreamExt;
+use tracing::Instrument;
 use url::Url;
 
 /// S3 client object.
@@ -57,6 +58,7 @@ impl S3Client {
             .key(key)
             .set_range(range)
             .send()
+            .instrument(tracing::Span::current())
             .await?;
         let content_length = response.content_length();
         // The data returned by the S3 client does not have any alignment guarantees. In order to
@@ -68,7 +70,12 @@ impl S3Client {
         let mut buf = maligned::align_first::<u8, maligned::A8>(content_length as usize);
 
         // Iterate over the streaming response, copying data into the aligned Vec<u8>.
-        while let Some(bytes) = response.body.try_next().await? {
+        while let Some(bytes) = response
+            .body
+            .try_next()
+            .instrument(tracing::Span::current())
+            .await?
+        {
             buf.extend_from_slice(&bytes)
         }
         // Return as Bytes.

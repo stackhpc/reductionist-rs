@@ -10,8 +10,9 @@ use reductionist::tracing;
 #[tokio::main]
 async fn main() {
     let args = cli::parse();
-    tracing::init_tracing();
+    tracing::init_tracing(&args);
     metrics::register_metrics();
     let service = app::service();
     server::serve(&args, service).await;
+    tracing::shutdown_tracing();
 }
