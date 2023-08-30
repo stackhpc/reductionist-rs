@@ -1,3 +1,5 @@
+//! Various common types
+
 pub mod byte_order;
 pub mod dvalue;
 pub mod missing;

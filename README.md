@@ -9,6 +9,8 @@ The work is funded by the
 and is done in collaboration with the
 [University of Reading](http://www.reading.ac.uk/).
 
+Documentation is available on [docs.rs](https://docs.rs/reductionist/latest/reductionist/).
+
 This is a performant implementation of the active storage server.
 The original Python functional prototype is available [here](https://github.com/stackhpc/s3-active-storage-prototype).
 
@@ -272,14 +274,13 @@ venv/bin/python ./scripts/client.py sum --server http://localhost:8080 --source 
 ## Documentation
 
 The source code is documented using [rustdoc](https://doc.rust-lang.org/rustdoc/what-is-rustdoc.html).
-Currently the `reductionist` crate is not uploaded to https://crates.io, so we do not benefit from hosted documentation on https://docs.rs.
-It is however possible to build the documentation locally:
+Documentation is available on [docs.rs](https://docs.rs/reductionist/latest/reductionist/).
+It is also possible to build the documentation locally:
 
 ```sh
-cargo doc
+cargo doc --no-deps
 ```
 
-Cargo builds documentation for the `reductionist` crate and all of its dependencies.
 The resulting documentation is available under `target/doc`, and may be viewed in a web browser using file:///path/to/reductionist/target/doc/reductionist/index.html.
 
 ## Contributing

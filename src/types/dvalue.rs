@@ -1,3 +1,5 @@
+//! Data value representing a value of any [DType](crate::models::DType)
+
 use crate::error::ActiveStorageError;
 
 /// A value of any DType.

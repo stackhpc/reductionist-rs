@@ -1,3 +1,5 @@
+//! Prometheus metrics
+
 use std::time::Instant;
 
 use axum::{http::Request, middleware::Next, response::IntoResponse};
