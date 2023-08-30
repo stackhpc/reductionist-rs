@@ -4,8 +4,9 @@ use crate::error::ActiveStorageError;
 use crate::models;
 
 use axum::body::Bytes;
-use flate2::read::{GzDecoder, ZlibDecoder};
+use flate2::read::GzDecoder;
 use std::io::Read;
+use zune_inflate::{DeflateDecoder, DeflateOptions};
 
 /// Decompresses some Bytes and returns the uncompressed data.
 ///
@@ -17,10 +18,14 @@ pub fn decompress(
     compression: models::Compression,
     data: &Bytes,
 ) -> Result<Bytes, ActiveStorageError> {
-    let mut decoder: Box<dyn Read> = match compression {
-        models::Compression::Gzip => Box::new(GzDecoder::<&[u8]>::new(data)),
-        models::Compression::Zlib => Box::new(ZlibDecoder::<&[u8]>::new(data)),
-    };
+    match compression {
+        models::Compression::Gzip => decompress_flate2_gzip(data),
+        models::Compression::Zlib => decompress_zune_zlib(data),
+    }
+}
+
+fn decompress_flate2_gzip(data: &Bytes) -> Result<Bytes, ActiveStorageError> {
+    let mut decoder = GzDecoder::<&[u8]>::new(data);
     // The data returned by the S3 client does not have any alignment guarantees. In order to
     // reinterpret the data as an array of numbers with a higher alignment than 1, we need to
     // return the data in Bytes object in which the underlying data has a higher alignment.
@@ -36,11 +41,19 @@ pub fn decompress(
     Ok(buf.into())
 }
 
+fn decompress_zune_zlib(data: &Bytes) -> Result<Bytes, ActiveStorageError> {
+    let options = DeflateOptions::default().set_size_hint(data.len());
+    let mut decoder = DeflateDecoder::new_with_options(data, options);
+    let data = decoder.decode_zlib()?;
+    Ok(data.into())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use flate2::read::{GzEncoder, ZlibEncoder};
     use flate2::Compression;
+    use zune_inflate::errors::DecodeErrorStatus;
 
     fn compress_gzip() -> Vec<u8> {
         // Adapated from flate2 documentation.
@@ -81,7 +94,7 @@ mod tests {
         let invalid = b"invalid format";
         let err = decompress(models::Compression::Gzip, &invalid.as_ref().into()).unwrap_err();
         match err {
-            ActiveStorageError::Decompression(io_err) => {
+            ActiveStorageError::DecompressionFlate2(io_err) => {
                 assert_eq!(io_err.kind(), std::io::ErrorKind::InvalidInput);
                 assert_eq!(io_err.to_string(), "invalid gzip header");
             }
@@ -94,10 +107,12 @@ mod tests {
         let invalid = b"invalid format";
         let err = decompress(models::Compression::Zlib, &invalid.as_ref().into()).unwrap_err();
         match err {
-            ActiveStorageError::Decompression(io_err) => {
-                assert_eq!(io_err.kind(), std::io::ErrorKind::InvalidInput);
-                assert_eq!(io_err.to_string(), "corrupt deflate stream");
-            }
+            ActiveStorageError::DecompressionZune(zune_err) => match zune_err.error {
+                DecodeErrorStatus::GenericStr(message) => {
+                    assert_eq!(message, "Unknown zlib compression method 9");
+                }
+                err => panic!("unexpected zune error {:?}", err),
+            },
             err => panic!("unexpected error {}", err),
         }
     }
