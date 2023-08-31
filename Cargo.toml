@@ -62,7 +62,7 @@ zerocopy = { version = "0.6.1", features = ["alloc", "simd"] }
 zune-inflate = "0.2.54"
 
 [dev-dependencies]
-criterion = { version = "0.4", features = ["html_reports"] }
+criterion = { version = "0.4", features = ["async_tokio", "html_reports"] }
 regex = "1"
 serde_test = "1.0"
 
@@ -72,6 +72,10 @@ harness = false
 
 [[bench]]
 name = "operations"
+harness = false
+
+[[bench]]
+name = "s3_client"
 harness = false
 
 [[bench]]
