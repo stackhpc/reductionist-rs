@@ -12,7 +12,8 @@ async fn main() {
     let args = cli::parse();
     tracing::init_tracing(&args);
     metrics::register_metrics();
-    let service = app::service();
+    app::init(&args);
+    let service = app::service(&args);
     server::serve(&args, service).await;
     tracing::shutdown_tracing();
 }
