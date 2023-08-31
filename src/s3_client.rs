@@ -2,13 +2,14 @@
 //! It attempts to hide the complexities of working with the AWS SDK for S3.
 
 use crate::error::ActiveStorageError;
+use crate::resource_manager::ResourceManager;
 
 use aws_credential_types::Credentials;
 use aws_sdk_s3::Client;
 use aws_types::region::Region;
 use axum::body::Bytes;
 use hashbrown::HashMap;
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, SemaphorePermit};
 use tokio_stream::StreamExt;
 use tracing::Instrument;
 use url::Url;
@@ -103,11 +104,15 @@ impl S3Client {
     /// * `bucket`: Name of the bucket
     /// * `key`: Name of the object in the bucket
     /// * `range`: Optional byte range
-    pub async fn download_object(
+    /// * `resource_manager`: ResourceManager object
+    /// * `mem_permits`: Optional SemaphorePermit for any memory resources reserved
+    pub async fn download_object<'a>(
         self: &S3Client,
         bucket: &str,
         key: &str,
         range: Option<String>,
+        resource_manager: &'a ResourceManager,
+        mem_permits: &mut Option<SemaphorePermit<'a>>,
     ) -> Result<Bytes, ActiveStorageError> {
         let mut response = self
             .client
@@ -119,6 +124,12 @@ impl S3Client {
             .instrument(tracing::Span::current())
             .await?;
         let content_length = response.content_length();
+
+        // FIXME: how to account for compressed data?
+        if mem_permits.is_none() {
+            let memory = content_length.try_into()?;
+            *mem_permits = resource_manager.memory(memory).await?;
+        };
         // The data returned by the S3 client does not have any alignment guarantees. In order to
         // reinterpret the data as an array of numbers with a higher alignment than 1, we need to
         // return the data in Bytes object in which the underlying data has a higher alignment.

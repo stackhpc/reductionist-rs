@@ -37,6 +37,16 @@ pub struct CommandLineArgs {
     /// Whether to use Rayon for execution of CPU-bound tasks.
     #[arg(long, default_value_t = false, env = "REDUCTIONIST_USE_RAYON")]
     pub use_rayon: bool,
+    /// Memory limit in bytes. Default is no limit.
+    #[arg(long, env = "REDUCTIONIST_MEMORY_LIMIT")]
+    pub memory_limit: Option<usize>,
+    /// S3 connection limit. Default is no limit.
+    #[arg(long, env = "REDUCTIONIST_S3_CONNECTION_LIMIT")]
+    pub s3_connection_limit: Option<usize>,
+    /// Thread limit for CPU-bound tasks. Default is one less than the number of CPUs. Used only
+    /// when use_rayon is false.
+    #[arg(long, env = "REDUCTIONIST_THREAD_LIMIT")]
+    pub thread_limit: Option<usize>,
 }
 
 /// Returns parsed command line arguments.
