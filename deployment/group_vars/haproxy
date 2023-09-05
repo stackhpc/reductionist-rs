@@ -1,0 +1,23 @@
+---
+# Global max connections.
+haproxy_max_connections: 40000
+# Number of threads.
+haproxy_threads: 1
+# Default max connections.
+haproxy_defaults_max_connections: 10000
+# HTTP request timeout.
+haproxy_http_request_timeout: "10s"
+# HTTP keep alive timeout.
+haproxy_http_keep_alive_timeout: "10s"
+# Queue timeout.
+haproxy_queue_timeout: "1m"
+# Connect timeout.
+haproxy_connect_timeout: "10s"
+# Client timeout.
+haproxy_client_timeout: "1m"
+# Server timeout.
+haproxy_server_timeout: "1m"
+# Check timeout.
+haproxy_check_timeout: "10s"
+# Default load balance mode.
+haproxy_defaults_balance: "roundrobin"

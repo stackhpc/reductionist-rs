@@ -1,0 +1,24 @@
+[haproxy]
+localhost ansible_connection=local
+
+[minio]
+localhost ansible_connection=local
+
+[prometheus]
+localhost ansible_connection=local
+
+[reductionist]
+localhost ansible_connection=local
+
+[step:children]
+reductionist
+
+[step-ca]
+localhost ansible_connection=local
+
+[docker:children]
+haproxy
+minio
+prometheus
+reductionist
+step-ca

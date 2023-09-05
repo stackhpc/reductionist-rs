@@ -79,7 +79,7 @@ jobs:
 
       - name: Wait for active storage server to start
         run: |
-          until curl -if http://localhost:8080/.well-known/reductionist-schema; do
+          until curl -if --cacert root.crt https://localhost:8080/.well-known/reductionist-schema; do
             sleep 1;
           done
 

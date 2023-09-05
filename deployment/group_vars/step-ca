@@ -1,0 +1,3 @@
+---
+# Path on localhost to save root CA certificate.
+step_ca_root_cert_local_path: "{{ lookup('env', 'PWD') ~ '/root.crt' }}"

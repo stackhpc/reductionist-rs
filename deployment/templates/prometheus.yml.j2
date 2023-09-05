@@ -1,0 +1,19 @@
+---
+global:
+  scrape_interval: 30s
+scrape_configs:
+  - job_name: haproxy
+    static_configs:
+      - targets: 
+{% for host in groups['haproxy'] %}
+          - "{{ hostvars[host].ansible_facts.default_ipv4.address }}:8405"
+{% endfor %}
+  - job_name: reductionist
+    static_configs:
+      - targets: 
+{% for host in groups['reductionist'] %}
+          - "{{ hostvars[host].ansible_facts.default_ipv4.address }}:8081"
+{% endfor %}
+    scheme: https
+    tls_config:
+      ca_file: /etc/prometheus/cacert.pem

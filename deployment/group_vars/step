@@ -1,0 +1,3 @@
+---
+# Whether to regenerate Step CLI configuration.
+step_config_regenerate: false
