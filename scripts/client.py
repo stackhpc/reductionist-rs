@@ -25,6 +25,7 @@ def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("operation")
     parser.add_argument("--server", required=True, type=str)
+    parser.add_argument("--cacert", type=str)
     parser.add_argument("--source", required=True, type=str)
     parser.add_argument("--username", required=True, type=str)
     parser.add_argument("--password", required=True, type=str)
@@ -98,11 +99,12 @@ def build_request_data(args: argparse.Namespace) -> dict:
     return {k: v for k, v in request_data.items() if v is not None}
 
 
-def request(url: str, username: str, password: str, request_data: dict):
+def request(url: str, username: str, password: str, request_data: dict, cacert: str):
     response = requests.post(
         url,
         json=request_data,
-        auth=(username, password)
+        auth=(username, password),
+        verify=cacert or True,
     )
     return response
 
@@ -134,7 +136,7 @@ def main():
     if args.verbose:
         print("\nRequest data:", request_data)
     url = f'{args.server}/v1/{args.operation}/'
-    response = request(url, args.username, args.password, request_data)
+    response = request(url, args.username, args.password, request_data, args.cacert)
     if response.ok:
         display(response, verbose=args.verbose)
     else:
