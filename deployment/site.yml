@@ -1,0 +1,397 @@
+---
+# See deployment/README.md for usage
+
+- name: Install Docker
+  hosts: docker
+  tags:
+    - docker
+  become: true
+  tasks:
+    - name: Ensure docker is installed on Ubuntu
+      when: ansible_facts["os_family"] | lower == "debian"
+      ansible.builtin.package:
+        name: docker.io
+        state: present
+        update_cache: true
+
+    - name: Ensure docker repo signing key exists on RedHat
+      when: ansible_facts["os_family"] | lower == "redhat"
+      ansible.builtin.rpm_key:
+        key: "https://download.docker.com/linux/centos/gpg"
+        state: present
+
+    - name: Ensure docker repo exists on RedHat
+      when: ansible_facts["os_family"] | lower == "redhat"
+      ansible.builtin.yum_repository:
+        name: docker
+        description: docker repository
+        baseurl: "https://download.docker.com/linux/centos/$releasever/$basearch/stable"
+        enabled: true
+        gpgcheck: true
+        gpgkey: "https://download.docker.com/linux/centos/gpg"
+
+    - name: Ensure docker is installed on RedHat
+      when: ansible_facts["os_family"] | lower == "redhat"
+      ansible.builtin.package:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: present
+        update_cache: true
+
+    - name: Ensure other system packages are present
+      ansible.builtin.package:
+        name:
+          - git
+          - python3-pip
+        state: present
+
+    - name: Check docker is running
+      ansible.builtin.service:
+        name: "docker"
+        enabled: true
+        state: started
+
+    - name: Ensure docker python package is present
+      ansible.builtin.pip:
+        name:
+          - docker
+
+- name: Deploy step CA
+  hosts: step-ca
+  tags:
+    - step-ca
+  become: true
+  tasks:
+    - name: Assert that there is only one CA server
+      ansible.builtin.assert:
+        that:
+          groups['step-ca'] | length == 1
+
+    - name: Ensure step-ca container is running
+      community.docker.docker_container:
+        name: step-ca
+        env:
+          DOCKER_STEPCA_INIT_NAME: "Smallstep"
+          DOCKER_STEPCA_INIT_DNS_NAMES: "localhost,{{ ansible_facts.nodename }},{{ ansible_facts.default_ipv4.address }}"
+          DOCKER_STEPCA_INIT_REMOTE_MANAGEMENT: "true"
+          DOCKER_STEPCA_INIT_ADDRESS: ":9999"
+        image: smallstep/step-ca
+        networks:
+          - name: host
+        volumes:
+          - "step:/home/step"
+
+    - name: Check health
+      ansible.builtin.uri:
+        url: https://localhost:9999/health
+        validate_certs: false
+      register: health_result
+      until:
+        - health_result.status == 200
+        - health_result.json.status == "ok"
+
+    - name: Stat provisioner password file
+      ansible.builtin.stat:
+        path: /root/.step/provisioner-password
+      register: provisioner_password_stat
+
+    - name: Get provisioner password
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          docker logs step-ca 2>&1 | awk '/Your CA administrative password is/ { print $7 }'
+        executable: /bin/bash
+      register: provisioner_password
+      changed_when: false
+      when: not provisioner_password_stat.stat.exists
+
+    - name: Create .step directory
+      ansible.builtin.file:
+        path: /root/.step
+        state: directory
+        mode: "0700"
+      when: not provisioner_password_stat.stat.exists
+
+    - name: Assert provisioner password found
+      ansible.builtin.assert:
+        that: provisioner_password.stdout | length > 0
+      when: not provisioner_password_stat.stat.exists
+
+    - name: Write provisioner password
+      ansible.builtin.copy:
+        content: "{{ provisioner_password.stdout }}"
+        dest: /root/.step/provisioner-password
+        mode: "0600"
+      when: not provisioner_password_stat.stat.exists
+
+    - name: Get root CA certificate
+      ansible.builtin.command: docker exec step-ca step ca root
+      changed_when: false
+      register: step_ca_root
+
+    - name: Save root CA certificate to localhost
+      ansible.builtin.copy:
+        content: "{{ step_ca_root.stdout }}"
+        dest: "{{ step_ca_root_cert_local_path }}"
+        mode: "0600"
+      delegate_to: localhost
+      become: false
+
+- name: Install step CLI
+  hosts: step
+  tags:
+    - step
+  become: true
+  tasks:
+    - name: Ensure step Deb is installed
+      when: ansible_facts["os_family"] | lower == "debian"
+      ansible.builtin.package:
+        deb: "https://dl.smallstep.com/gh-release/cli/docs-cli-install/v0.24.4/step-cli_0.24.4_amd64.deb"
+        state: present
+        update_cache: true
+
+    - name: Ensure step RPM is installed
+      when: ansible_facts["os_family"] | lower == "redhat"
+      ansible.builtin.package:
+        name: "https://dl.smallstep.com/gh-release/cli/docs-ca-install/v0.24.4/step-cli_0.24.4_amd64.rpm"
+        state: present
+
+    - name: Test step
+      ansible.builtin.command: step certificate inspect https://smallstep.com
+      changed_when: false
+
+    - name: Regenerate step config if requested
+      ansible.builtin.file:
+        path: "/root/.step/{{ item }}"
+        state: absent
+      loop:
+        - certs
+        - config
+      when: step_config_regenerate | bool
+
+    - name: Check whether step has been bootstrapped
+      ansible.builtin.stat:
+        path: /root/.step/config/defaults.json
+      register: step_stat
+
+    - name: Get CA fingerprint # noqa: run-once[task]
+      ansible.builtin.command: docker exec step-ca step certificate fingerprint certs/root_ca.crt
+      register: ca_fingerprint
+      changed_when: false
+      delegate_to: "{{ groups['step-ca'][0] }}"
+      run_once: true
+      when: not step_stat.stat.exists
+
+    - name: Bootstrap CA
+      ansible.builtin.command: >
+        step ca bootstrap
+        --ca-url https://{{ hostvars[groups['step-ca'][0]].ansible_facts.nodename }}:9999
+        --fingerprint {{ ca_fingerprint.stdout }} --install
+      changed_when: true
+      when: not step_stat.stat.exists
+
+    - name: Install root certificate to system
+      ansible.builtin.shell: step certificate install $(step path)/certs/root_ca.crt
+      changed_when: false
+      when: not step_stat.stat.exists
+
+- name: Deploy Minio
+  hosts: minio
+  tags:
+    - minio
+  become: true
+  tasks:
+    - name: Assert that there is only one Minio server
+      ansible.builtin.assert:
+        that:
+          groups['minio'] | length == 1
+
+    - name: Ensure minio container is running
+      community.docker.docker_container:
+        name: minio-server
+        command: server data --console-address ":9001"
+        image: minio/minio
+        keep_volumes: false
+        networks:
+          - name: host
+        volumes: /data
+
+    - name: Wait for minio object storage to start
+      ansible.builtin.uri:
+        url: http://localhost:9001
+      until: result is success
+      register: result
+
+- name: Gather facts for Prometheus
+  hosts:
+    - haproxy
+    - reductionist
+    - "!prometheus"
+  tags:
+    - prometheus
+  gather_facts: true
+
+- name: Deploy Prometheus
+  hosts: prometheus
+  tags:
+    - prometheus
+  become: true
+  tasks:
+    - name: Assert that there is only one Prometheus server
+      ansible.builtin.assert:
+        that:
+          groups['prometheus'] | length == 1
+
+    - name: Ensure /etc/prometheus directory exists
+      ansible.builtin.file:
+        path: /etc/prometheus
+        state: directory
+        mode: "0755"
+
+    - name: Ensure CA certificate is copied
+      ansible.builtin.copy:
+        src: "{{ prometheus_cacert }}"
+        dest: /etc/prometheus/cacert.pem
+        mode: "0644"
+      register: prometheus_cacert
+
+    - name: Ensure prometheus.yml is templated
+      ansible.builtin.template:
+        src: prometheus.yml.j2
+        dest: /etc/prometheus/prometheus.yml
+        mode: "0644"
+      register: prometheus_yml
+
+    - name: Ensure prometheus container is running
+      community.docker.docker_container:
+        name: prometheus
+        image: prom/prometheus
+        networks:
+          - name: host
+        restart: "{{ prometheus_yml is changed or prometheus_cacert is changed }}"
+        volumes:
+          - "/etc/prometheus:/etc/prometheus:ro"
+          - "prometheus:/prometheus"
+
+- name: Gather facts for Reductionist
+  hosts:
+    - haproxy
+    - "!reductionist"
+  tags:
+    - reductionist
+  gather_facts: true
+
+- name: Deploy Reductionist
+  hosts: reductionist
+  tags:
+    - reductionist
+  become: true
+  tasks:
+    - name: Check whether certificate exists
+      ansible.builtin.stat:
+        path: "{{ reductionist_remote_certs_path }}/cert.pem"
+      register: reductionist_cert_stat
+
+    - name: Ensure remote certificate path exists
+      ansible.builtin.file:
+        path: "{{ reductionist_remote_certs_path }}"
+        state: directory
+        mode: "0700"
+
+    - name: Generate a step token
+      ansible.builtin.command: >-
+        step ca token
+        --provisioner-password-file /root/.step/provisioner-password
+        {{ reductionist_host }}
+      delegate_to: "{{ groups['step-ca'][0] }}"
+      changed_when: false
+      register: reductionist_step_token
+
+    - name: Generate an initial certificate
+      ansible.builtin.command: >-
+        step ca certificate
+        --token {{ reductionist_step_token.stdout }}
+        --not-after {{ reductionist_cert_not_after }}
+        --force
+        {{ reductionist_host }}
+        {{ reductionist_remote_certs_path }}/cert.pem
+        {{ reductionist_remote_certs_path }}/key.pem
+      changed_when: true
+      when: not reductionist_cert_stat.stat.exists
+
+    - name: Ensure certificate renewal systemd units exist
+      ansible.builtin.template:
+        src: "{{ item }}.j2"
+        dest: "/etc/systemd/system/{{ item }}"
+        mode: "0600"
+      loop:
+        - reductionist-cert-renewer.service
+        - reductionist-cert-renewer.timer
+
+    - name: Ensure certificate renewal systemd timer is enabled
+      ansible.builtin.service:
+        name: reductionist-cert-renewer.timer
+        enabled: true
+
+    - name: Clone reductionist repo
+      ansible.builtin.git:
+        repo: "{{ reductionist_src_url }}"
+        dest: "{{ ansible_env.HOME }}/reductionist-rs"
+        version: "{{ reductionist_src_version }}"
+      when: reductionist_build_image | bool
+
+    - name: Ensure reductionist image is built
+      community.docker.docker_image:
+        name: "{{ reductionist_image }}"
+        tag: "{{ reductionist_tag }}"
+        build:
+          network: host # Network to use for RUN cmds in dockerfile - needed to allow 'pip install...' in RedHat images
+          path: "{{ ansible_env.HOME }}/reductionist-rs"
+        source: build
+      when: reductionist_build_image | bool
+
+    - name: Ensure reductionist container is running
+      community.docker.docker_container:
+        name: "{{ reductionist_name }}"
+        env: "{{ reductionist_env }}"
+        image: "{{ reductionist_image }}:{{ reductionist_tag }}"
+        networks: "{{ reductionist_networks }}"
+        volumes: "{{ reductionist_volumes }}"
+        restart: true  # Load new certificates. TODO: Hot reload
+
+- name: Deploy HAProxy
+  hosts: haproxy
+  tags:
+    - haproxy
+  become: true
+  tasks:
+    - name: Ensure /etc/haproxy directory exists
+      ansible.builtin.file:
+        path: /etc/haproxy
+        state: directory
+        mode: "0755"
+
+    - name: Ensure haproxy.cfg is templated
+      ansible.builtin.template:
+        src: haproxy.cfg.j2
+        dest: /etc/haproxy/haproxy.cfg
+        mode: "0644"
+      register: haproxy_cfg
+
+    - name: Ensure haproxy container is running
+      community.docker.docker_container:
+        name: haproxy
+        image: haproxy:2.8
+        networks:
+          - name: host
+        restart: "{{ haproxy_cfg is changed }}"
+        volumes:
+          - "/etc/haproxy:/usr/local/etc/haproxy:ro"
+
+    - name: Wait for reductionist server to be accessible via HAProxy
+      ansible.builtin.uri:
+        url: "https://{{ ansible_facts.default_ipv4.address }}:8080/.well-known/reductionist-schema"
+      until: result is success
+      register: result

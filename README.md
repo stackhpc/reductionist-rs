@@ -129,6 +129,12 @@ In particular, the following are known limitations which we intend to address:
 
 There are various ways to run the Reductionist server.
 
+### Production deployment
+
+Reductionist provides an Ansible playbook to easily deploy it and supporting
+services to one or more hosts. See the [deployment
+README](deployment/README.md) for details.
+
 ### Running in a container
 
 The simplest method is to run it in a container using a pre-built image:

@@ -1,0 +1,28 @@
+[Unit]
+Description=Certificate renewer for reductionist
+After=network-online.target
+Documentation=https://smallstep.com/docs/step-ca/certificate-authority-server-production
+StartLimitIntervalSec=0
+; PartOf=cert-renewer.target
+
+[Service]
+Type=oneshot
+User=root
+
+Environment=CERT_LOCATION={{ reductionist_remote_certs_path }}/cert.pem \
+            KEY_LOCATION={{ reductionist_remote_certs_path }}/key.pem
+
+; ExecCondition checks if the certificate is ready for renewal,
+; based on the exit status of the command.
+; (In systemd <242, you can use ExecStartPre= here.)
+ExecCondition=/usr/bin/step certificate needs-renewal ${CERT_LOCATION}
+
+; ExecStart renews the certificate, if ExecStartPre was successful.
+ExecStart=/usr/bin/step ca renew --force ${CERT_LOCATION} ${KEY_LOCATION}
+
+; Try to reload or restart the systemd service that relies on this cert-renewer
+; If the relying service doesn't exist, forge ahead.
+ExecStartPost=/usr/bin/docker restart {{ reductionist_name }}
+
+[Install]
+WantedBy=multi-user.target

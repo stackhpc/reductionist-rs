@@ -30,6 +30,15 @@ jobs:
 
       - name: Lint
         run: make lint
+
+      - name: Install ansible-lint
+        run: pip install ansible-lint==6.17.*
+
+      - name: Install Ansible Galaxy requirements
+        run: ansible-galaxy collection install -r deployment/requirements.yml
+
+      - name: Lint Ansible playbook
+        run: ansible-lint deployment/site.yml
   test:
     runs-on: ubuntu-latest
     steps:
@@ -107,6 +116,58 @@ jobs:
       - name: Stop active storage container
         run: make stop
         if: always()
+  deployment-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup python
+        uses: actions/setup-python@v4
+
+      - name: Install deployment dependencies
+        run: pip install -r deployment/requirements.txt
+
+      - name: Install Ansible Galaxy requirements
+        run: ansible-galaxy collection install -r deployment/requirements.yml
+
+      - name: Run Ansible playbook
+        # GitHub runner already has Docker installed.
+        run: ansible-playbook -i deployment/inventory deployment/site.yml --skip-tags docker
+
+      - name: Install Python client dependencies
+        run: pip install -r scripts/requirements.txt
+
+      - name: Upload some sample data
+        run: python ./scripts/upload_sample_data.py
+
+      - name: Perform a smoke test
+        run: >
+          # Get the local IP of the default route
+          ip=$(ip r get 8.8.8.8 | awk '/via/ { print $7 }') &&
+          python ./scripts/client.py
+          sum
+          --server https://${ip}:8080
+          --cacert root.crt
+          --source http://localhost:9000
+          --username minioadmin --password minioadmin
+          --bucket sample-data --object data-uint32.dat
+          --dtype uint32
+
+      - name: Debug on failure
+        run: |
+          set -x
+          set +e
+          docker ps -a
+          for container in $(docker ps -aq); do
+            docker logs $container
+          done
+          sudo ss -nltp
+          sudo cat /etc/haproxy/haproxy.cfg
+          sudo cat /etc/prometheus/prometheus.yml
+          sudo ip a
+          sudo ip r
+        if: failure()
   dependency-review:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
