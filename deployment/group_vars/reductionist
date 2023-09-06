@@ -16,6 +16,8 @@ reductionist_networks:
   - name: host
 # Container environment.
 reductionist_env:
+  OTEL_EXPORTER_JAEGER_AGENT_HOST: "{{ hostvars[(groups['jaeger'] | default([]) + [inventory_hostname])[0]].ansible_facts.default_ipv4.address }}"
+  REDUCTIONIST_ENABLE_JAEGER: "{{ (groups['jaeger'] | default([]) | length > 0) | string | lower }}"
   REDUCTIONIST_HTTPS: "true"
   REDUCTIONIST_PORT: "8081"
 # Path to certificates directory on remote host.
