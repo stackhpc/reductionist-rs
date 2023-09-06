@@ -92,3 +92,9 @@ supported and may be specified via `--tags <tag1,tag2>`:
 * `jaeger`
 * `reductionist`
 * `haproxy`
+
+## Usage
+
+Once deployed, the Reductionist API is accessible on port 8080 by HAProxy. The
+Prometheus UI is accessible on port 9090 on the host running Prometheus. The
+Jaeger UI is accessible on port 16686 on the host running Jaeger.
