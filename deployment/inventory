@@ -1,6 +1,9 @@
 [haproxy]
 localhost ansible_connection=local
 
+[jaeger]
+localhost ansible_connection=local
+
 [minio]
 localhost ansible_connection=local
 
@@ -18,6 +21,7 @@ localhost ansible_connection=local
 
 [docker:children]
 haproxy
+jaeger
 minio
 prometheus
 reductionist

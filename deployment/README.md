@@ -16,6 +16,7 @@ The following services are supported:
 * Step CLI (requests and renews certificates)
 * Minio object store (optional, for testing)
 * Prometheus (monitors Reductionist and HAProxy)
+* Jaeger (distributed tracing UI)
 * Reductionist
 * HAProxy (load balancer for Reductionist)
 
@@ -25,12 +26,15 @@ An example Ansible inventory file is provided in [inventory](inventory) which
 defines all groups and maps localhost to them. For a production deployment it
 is more typical to deploy to one or more remote hosts.
 
-The following example inventory places HAProxy, Prometheus and Step CA on
-`reductionist`, while Reductionist is deployed on `reductionist1` and
+The following example inventory places HAProxy, Jaeger, Prometheus and Step CA
+on `reductionist`, while Reductionist is deployed on `reductionist1` and
 `reductionist2`.
 
 ```ini
 [haproxy]
+reductionist1
+
+[jaeger]
 reductionist1
 
 [prometheus]
@@ -47,6 +51,7 @@ reductionist1
 
 [docker:children]
 haproxy
+jaeger
 minio
 prometheus
 reductionist
@@ -84,5 +89,6 @@ supported and may be specified via `--tags <tag1,tag2>`:
 * `step`
 * `minio`
 * `prometheus`
+* `jaeger`
 * `reductionist`
 * `haproxy`
