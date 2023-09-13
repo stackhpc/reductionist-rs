@@ -27,7 +27,7 @@ defines all groups and maps localhost to them. For a production deployment it
 is more typical to deploy to one or more remote hosts.
 
 The following example inventory places HAProxy, Jaeger, Prometheus and Step CA
-on `reductionist`, while Reductionist is deployed on `reductionist1` and
+on `reductionist1`, while Reductionist is deployed on `reductionist1` and
 `reductionist2`.
 
 ```ini
