@@ -14,6 +14,7 @@ use ndarray::ShapeError;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use thiserror::Error;
+use tokio::sync::AcquireError;
 use tracing::{event, Level};
 use zune_inflate::errors::InflateDecodeErrors;
 
@@ -41,8 +42,13 @@ pub enum ActiveStorageError {
     #[error("failed to convert from bytes to {type_name}")]
     FromBytes { type_name: &'static str },
 
+    /// Incompatible missing data descriptor
     #[error("Incompatible value {0} for missing")]
     IncompatibleMissing(DValue),
+
+    /// Insufficient memory to process request
+    #[error("Insufficient memory to process request ({requested} > {total})")]
+    InsufficientMemory { requested: usize, total: usize },
 
     /// Error deserialising request data into RequestData
     #[error("request data is not valid")]
@@ -63,6 +69,10 @@ pub enum ActiveStorageError {
     /// Error while retrieving an object from S3
     #[error("error retrieving object from S3 storage")]
     S3GetObject(#[from] SdkError<GetObjectError>),
+
+    /// Error acquiring a semaphore
+    #[error("error acquiring resources")]
+    SemaphoreAcquireError(#[from] AcquireError),
 
     /// Error creating ndarray ArrayView from Shape
     #[error("failed to create array from shape")]
@@ -196,6 +206,10 @@ impl From<ActiveStorageError> for ErrorResponse {
             | ActiveStorageError::DecompressionZune(_)
             | ActiveStorageError::EmptyArray { operation: _ }
             | ActiveStorageError::IncompatibleMissing(_)
+            | ActiveStorageError::InsufficientMemory {
+                requested: _,
+                total: _,
+            }
             | ActiveStorageError::RequestDataJsonRejection(_)
             | ActiveStorageError::RequestDataValidationSingle(_)
             | ActiveStorageError::RequestDataValidation(_)
@@ -207,7 +221,8 @@ impl From<ActiveStorageError> for ErrorResponse {
             // Internal server error
             ActiveStorageError::FromBytes { type_name: _ }
             | ActiveStorageError::TryFromInt(_)
-            | ActiveStorageError::S3ByteStream(_) => Self::internal_server_error(&error),
+            | ActiveStorageError::S3ByteStream(_)
+            | ActiveStorageError::SemaphoreAcquireError(_) => Self::internal_server_error(&error),
 
             ActiveStorageError::S3GetObject(sdk_error) => {
                 // Tailor the response based on the specific SdkError variant.
@@ -378,6 +393,17 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn insufficient_memory() {
+        let error = ActiveStorageError::InsufficientMemory {
+            requested: 2,
+            total: 1,
+        };
+        let message = "Insufficient memory to process request (2 > 1)";
+        let caused_by = None;
+        test_active_storage_error(error, StatusCode::BAD_REQUEST, message, caused_by).await;
+    }
+
+    #[tokio::test]
     async fn request_data_validation_single() {
         let validation_error = validator::ValidationError::new("foo");
         let error = ActiveStorageError::RequestDataValidationSingle(validation_error);
@@ -500,6 +526,17 @@ mod tests {
         );
         let message = "error receiving object from S3 storage";
         let caused_by = Some(vec!["IO error", "unexpected end of file"]);
+        test_active_storage_error(error, StatusCode::INTERNAL_SERVER_ERROR, message, caused_by)
+            .await;
+    }
+
+    #[tokio::test]
+    async fn semaphore_acquire_error() {
+        let sem = tokio::sync::Semaphore::new(1);
+        sem.close();
+        let error = ActiveStorageError::SemaphoreAcquireError(sem.acquire().await.unwrap_err());
+        let message = "error acquiring resources";
+        let caused_by = Some(vec!["semaphore closed"]);
         test_active_storage_error(error, StatusCode::INTERNAL_SERVER_ERROR, message, caused_by)
             .await;
     }

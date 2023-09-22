@@ -296,6 +296,7 @@ pub mod metrics;
 pub mod models;
 pub mod operation;
 pub mod operations;
+pub mod resource_manager;
 pub mod s3_client;
 pub mod server;
 #[cfg(test)]

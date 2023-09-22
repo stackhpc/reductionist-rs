@@ -5,6 +5,7 @@ use aws_sdk_s3::Client;
 use aws_types::region::Region;
 use axum::body::Bytes;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use reductionist::resource_manager::ResourceManager;
 use reductionist::s3_client::{S3Client, S3ClientMap};
 use url::Url;
 // Bring trait into scope to use as_bytes method.
@@ -42,6 +43,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     let bucket = "s3-client-bench";
     let runtime = tokio::runtime::Runtime::new().unwrap();
     let map = S3ClientMap::new();
+    let resource_manager = ResourceManager::new(None, None, None);
     for size_k in [64, 256, 1024] {
         let size: isize = size_k * 1024;
         let data: Vec<u32> = (0_u32..(size as u32)).collect::<Vec<u32>>();
@@ -53,7 +55,7 @@ fn criterion_benchmark(c: &mut Criterion) {
             b.to_async(&runtime).iter(|| async {
                 let client = S3Client::new(&url, username, password).await;
                 client
-                    .download_object(black_box(bucket), &key, None)
+                    .download_object(black_box(bucket), &key, None, &resource_manager, &mut None)
                     .await
                     .unwrap();
             })
@@ -63,7 +65,7 @@ fn criterion_benchmark(c: &mut Criterion) {
             b.to_async(&runtime).iter(|| async {
                 let client = map.get(&url, username, password).await;
                 client
-                    .download_object(black_box(bucket), &key, None)
+                    .download_object(black_box(bucket), &key, None, &resource_manager, &mut None)
                     .await
                     .unwrap();
             })
