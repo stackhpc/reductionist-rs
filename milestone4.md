@@ -154,9 +154,14 @@ A few properties make it relatively easy to build a conceptual mental model of h
 
 The more challenging aspects of the system are the lower level details of asynchronous programming, memory management, the Rust type system and working with multi-dimensional arrays.
 
-A diagram of the request processing pipeline is shown in figure 1.
+A diagram of the request processing pipeline is shown in Figure 1.
 
-TODO: request processing pipeline diagram
+![Request processing flow diagram](reductionist-request-pipeline.svg "Figure 1: Request processing pipeline flow diagram")
+
+The "Perform numerical operation" step depends on the type of numerical operation being performed.
+A diagram of this step for the sum operation is shown in Figure 2.
+
+![Sum operation flow diagram](reductionist-operation.svg "Figure 2: Sum operation flow diagram")
 
 ### Axum web server
 
