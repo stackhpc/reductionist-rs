@@ -1,6 +1,6 @@
 [package]
 name = "reductionist"
-version = "0.8.1"
+version = "0.8.2"
 edition = "2021"
 # Due to AWS SDK.
 rust-version = "1.66.1"
