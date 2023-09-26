@@ -1,0 +1,26 @@
+---
+site_name: Reductionist
+site_url: https://stackhpc.github.io/reductionist-rs
+repo_url: https://github.com/stackhpc/reductionist-rs
+theme:
+  name: material
+  palette:
+    scheme: default
+    primary: red
+markdown_extensions:
+  # From mkdocs-material: allow !!! note.
+  - admonition
+  - attr_list
+  - md_in_html
+  - pymdownx.details
+  - pymdownx.superfences
+  - tables
+  - toc:
+      permalink: True
+nav:
+  - Home: index.md
+  - API: api.md
+  - Deployment: deployment.md
+  - Architecture: architecture.md
+  - Contributing: contributing.md
+  - PyActiveStorage Integration: pyactivestorage.md
