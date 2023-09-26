@@ -9,7 +9,7 @@
 //! [University of Reading](http://www.reading.ac.uk/).
 //!
 //! This site provides documentation for the Reductionist source code.
-//! Documentation for the Reductionist application is hosted on [GitHub]().
+//! Documentation for the Reductionist application is hosted on [GitHub](https://stackhpc.github.io/reductionist-rs).
 //!
 //! This is a performant implementation of the Active Storage Server.
 //! The original Python functional prototype is available
