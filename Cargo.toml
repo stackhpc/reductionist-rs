@@ -3,7 +3,7 @@ name = "reductionist"
 version = "0.8.2"
 edition = "2021"
 # Due to AWS SDK.
-rust-version = "1.66.1"
+rust-version = "1.70.0"
 license = "Apache-2.0"
 description = "S3 Active Storage server"
 homepage = "https://crates.io/crates/reductionist"
@@ -26,11 +26,12 @@ maintenance = { status = "actively-developed" }
 
 [dependencies]
 async-trait = "0.1"
-aws-credential-types = { version = "0.55", features = ["hardcoded-credentials"] }
-aws-sdk-s3 = "0.27"
-aws-smithy-http = "0.55"
-aws-smithy-types = "0.55"
-aws-types = "0.55"
+aws-credential-types = { version = "0.57.1", features = ["hardcoded-credentials"] }
+aws-sdk-s3 = "0.35"
+aws-smithy-http = "0.57.1"
+aws-smithy-runtime-api = "0.57.1"
+aws-smithy-types = "0.57.1"
+aws-types = "0.57.1"
 axum = { version = "0.6", features = ["headers"] }
 axum-server = { version = "0.4.7", features = ["tls-rustls"] }
 clap = { version = "~4.2", features = ["derive", "env"] }
@@ -46,8 +47,8 @@ ndarray = "0.15"
 ndarray-stats = "0.5"
 num_cpus = "1"
 num-traits = "0.2.16"
-opentelemetry = "0"
-opentelemetry-jaeger = { version = "0", features = ["rt-tokio"] }
+opentelemetry = "0.20"
+opentelemetry-jaeger = { version = "0.19", features = ["rt-tokio"] }
 prometheus = { version = "0.13", features = ["process"] }
 rayon = "1.7"
 serde = { version = "1.0", features = ["derive"] }
@@ -61,7 +62,7 @@ tower = "0.4"
 tower-http = { version = "0.4", features = ["normalize-path", "trace", "validate-request"] }
 tokio-stream = "0.1"
 tracing = "0.1"
-tracing-opentelemetry = "0"
+tracing-opentelemetry = "0.21"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 url = { version = "2", features = ["serde"] }
 validator = { version = "0.16", features = ["derive"] }

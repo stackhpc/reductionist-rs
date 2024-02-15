@@ -10,7 +10,6 @@ use aws_types::region::Region;
 use axum::body::Bytes;
 use hashbrown::HashMap;
 use tokio::sync::{RwLock, SemaphorePermit};
-use tokio_stream::StreamExt;
 use tracing::Instrument;
 use url::Url;
 

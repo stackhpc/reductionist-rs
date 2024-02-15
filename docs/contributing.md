@@ -71,7 +71,7 @@ Building locally may also be preferable during development to take advantage of 
 #### Prerequisites
 
 This project is written in Rust, and as such requires a Rust toolchain to be installed in order to build it.
-The Minimum Supported Rust Version (MSRV) is 1.66.1, due to a dependency on the [AWS SDK](https://github.com/awslabs/aws-sdk-rust).
+The Minimum Supported Rust Version (MSRV) is 1.70.0, due to a dependency on the [AWS SDK](https://github.com/awslabs/aws-sdk-rust).
 It may be necessary to use [rustup](https://rustup.rs/) rather than the OS provided Rust toolchain to meet this requirement.
 See the [Rust book](https://doc.rust-lang.org/book/ch01-01-installation.html) for toolchain installation.
 
