@@ -150,7 +150,7 @@ Proxy functionality can be tested using the [S3 active storage compliance suite]
 
 ### Making requests to active storage endpoints
 
-Request authentication is implemented using [Basic Auth](https://en.wikipedia.org/wiki/Basic_access_authentication) with the username and password consisting of your S3 Access Key ID and Secret Access Key, respectively. These credentials are then used internally to authenticate with the upstream S3 source using [standard AWS authentication methods](https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-auth-using-authorization-header.html)
+Request authentication is implemented using [Basic Auth](https://en.wikipedia.org/wiki/Basic_access_authentication) with the username and password consisting of your S3 Access Key ID and Secret Access Key, respectively. If provided, these credentials are then used internally to authenticate with the upstream S3 source using [standard AWS authentication methods](https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-auth-using-authorization-header.html). If no basic auth header is provided, an unauthenticated request will be made to S3.
 
 A basic Python client is provided in `scripts/client.py`.
 First install dependencies in a Python virtual environment:

@@ -6,7 +6,7 @@ use aws_types::region::Region;
 use axum::body::Bytes;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use reductionist::resource_manager::ResourceManager;
-use reductionist::s3_client::{S3Client, S3ClientMap};
+use reductionist::s3_client::{S3Client, S3ClientMap, S3Credentials};
 use url::Url;
 // Bring trait into scope to use as_bytes method.
 use zerocopy::AsBytes;
@@ -40,6 +40,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     let url = Url::parse("http://localhost:9000").unwrap();
     let username = "minioadmin";
     let password = "minioadmin";
+    let credentials = S3Credentials::access_key(username, password);
     let bucket = "s3-client-bench";
     let runtime = tokio::runtime::Runtime::new().unwrap();
     let map = S3ClientMap::new();
@@ -53,7 +54,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         let name = format!("s3_client({})", size);
         c.bench_function(&name, |b| {
             b.to_async(&runtime).iter(|| async {
-                let client = S3Client::new(&url, username, password).await;
+                let client = S3Client::new(&url, credentials.clone()).await;
                 client
                     .download_object(black_box(bucket), &key, None, &resource_manager, &mut None)
                     .await
@@ -63,7 +64,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         let name = format!("s3_client_map({})", size);
         c.bench_function(&name, |b| {
             b.to_async(&runtime).iter(|| async {
-                let client = map.get(&url, username, password).await;
+                let client = map.get(&url, credentials.clone()).await;
                 client
                     .download_object(black_box(bucket), &key, None, &resource_manager, &mut None)
                     .await
