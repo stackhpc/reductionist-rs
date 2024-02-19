@@ -10,21 +10,39 @@ use aws_types::region::Region;
 use axum::body::Bytes;
 use hashbrown::HashMap;
 use tokio::sync::{RwLock, SemaphorePermit};
-use tokio_stream::StreamExt;
 use tracing::Instrument;
 use url::Url;
+
+#[derive(Clone, Eq, Hash, PartialEq)]
+pub enum S3Credentials {
+    AccessKey {
+        access_key: String,
+        secret_key: String,
+    },
+    None,
+}
+
+impl S3Credentials {
+    /// Create an access key credential.
+    pub fn access_key(access_key: &str, secret_key: &str) -> Self {
+        S3Credentials::AccessKey {
+            access_key: access_key.to_string(),
+            secret_key: secret_key.to_string(),
+        }
+    }
+}
 
 /// A map containing initialised S3Client objects.
 ///
 /// The [aws_sdk_s3::Client] object is relatively expensive to create, so we reuse them where
 /// possible. This type provides a map for storing the clients objects.
 ///
-/// The map's key is a 3-tuple of the S3 URL, username and password.
+/// The map's key is a 2-tuple of the S3 URL and credentials.
 /// The value is the corresponding client object.
 pub struct S3ClientMap {
     /// A [hashbrown::HashMap] for storing the S3 clients. A read-write lock synchronises access to
     /// the map, optimised for reads.
-    map: RwLock<HashMap<(Url, String, String), S3Client>>,
+    map: RwLock<HashMap<(Url, S3Credentials), S3Client>>,
 }
 
 // FIXME: Currently clients are never removed from the map. If a large number of endpoints or
@@ -44,10 +62,9 @@ impl S3ClientMap {
     /// # Arguments
     ///
     /// * `url`: Object storage API URL
-    /// * `username`: Object storage account username
-    /// * `password`: Object storage account password
-    pub async fn get(&self, url: &Url, username: &str, password: &str) -> S3Client {
-        let key = (url.clone(), username.to_string(), password.to_string());
+    /// * `credentials`: Object storage account credentials
+    pub async fn get(&self, url: &Url, credentials: S3Credentials) -> S3Client {
+        let key = (url.clone(), credentials.clone());
         // Common case: return an existing client from the map.
         {
             let map = self.map.read().await;
@@ -62,7 +79,7 @@ impl S3ClientMap {
             client.clone()
         } else {
             tracing::info!("Creating new S3 client for {}", url);
-            let client = S3Client::new(url, username, password).await;
+            let client = S3Client::new(url, credentials).await;
             let (_, client) = map.insert_unique_unchecked(key, client);
             client.clone()
         }
@@ -82,13 +99,21 @@ impl S3Client {
     /// # Arguments
     ///
     /// * `url`: Object storage API URL
-    /// * `username`: Object storage account username
-    /// * `password`: Object storage account password
-    pub async fn new(url: &Url, username: &str, password: &str) -> Self {
-        let credentials = Credentials::from_keys(username, password, None);
+    /// * `credentials`: Object storage account credentials
+    pub async fn new(url: &Url, credentials: S3Credentials) -> Self {
         let region = Region::new("us-east-1");
-        let s3_config = aws_sdk_s3::Config::builder()
-            .credentials_provider(credentials)
+        let builder = aws_sdk_s3::Config::builder();
+        let builder = match credentials {
+            S3Credentials::AccessKey {
+                access_key,
+                secret_key,
+            } => {
+                let credentials = Credentials::from_keys(access_key, secret_key, None);
+                builder.credentials_provider(credentials)
+            }
+            S3Credentials::None => builder,
+        };
+        let s3_config = builder
             .region(Some(region))
             .endpoint_url(url.to_string())
             .force_path_style(true)
@@ -179,21 +204,38 @@ mod tests {
     use super::*;
     use url::Url;
 
+    fn make_access_key() -> S3Credentials {
+        S3Credentials::access_key("user", "password")
+    }
+
+    fn make_alt_access_key() -> S3Credentials {
+        S3Credentials::access_key("user2", "password")
+    }
+
     #[tokio::test]
     async fn s3_client_map() {
         let url = Url::parse("http://example.com").unwrap();
         let map = S3ClientMap::new();
-        map.get(&url, "user", "password").await;
-        map.get(&url, "user", "password").await;
+        map.get(&url, make_access_key()).await;
+        map.get(&url, make_access_key()).await;
         assert_eq!(map.map.read().await.len(), 1);
-        map.get(&url, "user2", "password2").await;
+        map.get(&url, make_alt_access_key()).await;
         assert_eq!(map.map.read().await.len(), 2);
+        map.get(&url, S3Credentials::None).await;
+        map.get(&url, S3Credentials::None).await;
+        assert_eq!(map.map.read().await.len(), 3);
     }
 
     #[tokio::test]
     async fn new() {
         let url = Url::parse("http://example.com").unwrap();
-        S3Client::new(&url, "user", "password").await;
+        S3Client::new(&url, make_access_key()).await;
+    }
+
+    #[tokio::test]
+    async fn new_no_auth() {
+        let url = Url::parse("http://example.com").unwrap();
+        S3Client::new(&url, S3Credentials::None).await;
     }
 
     #[test]

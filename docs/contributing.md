@@ -71,7 +71,7 @@ Building locally may also be preferable during development to take advantage of 
 #### Prerequisites
 
 This project is written in Rust, and as such requires a Rust toolchain to be installed in order to build it.
-The Minimum Supported Rust Version (MSRV) is 1.66.1, due to a dependency on the [AWS SDK](https://github.com/awslabs/aws-sdk-rust).
+The Minimum Supported Rust Version (MSRV) is 1.70.0, due to a dependency on the [AWS SDK](https://github.com/awslabs/aws-sdk-rust).
 It may be necessary to use [rustup](https://rustup.rs/) rather than the OS provided Rust toolchain to meet this requirement.
 See the [Rust book](https://doc.rust-lang.org/book/ch01-01-installation.html) for toolchain installation.
 
@@ -150,7 +150,7 @@ Proxy functionality can be tested using the [S3 active storage compliance suite]
 
 ### Making requests to active storage endpoints
 
-Request authentication is implemented using [Basic Auth](https://en.wikipedia.org/wiki/Basic_access_authentication) with the username and password consisting of your S3 Access Key ID and Secret Access Key, respectively. These credentials are then used internally to authenticate with the upstream S3 source using [standard AWS authentication methods](https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-auth-using-authorization-header.html)
+Request authentication is implemented using [Basic Auth](https://en.wikipedia.org/wiki/Basic_access_authentication) with the username and password consisting of your S3 Access Key ID and Secret Access Key, respectively. If provided, these credentials are then used internally to authenticate with the upstream S3 source using [standard AWS authentication methods](https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-auth-using-authorization-header.html). If no basic auth header is provided, an unauthenticated request will be made to S3.
 
 A basic Python client is provided in `scripts/client.py`.
 First install dependencies in a Python virtual environment:

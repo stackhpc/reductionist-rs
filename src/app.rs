@@ -14,12 +14,10 @@ use crate::validated_json::ValidatedJson;
 
 use axum::middleware;
 use axum::{
-    body::{Body, Bytes},
+    body::Bytes,
     extract::{Path, State},
     headers::authorization::{Authorization, Basic},
     http::header,
-    http::Request,
-    http::StatusCode,
     response::{IntoResponse, Response},
     routing::{get, post},
     Router, TypedHeader,
@@ -31,7 +29,6 @@ use tower::Layer;
 use tower::ServiceBuilder;
 use tower_http::normalize_path::NormalizePathLayer;
 use tower_http::trace::TraceLayer;
-use tower_http::validate_request::ValidateRequestHeaderLayer;
 use tracing::debug_span;
 use tracing::Instrument;
 
@@ -113,8 +110,6 @@ pub fn init(args: &CommandLineArgs) {
 /// The router is populated with all routes as well as the following middleware:
 ///
 /// * a [tower_http::trace::TraceLayer] for tracing requests and responses
-/// * a [tower_http::validate_request::ValidateRequestHeaderLayer] for validating authorisation
-///   headers
 fn router(args: &CommandLineArgs) -> Router {
     fn v1(state: SharedAppState) -> Router {
         Router::new()
@@ -124,20 +119,7 @@ fn router(args: &CommandLineArgs) -> Router {
             .route("/select", post(operation_handler::<operations::Select>))
             .route("/sum", post(operation_handler::<operations::Sum>))
             .route("/:operation", post(unknown_operation_handler))
-            .layer(
-                ServiceBuilder::new()
-                    .layer(TraceLayer::new_for_http())
-                    .layer(ValidateRequestHeaderLayer::custom(
-                        // Validate that an authorization header has been provided.
-                        |request: &mut Request<Body>| {
-                            if request.headers().contains_key(header::AUTHORIZATION) {
-                                Ok(())
-                            } else {
-                                Err(StatusCode::UNAUTHORIZED.into_response())
-                            }
-                        },
-                    )),
-            )
+            .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http()))
             .with_state(state)
     }
 
@@ -183,7 +165,7 @@ async fn schema() -> &'static str {
 ///
 /// # Arguments
 ///
-/// * `auth`: Basic authentication credentials
+/// * `client`: S3 client object
 /// * `request_data`: RequestData object for the request
 #[tracing::instrument(
     level = "DEBUG",
@@ -220,18 +202,23 @@ async fn download_object<'a>(
 ///
 /// # Arguments
 ///
-/// * `auth`: Basic authorization header
+/// * `auth`: Optional basic authentication header
 /// * `request_data`: RequestData object for the request
 async fn operation_handler<T: operation::Operation>(
     State(state): State<SharedAppState>,
-    TypedHeader(auth): TypedHeader<Authorization<Basic>>,
+    auth: Option<TypedHeader<Authorization<Basic>>>,
     ValidatedJson(request_data): ValidatedJson<models::RequestData>,
 ) -> Result<models::Response, ActiveStorageError> {
     let memory = request_data.size.unwrap_or(0);
     let mut _mem_permits = state.resource_manager.memory(memory).await?;
+    let credentials = if let Some(TypedHeader(auth)) = auth {
+        s3_client::S3Credentials::access_key(auth.username(), auth.password())
+    } else {
+        s3_client::S3Credentials::None
+    };
     let s3_client = state
         .s3_client_map
-        .get(&request_data.source, auth.username(), auth.password())
+        .get(&request_data.source, credentials)
         .instrument(tracing::Span::current())
         .await;
     let data = download_object(

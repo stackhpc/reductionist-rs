@@ -3,7 +3,7 @@
 use aws_sdk_s3::error::ProvideErrorMetadata;
 use aws_sdk_s3::error::SdkError;
 use aws_sdk_s3::operation::get_object::GetObjectError;
-use aws_smithy_http::byte_stream::error::Error as ByteStreamError;
+use aws_smithy_types::byte_stream::error::Error as ByteStreamError;
 use axum::{
     extract::rejection::JsonRejection,
     http::header,
@@ -311,7 +311,7 @@ mod tests {
     use super::*;
 
     use aws_sdk_s3::types::error::NoSuchKey;
-    use aws_smithy_http::operation::Response as SmithyResponse;
+    use aws_smithy_runtime_api::client::orchestrator::HttpResponse as SmithyResponse;
     use aws_smithy_types::Error as SmithyError;
     use http::response::Response as HttpResponse;
     use hyper::HeaderMap;
@@ -436,8 +436,7 @@ mod tests {
 
     fn get_smithy_response() -> SmithyResponse {
         let sdk_body = "body";
-        let http_response = HttpResponse::new(sdk_body.into());
-        SmithyResponse::new(http_response)
+        HttpResponse::new(sdk_body.into())
     }
 
     #[tokio::test]

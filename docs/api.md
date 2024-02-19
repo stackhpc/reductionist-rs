@@ -73,6 +73,7 @@ The request body should be a JSON object of the form:
 ```
 
 Request authentication is implemented using [Basic Auth](https://en.wikipedia.org/wiki/Basic_access_authentication) with the username and password consisting of your S3 Access Key ID and Secret Access Key, respectively.
+Unauthenticated access to S3 is possible by omitting the basic auth header.
 
 On success, all operations return HTTP 200 OK with the response using the same datatype as specified in the request except for `count` which always returns the result as `int64`.
 The server returns the following headers with the HTTP response:
