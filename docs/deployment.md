@@ -56,6 +56,32 @@ step-ca
 
 Some variables are provided to configure the deployment in the [group_vars](https://github.com/stackhpc/reductionist-rs/tree/main/deployment/group_vars) directory. Reductionist configuration options may be specified using environment variables.
 
+## Ansible control host setup
+
+Whether running Ansible on the same host as the Reductionist server(s) or a separate remote host, some setup is necessary.
+
+Ensure Git and Pip are installed:
+```sh
+sudo apt -y install git python3-pip # Ubuntu
+sudo dnf -y install git python3-pip # CentOS Stream or Rocky Linux
+```
+
+Clone the Reductionist source code:
+```sh
+git clone https://github.com/stackhpc/reductionist-rs
+```
+
+Change to the Reductionist source code directory:
+```sh
+cd reductionist-rs
+```
+
+When working with Pip it's generally best to install packages into a virtual environment, to avoid modifying the system packages.
+```sh
+python3 -m venv venv
+source venv/bin/activate
+```
+
 ## Installation
 
 Install Python dependencies:
