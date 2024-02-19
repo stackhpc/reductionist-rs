@@ -156,6 +156,10 @@
       when: ansible_facts["os_family"] | lower == "redhat"
       ansible.builtin.package:
         name: "https://dl.smallstep.com/gh-release/cli/docs-ca-install/v0.24.4/step-cli_0.24.4_amd64.rpm"
+        # FIXME: We see the following error without this:
+        # Failed to validate GPG signature for step-cli-0.24.4-1.x86_64:
+        # Package step-cli_0.24.4_amd643z16ickc.rpm is not signed
+        disable_gpg_check: true
         state: present
 
     - name: Test step
