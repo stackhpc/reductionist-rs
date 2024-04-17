@@ -391,6 +391,13 @@
     - haproxy
   become: true
   tasks:
+    # Currently we are not deploying any failover mechanism such as keepalived,
+    # so limit to one HAProxy server.
+    - name: Assert that there is only one HAProxy server
+      ansible.builtin.assert:
+        that:
+          groups['haproxy'] | length == 1
+
     - name: Ensure /etc/haproxy directory exists
       ansible.builtin.file:
         path: /etc/haproxy
