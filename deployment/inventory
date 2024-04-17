@@ -1,24 +1,40 @@
+# Example inventory for deployment to a single host (localhost).
+
+# HAProxy load balancer.
+# Should contain exactly one host.
 [haproxy]
 localhost ansible_connection=local
 
+# Jaeger distributed tracing UI.
+# Should contain at most one host.
 [jaeger]
 localhost ansible_connection=local
 
+# Minio object storage service (for test & development only).
+# Should contain at most one host.
 [minio]
 localhost ansible_connection=local
 
+# Prometheus monitoring service.
+# Should contain at most one host.
 [prometheus]
 localhost ansible_connection=local
 
+# Reductionist servers.
+# May contain multiple hosts.
 [reductionist]
 localhost ansible_connection=local
 
-[step:children]
-reductionist
-
+# Step Certificate Authority (CA).
+# Should contain exactly one host.
 [step-ca]
 localhost ansible_connection=local
 
+# Do not edit.
+[step:children]
+reductionist
+
+# Do not edit.
 [docker:children]
 haproxy
 jaeger

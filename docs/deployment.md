@@ -27,24 +27,38 @@ An example Ansible inventory file is provided in [inventory](https://github.com/
 The following example inventory places HAProxy, Jaeger, Prometheus and Step CA on `reductionist1`, while Reductionist is deployed on `reductionist1` and `reductionist2`.
 
 ```ini
+# Example inventory for deployment to two hosts, reductionist1 and reductionist2.
+
+# HAProxy load balancer.
+# Should contain exactly one host.
 [haproxy]
 reductionist1
 
+# Jaeger distributed tracing UI.
+# Should contain at most one host.
 [jaeger]
 reductionist1
 
+# Prometheus monitoring service.
+# Should contain at most one host.
 [prometheus]
 reductionist1
 
+# Reductionist servers.
+# May contain multiple hosts.
 [reductionist]
 reductionist[1:2]
 
-[step:children]
-reductionist
-
+# Step Certificate Authority (CA).
+# Should contain exactly one host.
 [step-ca]
 reductionist1
 
+# Do not edit.
+[step:children]
+reductionist
+
+# Do not edit.
 [docker:children]
 haproxy
 jaeger
