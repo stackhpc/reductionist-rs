@@ -431,6 +431,6 @@
 
     - name: Wait for reductionist server to be accessible via HAProxy
       ansible.builtin.uri:
-        url: "https://{{ ansible_facts.default_ipv4.address }}:8080/.well-known/reductionist-schema"
+        url: "https://{{ reductionist_host }}:8080/.well-known/reductionist-schema"
       until: result is success
       register: result
