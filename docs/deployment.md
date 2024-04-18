@@ -90,7 +90,7 @@ reductionist
 step-ca
 ```
 
-Some variables are provided to configure the deployment in the [group_vars](https://github.com/stackhpc/reductionist-rs/tree/main/deployment/group_vars) directory. Reductionist configuration options may be specified using environment variables.
+Some variables are provided to configure the deployment in the [group_vars](https://github.com/stackhpc/reductionist-rs/tree/main/deployment/group_vars) directory. Reductionist configuration options may be specified using environment variables specified using `reductionist_env`.
 
 ## Ansible control host setup
 
