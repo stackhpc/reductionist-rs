@@ -385,6 +385,14 @@
         volumes: "{{ reductionist_volumes }}"
         restart: true  # Load new certificates. TODO: Hot reload
 
+- name: Gather facts for HAProxy
+  hosts:
+    - reductionist
+    - "!haproxy"
+  tags:
+    - haproxy
+  gather_facts: true
+
 - name: Deploy HAProxy
   hosts: haproxy
   tags:
