@@ -3,12 +3,6 @@
 The [deployment](https://github.com/stackhpc/reductionist-rs/tree/main/deployment) directory in the Reductionist Git repository contains an Ansible playbook to deploy Reductionist and supporting services to one or more hosts.
 The Ansible playbook allows for a secure, scale-out deployment of Reductionist, with an HAProxy load balancer proxying requests to any number of Reductionist backend servers.
 
-The following OS distributions are supported:
-
-* Ubuntu 20.04-22.04
-* CentOS Stream 8-9
-* Rocky Linux 8-9
-
 The following services are supported:
 
 * Docker engine
@@ -19,6 +13,34 @@ The following services are supported:
 * Jaeger (distributed tracing UI)
 * Reductionist
 * HAProxy (load balancer for Reductionist)
+
+## Prerequisites
+
+The existence of correctly configured hosts is assumed by this playbook.
+
+The following host OS distributions are supported:
+
+* Ubuntu 20.04-22.04
+* CentOS Stream 8-9
+* Rocky Linux 8-9
+
+Currently only a single network is supported.
+Several TCP ports should be accessible on this network.
+This may require configuration of a firewall on the host (e.g. firewalld, ufw) or security groups in a cloud environment.
+
+* SSH: 22
+* Reductionist backend: 8081
+* Reductionist frontend: 8080 (HAProxy host only)
+* Step CA: 9999 (Step CA host only)
+* Minio: 9000 (Minio host only)
+* Prometheus: 9090 (Prometheus host only)
+* Jaeger: 16686 (Jaeger host only)
+
+The Ansible control host (the host from which you will run `ansible-playbook`) should be able to resolve the hostnames of the hosts.
+If names are not provided by DNS, entries may be added to `/etc/hosts` on the Ansible control host.
+
+It may be desirable to host the Reductionist API on a different address, such as a hostname or public IP exposed on the host running HAProxy.
+This may be configured using the `reductionist_host` variable.
 
 ## Configuration
 
