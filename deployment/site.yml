@@ -406,6 +406,15 @@
         that:
           groups['haproxy'] | length == 1
 
+    - name: Wait for reductionist backends to be accessible from HAProxy host
+      ansible.builtin.uri:
+        url: "https://{{ hostvars[item].ansible_facts.default_ipv4.address }}:8081/.well-known/reductionist-schema"
+        # The certificates are only valid for the HAProxy frontend address (reductionist_host).
+        validate_certs: false
+      until: result is success
+      register: result
+      loop: "{{ query('inventory_hostnames', 'reductionist') }}"
+
     - name: Ensure /etc/haproxy directory exists
       ansible.builtin.file:
         path: /etc/haproxy
