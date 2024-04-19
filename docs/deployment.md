@@ -38,6 +38,7 @@ This may require configuration of a firewall on the host (e.g. firewalld, ufw) o
 
 The Ansible control host (the host from which you will run `ansible-playbook`) should be able to resolve the hostnames of the hosts.
 If names are not provided by DNS, entries may be added to `/etc/hosts` on the Ansible control host.
+Issues have been reported when using Ansible with password-protected SSH private keys and SSH agent.
 
 It may be desirable to host the Reductionist API on a different address, such as a hostname or public IP exposed on the host running HAProxy.
 This may be configured using the `reductionist_host` variable.
