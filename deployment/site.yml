@@ -186,7 +186,6 @@
       changed_when: false
       delegate_to: "{{ groups['step-ca'][0] }}"
       run_once: true
-      when: not step_stat.stat.exists
 
     - name: Bootstrap CA
       ansible.builtin.command: >
@@ -386,12 +385,36 @@
         volumes: "{{ reductionist_volumes }}"
         restart: true  # Load new certificates. TODO: Hot reload
 
+- name: Gather facts for HAProxy
+  hosts:
+    - reductionist
+    - "!haproxy"
+  tags:
+    - haproxy
+  gather_facts: true
+
 - name: Deploy HAProxy
   hosts: haproxy
   tags:
     - haproxy
   become: true
   tasks:
+    # Currently we are not deploying any failover mechanism such as keepalived,
+    # so limit to one HAProxy server.
+    - name: Assert that there is only one HAProxy server
+      ansible.builtin.assert:
+        that:
+          groups['haproxy'] | length == 1
+
+    - name: Wait for reductionist backends to be accessible from HAProxy host
+      ansible.builtin.uri:
+        url: "https://{{ hostvars[item].ansible_facts.default_ipv4.address }}:8081/.well-known/reductionist-schema"
+        # The certificates are only valid for the HAProxy frontend address (reductionist_host).
+        validate_certs: false
+      until: result is success
+      register: result
+      loop: "{{ query('inventory_hostnames', 'reductionist') }}"
+
     - name: Ensure /etc/haproxy directory exists
       ansible.builtin.file:
         path: /etc/haproxy
@@ -417,6 +440,6 @@
 
     - name: Wait for reductionist server to be accessible via HAProxy
       ansible.builtin.uri:
-        url: "https://{{ ansible_facts.default_ipv4.address }}:8080/.well-known/reductionist-schema"
+        url: "https://{{ reductionist_host }}:8080/.well-known/reductionist-schema"
       until: result is success
       register: result
