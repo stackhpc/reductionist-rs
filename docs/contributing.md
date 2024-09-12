@@ -199,3 +199,17 @@ cargo doc --no-deps
 ```
 
 The resulting documentation is available under `target/doc`, and may be viewed in a web browser using file:///path/to/reductionist/target/doc/reductionist/index.html.
+
+---
+
+## Maintenance
+
+### Updating dependencies
+
+Rust package dependencies are managed by [Cargo](https://doc.rust-lang.org/cargo/).
+The `[dependencies]` section in `Cargo.toml` defines package dependencies and their version constraints.
+The `[dev-dependencies]` section includes additional dependencies for testing.
+In order to make builds reproducible, Cargo maintains a `Cargo.lock` file that captures the versions of all package dependencies.
+This even allows for multiple versions of a package to be used by a single Rust application, although this can lead to incompatibilities at runtime and should be avoided if possible.
+
+To update the versions in the `Cargo.lock` file, run `cargo update`, then inspect and commit the changes.
