@@ -2104,7 +2104,7 @@ dependencies = [
  "expanduser",
  "flate2",
  "hashbrown 0.14.5",
- "http 0.2.12",
+ "http 1.1.0",
  "hyper",
  "lazy_static",
  "maligned",
