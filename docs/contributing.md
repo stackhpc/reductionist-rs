@@ -227,3 +227,12 @@ Updating the Reductionist MSRV requires making changes in a few places.
 1. Prerequisites section in `docs/contributing.md`
 
 Updating the MSRV typically requires a few updates to the code to handle changes in the standard library, Clippy rules, etc.
+
+### Create a release
+
+To update the version of Reductionist, set `[package] version` in `Cargo.toml`.
+Create a pull request, approve and merge it.
+When ready to release, [draft a new release](https://github.com/stackhpc/reductionist-rs/releases/new) in GitHub, creating a new tag matching Reductionist's version, and auto-generating release notes.
+
+After the release is published, the [publish.yml](https://github.com/stackhpc/reductionist-rs/blob/main/.github/workflows/publish.yml) workflow will be triggered.
+This workflow publishes the crate to crates.io, and builds then publishes a container image on GHCR.
