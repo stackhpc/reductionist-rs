@@ -27,7 +27,6 @@ import json
 import requests
 import numpy as np
 import ssl
-import sys
 import time
 import urllib3
 
@@ -265,7 +264,10 @@ async def run_async_httpx(args):
 
 
 def main():
-    urllib3.disable_warnings(urllib3.exceptions.SubjectAltNameWarning)
+    try:
+        urllib3.disable_warnings(urllib3.exceptions.SubjectAltNameWarning)
+    except:
+        pass
     args = get_args()
     start = time.time()
     num_errors = 0
