@@ -213,3 +213,17 @@ In order to make builds reproducible, Cargo maintains a `Cargo.lock` file that c
 This even allows for multiple versions of a package to be used by a single Rust application, although this can lead to incompatibilities at runtime and should be avoided if possible.
 
 To update the versions in the `Cargo.lock` file, run `cargo update`, then inspect and commit the changes.
+
+### Updating Minimum Supported Rust Version (MSRV)
+
+Rust moves quickly, and it's sensible to keep up with the latest toolchain.
+With support for multiple installed versions of Rust and the separation provided by containers there is little reason to support old versions of Rust.
+The AWS SDK for Rust is particularly aggressive in updating its MSRV, and this often drives the MSRV of Reductionist.
+Updating the Reductionist MSRV requires making changes in a few places.
+
+1. `rust-version` in `Cargo.toml`
+1. `FROM rust:<version>` in `Dockerfile`
+1. `toolchain` in `.github/workflows/publish.yml`
+1. Prerequisites section in `docs/contributing.md`
+
+Updating the MSRV typically requires a few updates to the code to handle changes in the standard library, Clippy rules, etc.
