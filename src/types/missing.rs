@@ -21,8 +21,8 @@ use crate::types::DValue;
 ///
 /// This enum can represent all known descriptions of missing data used in NetCDF4 files.
 /// It is generic over the type of missing data values. We use this in two ways:
-/// 1. T = [DValue](crate::types::DValue), used in the API to represent values of any supported
-///    [DType](crate::models::DType).
+/// 1. T = [DValue], used in the API to represent values of any supported
+///    [DType].
 /// 2. T = a primitive numeric type (i32, u64, f32, etc.), used in numeric operations when we know
 ///    the DType of the values.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -42,7 +42,7 @@ pub enum Missing<T> {
 
 impl Missing<DValue> {
     /// Validate a [`Missing<DValue>`](crate::types::Missing) object for a given
-    /// [DType](crate::models::DType).
+    /// [DType].
     pub fn validate(&self, dtype: DType) -> Result<(), ValidationError> {
         match dtype {
             DType::Int32 => Missing::<i32>::validate_dvalue(self),

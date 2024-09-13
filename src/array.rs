@@ -46,7 +46,7 @@ pub fn get_shape(
     }
 }
 
-/// Returns an [ndarray::ArrayView](ndarray::ArrayView) corresponding to the data in the
+/// Returns an [ndarray::ArrayView] corresponding to the data in the
 /// request.
 ///
 /// The array view borrows the data, so no copying takes place.
@@ -62,7 +62,7 @@ fn build_array_from_shape<T>(
     ArrayView::<T, _>::from_shape(shape, data).map_err(ActiveStorageError::ShapeInvalid)
 }
 
-/// Returns a mutable [ndarray::ArrayViewMut](ndarray::ArrayViewMut) corresponding to the data in
+/// Returns a mutable [ndarray::ArrayViewMut] corresponding to the data in
 /// the request.
 ///
 /// The array view borrows the data, so no copying takes place.
@@ -176,7 +176,7 @@ pub fn reverse_array_byte_order<T>(
     }
 }
 
-/// Build an [ndarray::ArrayView](ndarray::ArrayView) object corresponding to the request and data bytes.
+/// Build an [ndarray::ArrayView] object corresponding to the request and data bytes.
 ///
 /// The resulting array will contain a reference to `data`.
 ///
