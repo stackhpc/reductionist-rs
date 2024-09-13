@@ -34,7 +34,7 @@ aws-smithy-types = "1.2"
 aws-types = "1.3"
 axum = { version = "0.6", features = ["headers"] }
 axum-server = { version = "0.4.7", features = ["tls-rustls"] }
-clap = { version = "~4.2", features = ["derive", "env"] }
+clap = { version = "~4.5", features = ["derive", "env"] }
 expanduser = "1.2.2"
 flate2 = "1.0"
 hashbrown = "0.12"
