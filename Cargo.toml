@@ -3,7 +3,7 @@ name = "reductionist"
 version = "0.9.0"
 edition = "2021"
 # Due to AWS SDK.
-rust-version = "1.70.0"
+rust-version = "1.78.0"
 license = "Apache-2.0"
 description = "S3 Active Storage server"
 homepage = "https://crates.io/crates/reductionist"

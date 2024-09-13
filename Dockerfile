@@ -6,7 +6,7 @@
 ARG PROFILE=release
 
 # Stage 1: builder
-FROM rust:1.70 as builder
+FROM rust:1.78 as builder
 ARG PROFILE
 WORKDIR /build
 COPY . .
