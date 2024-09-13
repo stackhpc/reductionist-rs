@@ -2,15 +2,33 @@
 
 ## Testing of Reductionist
 
-A majority of the application code in Reductionist is unit tested, and any new code should include unit tests where practical.
-Unit tests in Rust code typically reside in the same file as the module being tested.
-
-The [S3 Active Storage compliance test suite](https://github.com/stackhpc/s3-active-storage-compliance-suite/) should be updated to test any new features added to Reductionist.
+Reductionist is tested at various levels.
 
 ### Continuous Integration (CI)
 
 GitHub Actions is used for CI for pull requests.
 It checks that the package builds, and passes various checks, unit and integration tests.
+
+### Compliance/integration tests
+
+The [S3 Active Storage compliance test suite](https://github.com/stackhpc/s3-active-storage-compliance-suite/) should be updated to test any new features added to Reductionist.
+
+### Code style
+
+Rust code style is enforced using `cargo fmt`.
+This command will modify the source code to resolve any code style issues.
+To check for code style issues without making changes, use `cargo fmt -- --check`.
+
+### Linting
+
+[Clippy](https://github.com/rust-lang/rust-clippy) is used to lint the source code.
+Use `cargo clippy --all-targets -- -D warnings`.
+
+### Unit tests
+
+A majority of the application code in Reductionist is unit tested, and any new code should include unit tests where practical.
+Unit tests in Rust code typically reside in the same file as the module being tested.
+Unit tests can be run using `cargo test`.
 
 ### Benchmarks
 
