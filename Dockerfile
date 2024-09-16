@@ -6,7 +6,7 @@
 ARG PROFILE=release
 
 # Stage 1: builder
-FROM rust:1.70 as builder
+FROM rust:1.78 as builder
 ARG PROFILE
 WORKDIR /build
 COPY . .
@@ -16,7 +16,7 @@ COPY . .
 RUN cargo install --path . --profile $PROFILE --locked
 
 # Stage 2: final image
-FROM debian:bullseye-slim
+FROM debian:bookworm-slim
 # AWS SDK requires CA certificates to be present.
 RUN apt update \
     && apt install -y --no-install-recommends ca-certificates \

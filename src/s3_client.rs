@@ -5,6 +5,7 @@ use crate::error::ActiveStorageError;
 use crate::resource_manager::ResourceManager;
 
 use aws_credential_types::Credentials;
+use aws_sdk_s3::config::BehaviorVersion;
 use aws_sdk_s3::Client;
 use aws_types::region::Region;
 use axum::body::Bytes;
@@ -102,7 +103,7 @@ impl S3Client {
     /// * `credentials`: Object storage account credentials
     pub async fn new(url: &Url, credentials: S3Credentials) -> Self {
         let region = Region::new("us-east-1");
-        let builder = aws_sdk_s3::Config::builder();
+        let builder = aws_sdk_s3::Config::builder().behavior_version(BehaviorVersion::latest());
         let builder = match credentials {
             S3Credentials::AccessKey {
                 access_key,
@@ -148,12 +149,15 @@ impl S3Client {
             .send()
             .instrument(tracing::Span::current())
             .await?;
-        let content_length = response.content_length();
+        // Fail if the content length header is missing.
+        let content_length: usize = response
+            .content_length()
+            .ok_or(ActiveStorageError::S3ContentLengthMissing)?
+            .try_into()?;
 
         // FIXME: how to account for compressed data?
         if mem_permits.is_none() {
-            let memory = content_length.try_into()?;
-            *mem_permits = resource_manager.memory(memory).await?;
+            *mem_permits = resource_manager.memory(content_length).await?;
         };
         // The data returned by the S3 client does not have any alignment guarantees. In order to
         // reinterpret the data as an array of numbers with a higher alignment than 1, we need to
@@ -161,7 +165,7 @@ impl S3Client {
         // For now we're hard-coding an alignment of 8 bytes, although this should depend on the
         // data type, and potentially whether there are any SIMD requirements.
         // Create an 8-byte aligned Vec<u8>.
-        let mut buf = maligned::align_first::<u8, maligned::A8>(content_length as usize);
+        let mut buf = maligned::align_first::<u8, maligned::A8>(content_length);
 
         // Iterate over the streaming response, copying data into the aligned Vec<u8>.
         while let Some(bytes) = response

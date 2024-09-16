@@ -30,11 +30,11 @@ fn as_f64(value: &DValue) -> Result<f64, ActiveStorageError> {
         .ok_or(ActiveStorageError::IncompatibleMissing(value.clone()))
 }
 
-/// Attempt to convert from a [DValue](crate::types::DValue) to specific numeric type.
+/// Attempt to convert from a [DValue] to specific numeric type.
 // This trait exists because we can't implement TryFrom<DValue> for numeric types because the trait
 // and type are in external crates.
 pub trait TryFromDValue: Sized {
-    /// Try to convert from a [DValue](crate::types::DValue) to a numeric type.
+    /// Try to convert from a [DValue] to a numeric type.
     fn try_from_dvalue(value: DValue) -> Result<Self, ActiveStorageError>;
 }
 

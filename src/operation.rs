@@ -51,7 +51,7 @@ impl<T> Element for T where
 pub trait Operation {
     /// Execute the operation.
     ///
-    /// Returns a [models::Response](crate::models::Response) object with response data.
+    /// Returns a [models::Response] object with response data.
     ///
     /// # Arguments
     ///

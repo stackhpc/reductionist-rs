@@ -12,7 +12,7 @@ use axum::body::Bytes;
 /// # Arguments
 ///
 /// * `filter`: Filter algorithm
-/// * `data`: Filtered data [Bytes](axum::body::Bytes)
+/// * `data`: Filtered data [Bytes]
 pub fn decode(filter: &models::Filter, data: &Bytes) -> Result<Bytes, ActiveStorageError> {
     match filter {
         models::Filter::Shuffle { element_size } => Ok(shuffle::deshuffle(data, *element_size)),

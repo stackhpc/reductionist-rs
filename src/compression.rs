@@ -13,7 +13,7 @@ use zune_inflate::{DeflateDecoder, DeflateOptions};
 /// # Arguments
 ///
 /// * `compression`: Compression algorithm
-/// * `data`: Compressed data [Bytes](axum::body::Bytes)
+/// * `data`: Compressed data [Bytes]
 pub fn decompress(
     compression: models::Compression,
     data: &Bytes,

@@ -169,10 +169,7 @@ fn validate_slice(slice: &Slice) -> Result<(), ValidationError> {
 }
 
 /// Validate that a shape and selection are consistent
-fn validate_shape_selection(
-    shape: &Vec<usize>,
-    selection: &Vec<Slice>,
-) -> Result<(), ValidationError> {
+fn validate_shape_selection(shape: &[usize], selection: &[Slice]) -> Result<(), ValidationError> {
     if shape.len() != selection.len() {
         let mut error = ValidationError::new("Shape and selection must have the same length");
         error.add_param("shape".into(), &shape.len());

@@ -66,6 +66,10 @@ pub enum ActiveStorageError {
     #[error("error receiving object from S3 storage")]
     S3ByteStream(#[from] ByteStreamError),
 
+    /// Missing Content-Length header in S3 response.
+    #[error("S3 response missing Content-Length header")]
+    S3ContentLengthMissing,
+
     /// Error while retrieving an object from S3
     #[error("error retrieving object from S3 storage")]
     S3GetObject(#[from] SdkError<GetObjectError>),
@@ -213,6 +217,7 @@ impl From<ActiveStorageError> for ErrorResponse {
             | ActiveStorageError::RequestDataJsonRejection(_)
             | ActiveStorageError::RequestDataValidationSingle(_)
             | ActiveStorageError::RequestDataValidation(_)
+            | ActiveStorageError::S3ContentLengthMissing
             | ActiveStorageError::ShapeInvalid(_) => Self::bad_request(&error),
 
             // Not found
@@ -244,7 +249,7 @@ impl From<ActiveStorageError> for ErrorResponse {
 
                             // Quite a lot of error cases end up as unhandled. Attempt to determine
                             // the error from the code.
-                            GetObjectError::Unhandled(_) => {
+                            _ => {
                                 match get_obj_error.code() {
                                     // Bad request
                                     Some("NoSuchBucket") => Self::bad_request(&error),
@@ -258,9 +263,6 @@ impl From<ActiveStorageError> for ErrorResponse {
                                     _ => Self::internal_server_error(&error),
                                 }
                             }
-
-                            // The enum is marked as non-exhaustive
-                            _ => Self::internal_server_error(&error),
                         }
                     }
 
@@ -311,9 +313,9 @@ mod tests {
     use super::*;
 
     use aws_sdk_s3::types::error::NoSuchKey;
-    use aws_smithy_runtime_api::client::orchestrator::HttpResponse as SmithyResponse;
-    use aws_smithy_types::Error as SmithyError;
-    use http::response::Response as HttpResponse;
+    use aws_smithy_runtime_api::http::Response as SmithyResponse;
+    use aws_smithy_runtime_api::http::StatusCode as SmithyStatusCode;
+    use aws_smithy_types::error::ErrorMetadata as SmithyError;
     use hyper::HeaderMap;
 
     // Jump through the hoops to get the body as a string.
@@ -423,6 +425,13 @@ mod tests {
         test_active_storage_error(error, StatusCode::BAD_REQUEST, message, caused_by).await;
     }
 
+    #[tokio::test]
+    async fn s3_content_length_missing() {
+        let error = ActiveStorageError::S3ContentLengthMissing;
+        let message = "S3 response missing Content-Length header";
+        test_active_storage_error(error, StatusCode::BAD_REQUEST, message, None).await;
+    }
+
     // Helper function for S3 GetObjectError errors
     async fn test_s3_get_object_error(
         sdk_error: SdkError<GetObjectError>,
@@ -436,7 +445,8 @@ mod tests {
 
     fn get_smithy_response() -> SmithyResponse {
         let sdk_body = "body";
-        HttpResponse::new(sdk_body.into())
+        let status: SmithyStatusCode = 400.try_into().unwrap();
+        SmithyResponse::new(status, sdk_body.into())
     }
 
     #[tokio::test]
@@ -460,7 +470,7 @@ mod tests {
         let sdk_error = SdkError::service_error(get_object_error, get_smithy_response());
         let caused_by = Some(vec![
             "service error",
-            "unhandled error",
+            "unhandled error (InvalidAccessKeyId)",
             "Error { code: \"InvalidAccessKeyId\", message: \"fake smithy error\" }",
         ]);
         test_s3_get_object_error(sdk_error, StatusCode::UNAUTHORIZED, caused_by).await;
@@ -477,7 +487,7 @@ mod tests {
         let sdk_error = SdkError::service_error(get_object_error, get_smithy_response());
         let caused_by = Some(vec![
             "service error",
-            "unhandled error",
+            "unhandled error (NoSuchBucket)",
             "Error { code: \"NoSuchBucket\", message: \"fake smithy error\" }",
         ]);
         test_s3_get_object_error(sdk_error, StatusCode::BAD_REQUEST, caused_by).await;
@@ -494,7 +504,7 @@ mod tests {
         let sdk_error = SdkError::service_error(get_object_error, get_smithy_response());
         let caused_by = Some(vec![
             "service error",
-            "unhandled error",
+            "unhandled error (SignatureDoesNotMatch)",
             "Error { code: \"SignatureDoesNotMatch\", message: \"fake smithy error\" }",
         ]);
         test_s3_get_object_error(sdk_error, StatusCode::UNAUTHORIZED, caused_by).await;
@@ -511,7 +521,7 @@ mod tests {
         let sdk_error = SdkError::service_error(get_object_error, get_smithy_response());
         let caused_by = Some(vec![
             "service error",
-            "unhandled error",
+            "unhandled error (AccessDenied)",
             "Error { code: \"AccessDenied\", message: \"fake smithy error\" }",
         ]);
         test_s3_get_object_error(sdk_error, StatusCode::UNAUTHORIZED, caused_by).await;

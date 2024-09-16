@@ -56,7 +56,7 @@ fn criterion_benchmark(c: &mut Criterion) {
                     b.iter(|| {
                         let mut request_data = get_test_request_data();
                         request_data.dtype = DType::Int64;
-                        request_data.missing = missing.clone();
+                        request_data.missing.clone_from(&missing);
                         execute(&request_data, black_box(data.clone())).unwrap();
                     })
                 });

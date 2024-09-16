@@ -89,7 +89,7 @@ Building locally may also be preferable during development to take advantage of 
 #### Prerequisites
 
 This project is written in Rust, and as such requires a Rust toolchain to be installed in order to build it.
-The Minimum Supported Rust Version (MSRV) is 1.70.0, due to a dependency on the [AWS SDK](https://github.com/awslabs/aws-sdk-rust).
+The Minimum Supported Rust Version (MSRV) is 1.78.0, due to a dependency on the [AWS SDK](https://github.com/awslabs/aws-sdk-rust).
 It may be necessary to use [rustup](https://rustup.rs/) rather than the OS provided Rust toolchain to meet this requirement.
 See the [Rust book](https://doc.rust-lang.org/book/ch01-01-installation.html) for toolchain installation.
 
@@ -231,3 +231,26 @@ In order to make builds reproducible, Cargo maintains a `Cargo.lock` file that c
 This even allows for multiple versions of a package to be used by a single Rust application, although this can lead to incompatibilities at runtime and should be avoided if possible.
 
 To update the versions in the `Cargo.lock` file, run `cargo update`, then inspect and commit the changes.
+
+### Updating Minimum Supported Rust Version (MSRV)
+
+Rust moves quickly, and it's sensible to keep up with the latest toolchain.
+With support for multiple installed versions of Rust and the separation provided by containers there is little reason to support old versions of Rust.
+The AWS SDK for Rust is particularly aggressive in updating its MSRV, and this often drives the MSRV of Reductionist.
+Updating the Reductionist MSRV requires making changes in a few places.
+
+1. `rust-version` in `Cargo.toml`
+1. `FROM rust:<version>` in `Dockerfile`
+1. `toolchain` in `.github/workflows/publish.yml`
+1. Prerequisites section in `docs/contributing.md`
+
+Updating the MSRV typically requires a few updates to the code to handle changes in the standard library, Clippy rules, etc.
+
+### Create a release
+
+To update the version of Reductionist, set `[package] version` in `Cargo.toml`.
+Create a pull request, approve and merge it.
+When ready to release, [draft a new release](https://github.com/stackhpc/reductionist-rs/releases/new) in GitHub, creating a new tag matching Reductionist's version, and auto-generating release notes.
+
+After the release is published, the [publish.yml](https://github.com/stackhpc/reductionist-rs/blob/main/.github/workflows/publish.yml) workflow will be triggered.
+This workflow publishes the crate to crates.io, and builds then publishes a container image on GHCR.
