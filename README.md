@@ -40,7 +40,7 @@ Reductionist provides the following features:
 
 ## Contributing
 
-See the [contributor guide](https://stackhpc.github.io/reductionist-rs/contributing.html) for information about contributing to Reductionist.
+See the [contributor guide](https://stackhpc.github.io/reductionist-rs/contributing/) for information about contributing to Reductionist.
 
 ## License
 
