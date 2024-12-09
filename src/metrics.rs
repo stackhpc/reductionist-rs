@@ -11,12 +11,12 @@ lazy_static! {
     pub static ref INCOMING_REQUESTS: IntCounterVec = IntCounterVec::new(
         Opts::new("incoming_requests", "The number of HTTP requests received"),
         &["http_method", "path"]
-    ).expect("Prometheus metric initialization failed");
+    ).expect("Prometheus metric options should be valid");
     // Request counter by status code
     pub static ref RESPONSE_CODE_COLLECTOR: IntCounterVec = IntCounterVec::new(
         Opts::new("outgoing_response", "The number of responses sent"),
         &["status_code", "http_method", "path"]
-    ).expect("Prometheus metric initialization failed");
+    ).expect("Prometheus metric options should be valid");
     // Response histogram by response time
     pub static ref RESPONSE_TIME_COLLECTOR: HistogramVec = HistogramVec::new(
         HistogramOpts{
@@ -24,7 +24,7 @@ lazy_static! {
             buckets: prometheus::DEFAULT_BUCKETS.to_vec(), // Change buckets here if desired
         },
         &["status_code", "http_method", "path"],
-    ).expect("Prometheus metric initialization failed");
+    ).expect("Prometheus metric options should be valid");
 }
 
 /// Registers various prometheus metrics with the global registry
@@ -32,13 +32,13 @@ pub fn register_metrics() {
     let registry = prometheus::default_registry();
     registry
         .register(Box::new(INCOMING_REQUESTS.clone()))
-        .expect("registering prometheus metrics during initialization failed");
+        .expect("Prometheus metrics registration should not fail during initialization");
     registry
         .register(Box::new(RESPONSE_CODE_COLLECTOR.clone()))
-        .expect("registering prometheus metrics during initialization failed");
+        .expect("Prometheus metrics registration should not fail during initialization");
     registry
         .register(Box::new(RESPONSE_TIME_COLLECTOR.clone()))
-        .expect("registering prometheus metrics during initialization failed");
+        .expect("Prometheus metrics registration should not fail during initialization");
 }
 
 /// Returns currently gathered prometheus metrics

@@ -90,7 +90,7 @@ mod tests {
 
     #[tokio::test]
     async fn ok() {
-        let body = Body::from("{\"foo\": \"abc\", \"bar\": 123}");
+        let body = Body::from(r#"{"foo": "abc", "bar": 123}"#);
         let response = request(body).await;
 
         assert_eq!(response.status(), StatusCode::OK);
@@ -113,7 +113,7 @@ mod tests {
 
     #[tokio::test]
     async fn invalid_foo_type() {
-        let body = Body::from("{\"foo\": 123}");
+        let body = Body::from(r#"{"foo": 123}"#);
         let response = request(body).await;
 
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
@@ -125,7 +125,7 @@ mod tests {
 
     #[tokio::test]
     async fn invalid_foo_too_short() {
-        let body = Body::from("{\"foo\": \"\"}");
+        let body = Body::from(r#"{"foo": ""}"#);
         let response = request(body).await;
 
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
@@ -139,7 +139,7 @@ mod tests {
 
     #[tokio::test]
     async fn invalid_foo_too_long() {
-        let body = Body::from("{\"foo\": \"abcd\"}");
+        let body = Body::from(r#"{"foo": "abcd"}"#);
         let response = request(body).await;
 
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
