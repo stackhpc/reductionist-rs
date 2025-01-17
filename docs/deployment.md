@@ -5,7 +5,7 @@ The Ansible playbook allows for a secure, scale-out deployment of Reductionist, 
 
 The following services are supported:
 
-* Docker engine
+* Podman engine
 * Step CA Certificate Authority (generates certificates for Reductionist)
 * Step CLI (requests and renews certificates)
 * Minio object store (optional, for testing)
@@ -18,11 +18,11 @@ The following services are supported:
 
 The existence of correctly configured hosts is assumed by this playbook.
 
-The following host OS distributions are supported:
+The following host OS distributions have been tested and are supported:
 
-* Ubuntu 20.04-22.04
-* CentOS Stream 8-9
-* Rocky Linux 8-9
+* CentOS Stream 9
+* Rocky Linux 9
+* Ubuntu 24.04
 
 Currently only a single network is supported.
 Several TCP ports should be accessible on this network.
@@ -82,7 +82,7 @@ reductionist1
 reductionist
 
 # Do not edit.
-[docker:children]
+[podman:children]
 haproxy
 jaeger
 minio
@@ -133,21 +133,38 @@ ansible-galaxy collection install -r deployment/requirements.yml
 
 ## Deployment
 
-Run the playbook:
+Podman will be used to run containers under the same user account used for ansible deployment.
+To install requisite system packages some tasks will require sudo `privileged` access.
+
+To run the entire playbook as an unprivileged user prompting for a sudo password:
 ```sh
-ansible-playbook -i deployment/inventory deployment/site.yml
+ansible-playbook -i deployment/inventory deployment/site.yml -K
 ```
 
-If you want to run only specific plays in the playbook, the following tags are supported and may be specified via `--tags <tag1,tag2>`:
+To run specific plays the following tags are supported and may be specified via `--tags <tag1,tag2>`:
 
-* `docker`
+* `podman` - runs privileged tasks
 * `step-ca`
-* `step`
+* `step` - runs privileged tasks
 * `minio`
-* `prometheus`
+* `prometheus` - runs privileged tasks
 * `jaeger`
 * `reductionist`
-* `haproxy`
+* `haproxy` - runs privileged tasks
+
+### Minimal deployment of Podman and the Reductionist
+
+Podman is a prerequisite for running the Reductionist.
+
+Optionally run the `podman` play to install this prerequisite as an **unprivileged** user, the following will prompt for the sudo password to escalate privileges only for package installation:
+```sh
+ansible-playbook -i deployment/inventory deployment/site.yml --tags podman -K
+```
+
+Then to run the `reductionist` play, again as the **unprivileged** user:
+```sh
+ansible-playbook -i deployment/inventory deployment/site.yml --tags reductionist
+```
 
 ## Usage
 
