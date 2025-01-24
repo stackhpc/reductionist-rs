@@ -14,7 +14,6 @@ use crate::validated_json::ValidatedJson;
 
 use axum::middleware;
 use axum::{
-    body::Bytes,
     extract::{Path, State},
     headers::authorization::{Authorization, Basic},
     http::header,
@@ -22,7 +21,8 @@ use axum::{
     routing::{get, post},
     Router, TypedHeader,
 };
-use cached::{proc_macro::io_cached, stores::DiskCacheBuilder};
+use bytes::Bytes;
+// use cached::{proc_macro::io_cached, stores::DiskCacheBuilder};
 
 use std::sync::Arc;
 use tokio::sync::SemaphorePermit;
@@ -172,13 +172,13 @@ async fn schema() -> &'static str {
     level = "DEBUG",
     skip(client, request_data, resource_manager, mem_permits)
 )]
-#[io_cached(
-    map_error = r##"|e| ActiveStorageError::CacheError{ error: format!("{:?}", e) }"##,
-    disk = true,
-    create = r##"{ DiskCacheBuilder::new("test-cache").set_disk_directory("./").build().expect("valid disk cache builder") }"##,
-    key = "String",
-    convert = r##"{ format!("{:?},{:?},{:?},{:?}", client, request_data, resource_manager, mem_permits) }"##
-)]
+// #[io_cached(
+//     map_error = r##"|e| ActiveStorageError::CacheError{ error: format!("{:?}", e) }"##,
+//     disk = true,
+//     create = r##"{ DiskCacheBuilder::new("test-cache").set_disk_directory("./").build().expect("valid disk cache builder") }"##,
+//     key = "String",
+//     convert = r##"{ format!("{:?},{:?},{:?},{:?}", client, request_data, resource_manager, mem_permits) }"##
+// )]
 async fn download_object<'a>(
     client: &s3_client::S3Client,
     request_data: &models::RequestData,

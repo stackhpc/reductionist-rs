@@ -274,7 +274,7 @@ impl From<ActiveStorageError> for ErrorResponse {
                     _ => Self::internal_server_error(&error),
                 }
             }
-            ActiveStorageError::CacheError { error } => todo!(),
+            ActiveStorageError::CacheError { error: _ } => todo!(),
         };
 
         // Log server errors.

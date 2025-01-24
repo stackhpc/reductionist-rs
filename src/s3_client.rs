@@ -206,10 +206,7 @@ pub fn get_range(offset: Option<usize>, size: Option<usize>) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cached::{
-        proc_macro::{cached, io_cached},
-        stores::DiskCacheBuilder,
-    };
+    use cached::{proc_macro::io_cached, stores::DiskCacheBuilder};
     use url::Url;
 
     // #[cached(
