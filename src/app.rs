@@ -22,6 +22,7 @@ use axum::{
     routing::{get, post},
     Router, TypedHeader,
 };
+use cached::{proc_macro::io_cached, stores::DiskCacheBuilder};
 
 use std::sync::Arc;
 use tokio::sync::SemaphorePermit;
@@ -170,6 +171,13 @@ async fn schema() -> &'static str {
 #[tracing::instrument(
     level = "DEBUG",
     skip(client, request_data, resource_manager, mem_permits)
+)]
+#[io_cached(
+    map_error = r##"|e| ActiveStorageError::CacheError{ error: format!("{:?}", e) }"##,
+    disk = true,
+    create = r##"{ DiskCacheBuilder::new("test-cache").set_disk_directory("./").build().expect("valid disk cache builder") }"##,
+    key = "String",
+    convert = r##"{ format!("{:?},{:?},{:?},{:?}", client, request_data, resource_manager, mem_permits) }"##
 )]
 async fn download_object<'a>(
     client: &s3_client::S3Client,

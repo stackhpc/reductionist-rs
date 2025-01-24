@@ -88,7 +88,7 @@ impl S3ClientMap {
 }
 
 /// S3 client object.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct S3Client {
     /// Underlying AWS SDK S3 client object.
     client: Client,
@@ -206,7 +206,42 @@ pub fn get_range(offset: Option<usize>, size: Option<usize>) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cached::{
+        proc_macro::{cached, io_cached},
+        stores::DiskCacheBuilder,
+    };
     use url::Url;
+
+    // #[cached(
+    //     ty = "SizedCache<String, String>",
+    //     create = "{ SizedCache::with_size(100) }",
+    //     convert = r#"{ format!("{}{}", a, b) }"#
+    // )]
+    // fn cache_test(a: &str, b: &str) -> String {
+    //     format!("{} - {}", a, b)
+    // }
+
+    #[io_cached(
+        map_error = r##"|e| ActiveStorageError::CacheError{ error: format!("{:?}", e) }"##,
+        disk = true,
+        create = r##"{ DiskCacheBuilder::new("test-cache").set_disk_directory("./").build().expect("valid disk cache builder") }"##,
+        key = "String",
+        convert = r##"{ format!("{}:{}", a, b) }"##
+    )]
+    async fn cache_test(a: &str, b: &str) -> Result<String, ActiveStorageError> {
+        println!("Function called");
+        Ok(format!("{} - {}", a, b))
+    }
+
+    #[tokio::test]
+    async fn disk_cache() {
+        // cache_test("a").unwrap();
+        // cache_test("a").unwrap();
+        // cache_test(1, 2).unwrap();
+        // cache_test(1, 2).unwrap();
+        cache_test("a", "b").await.unwrap();
+        cache_test("a", "b").await.unwrap();
+    }
 
     fn make_access_key() -> S3Credentials {
         S3Credentials::access_key("user", "password")
