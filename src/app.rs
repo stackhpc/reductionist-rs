@@ -178,7 +178,7 @@ async fn schema() -> &'static str {
     disk = true,
     create = r##"{ DiskCacheBuilder::new("test-cache").set_disk_directory("./").build().expect("valid disk cache builder") }"##,
     key = "String",
-    convert = r##"{ format!("{:?}", request_data) }"##
+    convert = r##"{ format!("{},{:?}", client, request_data) }"##
 )]
 async fn download_object<'a>(
     client: &s3_client::S3Client,
