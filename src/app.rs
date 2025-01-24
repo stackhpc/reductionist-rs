@@ -3,7 +3,7 @@
 use crate::cli::CommandLineArgs;
 use crate::error::ActiveStorageError;
 use crate::filter_pipeline;
-use crate::metrics::{metrics_handler, track_metrics};
+use crate::metrics::{metrics_handler, track_metrics, LOCAL_CACHE_MISSES};
 use crate::models;
 use crate::operation;
 use crate::operations;
@@ -160,37 +160,6 @@ async fn schema() -> &'static str {
     "Hello, world!"
 }
 
-// /// Download an object from S3
-// ///
-// /// Requests a byte range if `offset` or `size` is specified in the request.
-// ///
-// /// # Arguments
-// ///
-// /// * `client`: S3 client object
-// /// * `request_data`: RequestData object for the request
-// #[tracing::instrument(
-//     level = "DEBUG",
-//     skip(client, request_data, resource_manager, mem_permits)
-// )]
-// async fn download_object<'a>(
-//     client: &s3_client::S3Client,
-//     request_data: &models::RequestData,
-//     resource_manager: &'a ResourceManager,
-//     mem_permits: &mut Option<SemaphorePermit<'a>>,
-// ) -> Result<Bytes, ActiveStorageError> {
-//     let range = s3_client::get_range(request_data.offset, request_data.size);
-//     let _conn_permits = resource_manager.s3_connection().await?;
-//     client
-//         .download_object(
-//             &request_data.bucket,
-//             &request_data.object,
-//             range,
-//             resource_manager,
-//             mem_permits,
-//         )
-//         .await
-// }
-
 /// Download an object from S3
 ///
 /// Requests a byte range if `offset` or `size` is specified in the request.
@@ -219,9 +188,10 @@ async fn download_object<'a>(
 ) -> Result<Bytes, ActiveStorageError> {
     let range = s3_client::get_range(request_data.offset, request_data.size);
     // let _conn_permits = resource_manager.s3_connection().await?;
-    // println!("{:?},{:?}", client, request_data);
-    // TODO: Add cache hit / miss statistics?
-    println!("Downloading object");
+
+    // Increment the prometheus metric for cache misses
+    LOCAL_CACHE_MISSES.with_label_values(&["disk"]).inc();
+
     client
         .download_object(
             &request_data.bucket,
