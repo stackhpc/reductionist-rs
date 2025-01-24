@@ -22,7 +22,7 @@ use axum::{
     Router, TypedHeader,
 };
 use bytes::Bytes;
-// use cached::{proc_macro::io_cached, stores::DiskCacheBuilder};
+use cached::{proc_macro::io_cached, stores::DiskCacheBuilder};
 
 use std::sync::Arc;
 use tokio::sync::SemaphorePermit;
@@ -160,6 +160,37 @@ async fn schema() -> &'static str {
     "Hello, world!"
 }
 
+// /// Download an object from S3
+// ///
+// /// Requests a byte range if `offset` or `size` is specified in the request.
+// ///
+// /// # Arguments
+// ///
+// /// * `client`: S3 client object
+// /// * `request_data`: RequestData object for the request
+// #[tracing::instrument(
+//     level = "DEBUG",
+//     skip(client, request_data, resource_manager, mem_permits)
+// )]
+// async fn download_object<'a>(
+//     client: &s3_client::S3Client,
+//     request_data: &models::RequestData,
+//     resource_manager: &'a ResourceManager,
+//     mem_permits: &mut Option<SemaphorePermit<'a>>,
+// ) -> Result<Bytes, ActiveStorageError> {
+//     let range = s3_client::get_range(request_data.offset, request_data.size);
+//     let _conn_permits = resource_manager.s3_connection().await?;
+//     client
+//         .download_object(
+//             &request_data.bucket,
+//             &request_data.object,
+//             range,
+//             resource_manager,
+//             mem_permits,
+//         )
+//         .await
+// }
+
 /// Download an object from S3
 ///
 /// Requests a byte range if `offset` or `size` is specified in the request.
@@ -170,30 +201,34 @@ async fn schema() -> &'static str {
 /// * `request_data`: RequestData object for the request
 #[tracing::instrument(
     level = "DEBUG",
-    skip(client, request_data, resource_manager, mem_permits)
+    // skip(client, request_data, resource_manager, mem_permits)
+    skip(client, request_data)
 )]
-// #[io_cached(
-//     map_error = r##"|e| ActiveStorageError::CacheError{ error: format!("{:?}", e) }"##,
-//     disk = true,
-//     create = r##"{ DiskCacheBuilder::new("test-cache").set_disk_directory("./").build().expect("valid disk cache builder") }"##,
-//     key = "String",
-//     convert = r##"{ format!("{:?},{:?},{:?},{:?}", client, request_data, resource_manager, mem_permits) }"##
-// )]
+#[io_cached(
+    map_error = r##"|e| ActiveStorageError::CacheError{ error: format!("{:?}", e) }"##,
+    disk = true,
+    create = r##"{ DiskCacheBuilder::new("test-cache").set_disk_directory("./").build().expect("valid disk cache builder") }"##,
+    key = "String",
+    convert = r##"{ format!("{:?}", request_data) }"##
+)]
 async fn download_object<'a>(
     client: &s3_client::S3Client,
     request_data: &models::RequestData,
-    resource_manager: &'a ResourceManager,
-    mem_permits: &mut Option<SemaphorePermit<'a>>,
+    // resource_manager: &'a ResourceManager,
+    // mem_permits: &mut Option<SemaphorePermit<'a>>,
 ) -> Result<Bytes, ActiveStorageError> {
     let range = s3_client::get_range(request_data.offset, request_data.size);
-    let _conn_permits = resource_manager.s3_connection().await?;
+    // let _conn_permits = resource_manager.s3_connection().await?;
+    // println!("{:?},{:?}", client, request_data);
+    // TODO: Add cache hit / miss statistics?
+    println!("Downloading object");
     client
         .download_object(
             &request_data.bucket,
             &request_data.object,
             range,
-            resource_manager,
-            mem_permits,
+            // resource_manager,
+            // mem_permits,
         )
         .await
 }
@@ -232,8 +267,8 @@ async fn operation_handler<T: operation::Operation>(
     let data = download_object(
         &s3_client,
         &request_data,
-        &state.resource_manager,
-        &mut _mem_permits,
+        // &state.resource_manager,
+        // &mut _mem_permits,
     )
     .instrument(tracing::Span::current())
     .await?;

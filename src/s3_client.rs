@@ -137,8 +137,8 @@ impl S3Client {
         bucket: &str,
         key: &str,
         range: Option<String>,
-        resource_manager: &'a ResourceManager,
-        mem_permits: &mut Option<SemaphorePermit<'a>>,
+        // resource_manager: &'a ResourceManager,
+        // mem_permits: &mut Option<SemaphorePermit<'a>>,
     ) -> Result<Bytes, ActiveStorageError> {
         let mut response = self
             .client
@@ -156,9 +156,9 @@ impl S3Client {
             .try_into()?;
 
         // FIXME: how to account for compressed data?
-        if mem_permits.is_none() {
-            *mem_permits = resource_manager.memory(content_length).await?;
-        };
+        // if mem_permits.is_none() {
+        //     *mem_permits = resource_manager.memory(content_length).await?;
+        // };
         // The data returned by the S3 client does not have any alignment guarantees. In order to
         // reinterpret the data as an array of numbers with a higher alignment than 1, we need to
         // return the data in Bytes object in which the underlying data has a higher alignment.
