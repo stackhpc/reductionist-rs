@@ -25,7 +25,6 @@ use bytes::Bytes;
 use cached::{proc_macro::io_cached, stores::DiskCacheBuilder};
 
 use std::sync::Arc;
-use tokio::sync::SemaphorePermit;
 use tower::Layer;
 use tower::ServiceBuilder;
 use tower_http::normalize_path::NormalizePathLayer;
@@ -168,11 +167,7 @@ async fn schema() -> &'static str {
 ///
 /// * `client`: S3 client object
 /// * `request_data`: RequestData object for the request
-#[tracing::instrument(
-    level = "DEBUG",
-    // skip(client, request_data, resource_manager, mem_permits)
-    skip(client, request_data)
-)]
+#[tracing::instrument(level = "DEBUG", skip(client, request_data, resource_manager))]
 #[io_cached(
     map_error = r##"|e| ActiveStorageError::CacheError{ error: format!("{:?}", e) }"##,
     disk = true,
@@ -183,11 +178,15 @@ async fn schema() -> &'static str {
 async fn download_object<'a>(
     client: &s3_client::S3Client,
     request_data: &models::RequestData,
-    // resource_manager: &'a ResourceManager,
-    // mem_permits: &mut Option<SemaphorePermit<'a>>,
+    resource_manager: &ResourceManager,
 ) -> Result<Bytes, ActiveStorageError> {
+    // If we're given a size in the request data then use this to
+    // get an initial guess at the required memory resources.
+    let memory = request_data.size.unwrap_or(0);
+    let mut mem_permits = resource_manager.memory(memory).await?;
+
     let range = s3_client::get_range(request_data.offset, request_data.size);
-    // let _conn_permits = resource_manager.s3_connection().await?;
+    let _conn_permits = resource_manager.s3_connection().await?;
 
     // Increment the prometheus metric for cache misses
     LOCAL_CACHE_MISSES.with_label_values(&["disk"]).inc();
@@ -197,8 +196,8 @@ async fn download_object<'a>(
             &request_data.bucket,
             &request_data.object,
             range,
-            // resource_manager,
-            // mem_permits,
+            resource_manager,
+            &mut mem_permits,
         )
         .await
 }
@@ -222,8 +221,6 @@ async fn operation_handler<T: operation::Operation>(
     auth: Option<TypedHeader<Authorization<Basic>>>,
     ValidatedJson(request_data): ValidatedJson<models::RequestData>,
 ) -> Result<models::Response, ActiveStorageError> {
-    let memory = request_data.size.unwrap_or(0);
-    let mut _mem_permits = state.resource_manager.memory(memory).await?;
     let credentials = if let Some(TypedHeader(auth)) = auth {
         s3_client::S3Credentials::access_key(auth.username(), auth.password())
     } else {
@@ -234,14 +231,9 @@ async fn operation_handler<T: operation::Operation>(
         .get(&request_data.source, credentials)
         .instrument(tracing::Span::current())
         .await;
-    let data = download_object(
-        &s3_client,
-        &request_data,
-        // &state.resource_manager,
-        // &mut _mem_permits,
-    )
-    .instrument(tracing::Span::current())
-    .await?;
+    let data = download_object(&s3_client, &request_data, &state.resource_manager)
+        .instrument(tracing::Span::current())
+        .await?;
     // All remaining work is synchronous. If the use_rayon argument was specified, delegate to the
     // Rayon thread pool. Otherwise, execute as normal using Tokio.
     if state.args.use_rayon {

@@ -156,8 +156,8 @@ impl S3Client {
         bucket: &str,
         key: &str,
         range: Option<String>,
-        // resource_manager: &'a ResourceManager,
-        // mem_permits: &mut Option<SemaphorePermit<'a>>,
+        resource_manager: &'a ResourceManager,
+        mem_permits: &mut Option<SemaphorePermit<'a>>,
     ) -> Result<Bytes, ActiveStorageError> {
         let mut response = self
             .client
@@ -175,9 +175,10 @@ impl S3Client {
             .try_into()?;
 
         // FIXME: how to account for compressed data?
-        // if mem_permits.is_none() {
-        //     *mem_permits = resource_manager.memory(content_length).await?;
-        // };
+        if mem_permits.is_none() || mem_permits.as_ref().unwrap().num_permits() == 0 {
+            *mem_permits = resource_manager.memory(content_length).await?;
+        };
+
         // The data returned by the S3 client does not have any alignment guarantees. In order to
         // reinterpret the data as an array of numbers with a higher alignment than 1, we need to
         // return the data in Bytes object in which the underlying data has a higher alignment.
@@ -225,39 +226,7 @@ pub fn get_range(offset: Option<usize>, size: Option<usize>) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cached::{proc_macro::io_cached, stores::DiskCacheBuilder};
     use url::Url;
-
-    // #[cached(
-    //     ty = "SizedCache<String, String>",
-    //     create = "{ SizedCache::with_size(100) }",
-    //     convert = r#"{ format!("{}{}", a, b) }"#
-    // )]
-    // fn cache_test(a: &str, b: &str) -> String {
-    //     format!("{} - {}", a, b)
-    // }
-
-    #[io_cached(
-        map_error = r##"|e| ActiveStorageError::CacheError{ error: format!("{:?}", e) }"##,
-        disk = true,
-        create = r##"{ DiskCacheBuilder::new("test-cache").set_disk_directory("./").build().expect("valid disk cache builder") }"##,
-        key = "String",
-        convert = r##"{ format!("{}:{}", a, b) }"##
-    )]
-    async fn cache_test(a: &str, b: &str) -> Result<String, ActiveStorageError> {
-        println!("Function called");
-        Ok(format!("{} - {}", a, b))
-    }
-
-    #[tokio::test]
-    async fn disk_cache() {
-        // cache_test("a").unwrap();
-        // cache_test("a").unwrap();
-        // cache_test(1, 2).unwrap();
-        // cache_test(1, 2).unwrap();
-        cache_test("a", "b").await.unwrap();
-        cache_test("a", "b").await.unwrap();
-    }
 
     fn make_access_key() -> S3Credentials {
         S3Credentials::access_key("user", "password")
