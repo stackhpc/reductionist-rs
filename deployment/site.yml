@@ -5,8 +5,22 @@
   hosts: podman
   tags:
     - podman
-  become: true
   tasks:
+    # Unprivileged user account requires linger to be enabled so podman will continue to run
+    # after the session has been terminated upon logout
+    # The command: loginctl show-user <unprivileged user>
+    # Should show: Linger=yes
+    # When enabled we should have the file "/var/lib/systemd/linger/<unprivileged user>
+    - name: Determine linger state for Reductionist user
+      ansible.builtin.stat:
+        path: "/var/lib/systemd/linger/{{ ansible_facts['user_id'] }}"
+      register: systemd_linger_path_for_reductionist
+    - name: Enable linger for unprivileged Reductionist user
+      ansible.builtin.command: loginctl enable-linger {{ ansible_facts['user_id'] }}
+      changed_when: true
+      when: not systemd_linger_path_for_reductionist.stat.exists
+      become: true
+
     - name: Ensure podman docker is installed on Ubuntu
       when: ansible_facts["os_family"] | lower == "debian"
       ansible.builtin.package:
@@ -15,6 +29,7 @@
           - podman-docker
         state: present
         update_cache: true
+      become: true
 
     - name: Ensure podman docker is installed on RedHat
       when: ansible_facts["os_family"] | lower == "redhat"
@@ -24,6 +39,7 @@
           - podman-docker
         state: present
         update_cache: true
+      become: true
 
     - name: Ensure other system packages are present
       ansible.builtin.package:
@@ -31,6 +47,7 @@
           - git
           - python3-pip
         state: present
+      become: true
 
 - name: Deploy step CA
   hosts: step-ca

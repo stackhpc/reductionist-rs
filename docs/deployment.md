@@ -155,8 +155,14 @@ To run specific plays the following tags are supported and may be specified via 
 ### Minimal deployment of Podman and the Reductionist
 
 Podman is a prerequisite for running the Reductionist.
+Podman can run containers as an **unprivileged** user, however this user must have **linger** enabled on their account to allow Podman to continue to run after logging out of the user session.
 
-Optionally run the `podman` play to install this prerequisite as an **unprivileged** user, the following will prompt for the sudo password to escalate privileges only for package installation:
+To enable **linger** support for the unprivileged user:
+```sh
+sudo loginctl enable-linger <unprivileged user>
+```
+
+Alternatively, run the optional `podman` play to install Podman as an **unprivileged** user. The following will prompt for the sudo password to escalate privileges only for package installation and for enabling **linger** for the unprivileged user:
 ```sh
 ansible-playbook -i deployment/inventory deployment/site.yml --tags podman -K
 ```
@@ -165,6 +171,14 @@ Then to run the `reductionist` play, again as the **unprivileged** user:
 ```sh
 ansible-playbook -i deployment/inventory deployment/site.yml --tags reductionist
 ```
+
+Podman containers require a manual restart after a system reboot.
+This requires logging into the host(s) running the Reductionist as the **unprivileged** user to run:
+```sh
+podman restart reductionist
+```
+
+Automatic restart on boot can be enabled via **systemd**, not covered by this documentation.
 
 ## Usage
 
