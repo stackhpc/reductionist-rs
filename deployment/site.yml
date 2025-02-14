@@ -83,7 +83,7 @@
 
     - name: Set step config path
       set_fact:
-        step_config_path: "{{ ansible_facts.env.HOME }}/step"
+        step_config_path: "{{ ansible_env.HOME }}/step"
 
     - name: Stat provisioner password file
       ansible.builtin.stat:
@@ -161,7 +161,7 @@
 
     - name: Set step config path
       set_fact:
-        step_config_path: "{{ ansible_facts.env.HOME }}/step"
+        step_config_path: "{{ ansible_env.HOME }}/step"
 
     - name: Regenerate step config if requested
       ansible.builtin.file:
@@ -300,41 +300,41 @@
   hosts: prometheus
   tags:
     - prometheus
-  become: true
   tasks:
     - name: Assert that there is only one Prometheus server
       ansible.builtin.assert:
         that:
           groups['prometheus'] | length == 1
 
-    - name: Ensure /etc/prometheus directory exists
+    - name: Ensure non-privileged user's prometheus directory exists
       ansible.builtin.file:
-        path: /etc/prometheus
+        path: "{{ ansible_env.HOME }}/prometheus"
         state: directory
         mode: "0755"
 
     - name: Ensure CA certificate is copied
       ansible.builtin.copy:
         src: "{{ prometheus_cacert }}"
-        dest: /etc/prometheus/cacert.pem
+        dest: "{{ ansible_env.HOME }}/prometheus/cacert.pem"
         mode: "0644"
       register: prometheus_cacert
 
     - name: Ensure prometheus.yml is templated
       ansible.builtin.template:
         src: prometheus.yml.j2
-        dest: /etc/prometheus/prometheus.yml
+        dest: "{{ ansible_env.HOME }}/prometheus/prometheus.yml"
         mode: "0644"
       register: prometheus_yml
 
     - name: Ensure prometheus container is running
       containers.podman.podman_container:
         name: prometheus
+        privileged: true # Rocky 9 SELinux prevents visibility of the host volumes
         image: docker.io/prom/prometheus
         network: host
         restart: "{{ prometheus_yml is changed or prometheus_cacert is changed }}"
         volumes:
-          - "/etc/prometheus:/etc/prometheus:ro"
+          - "{{ ansible_env.HOME }}/prometheus:/etc/prometheus:ro"
           - "prometheus:/prometheus"
       become: false
 
@@ -406,7 +406,6 @@
   hosts: haproxy
   tags:
     - haproxy
-  become: true
   tasks:
     # Currently we are not deploying any failover mechanism such as keepalived,
     # so limit to one HAProxy server.
@@ -424,28 +423,28 @@
       register: result
       loop: "{{ query('inventory_hostnames', 'reductionist') }}"
 
-    - name: Ensure /etc/haproxy directory exists
+    - name: Ensure non-privileged user's haproxy directory exists
       ansible.builtin.file:
-        path: /etc/haproxy
+        path: "{{ ansible_env.HOME }}/haproxy"
         state: directory
         mode: "0755"
 
     - name: Ensure haproxy.cfg is templated
       ansible.builtin.template:
         src: haproxy.cfg.j2
-        dest: /etc/haproxy/haproxy.cfg
+        dest: "{{ ansible_env.HOME }}/haproxy/haproxy.cfg"
         mode: "0644"
       register: haproxy_cfg
 
     - name: Ensure haproxy container is running
       containers.podman.podman_container:
         name: haproxy
+        privileged: true # Rocky 9 SELinux prevents visibility of the host volumes
         image: docker.io/haproxy:2.8
         network: host
         restart: "{{ haproxy_cfg is changed }}"
         volumes:
-          - "/etc/haproxy:/usr/local/etc/haproxy:ro"
-      become: false
+          - "{{ ansible_env.HOME }}/haproxy:/usr/local/etc/haproxy:ro"
 
     - name: Wait for reductionist server to be accessible via HAProxy
       ansible.builtin.uri:

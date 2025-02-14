@@ -136,49 +136,69 @@ ansible-galaxy collection install -r deployment/requirements.yml
 Podman will be used to run containers under the same user account used for ansible deployment.
 To install requisite system packages some tasks will require sudo `privileged` access.
 
-To run the entire playbook as an unprivileged user prompting for a sudo password:
+To run the entire playbook as a non-privileged user prompting for a sudo password:
 ```sh
 ansible-playbook -i deployment/inventory deployment/site.yml -K
 ```
 
 To run specific plays the following tags are supported and may be specified via `--tags <tag1,tag2>`:
 
-* `podman` - runs privileged tasks
+* `podman` - runs privileged tasks to install packages
 * `step-ca`
-* `step` - runs privileged tasks
+* `step` - runs privileged tasks to install and the CA certificate
 * `minio`
-* `prometheus` - runs privileged tasks
+* `prometheus`
 * `jaeger`
 * `reductionist`
-* `haproxy` - runs privileged tasks
+* `haproxy`
 
 ### Minimal deployment of Podman and the Reductionist
 
 Podman is a prerequisite for running the Reductionist.
-Podman can run containers as an **unprivileged** user, however this user must have **linger** enabled on their account to allow Podman to continue to run after logging out of the user session.
+Podman can run containers as an **non-privileged** user, however this user must have **linger** enabled on their account to allow Podman to continue to run after logging out of the user session.
 
-To enable **linger** support for the unprivileged user:
+To enable **linger** support for the non-privileged user:
 ```sh
-sudo loginctl enable-linger <unprivileged user>
+sudo loginctl enable-linger <non-privileged user>
 ```
 
-Alternatively, run the optional `podman` play to install Podman as an **unprivileged** user. The following will prompt for the sudo password to escalate privileges only for package installation and for enabling **linger** for the unprivileged user:
+Alternatively, run the optional `podman` play to install Podman as an **non-privileged** user. The following will prompt for the sudo password to escalate privileges only for package installation and for enabling **linger** for the non-privileged user:
 ```sh
 ansible-playbook -i deployment/inventory deployment/site.yml --tags podman -K
 ```
 
-Then to run the `reductionist` play, again as the **unprivileged** user:
+Then to run the `reductionist` play, again as the **non-privileged** user:
 ```sh
 ansible-playbook -i deployment/inventory deployment/site.yml --tags reductionist
 ```
 
 Podman containers require a manual restart after a system reboot.
-This requires logging into the host(s) running the Reductionist as the **unprivileged** user to run:
+This requires logging into the host(s) running the Reductionist as the **non-privileged** user to run:
 ```sh
 podman restart reductionist
 ```
 
 Automatic restart on boot can be enabled via **systemd**, not covered by this documentation.
+
+### Using SSL/TLS certificates with the Reductionist
+
+To enable **https** connections edit `deployment/group_vars/all` before deployment as set:
+
+```
+REDUCTIONIST_HTTPS: "true"
+```
+
+Note, this is the default.
+
+Create a `certs` directory under the home directory of the non-privileged deployment user.
+Ensure the following files are added to the this directory:
+
+| Filename    | Description |
+| -------- | ------- |
+| certs/key.pem  | Private key file |
+| certs/cert.pem | Certificate file including any intermediates |
+
+Certificates can be added post Reductionist deployment but the Reductionist's container will need to be restarted afterwards.
 
 ## Usage
 
