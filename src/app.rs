@@ -1,5 +1,6 @@
 //! Active Storage server API
 
+use crate::chunk_cache::{self, ChunkCache};
 use crate::cli::CommandLineArgs;
 use crate::error::ActiveStorageError;
 use crate::filter_pipeline;
@@ -22,7 +23,7 @@ use axum::{
     Router, TypedHeader,
 };
 use bytes::Bytes;
-use cached::{proc_macro::io_cached, stores::DiskCacheBuilder};
+use cached::IOCached;
 
 use std::sync::Arc;
 use tower::Layer;
@@ -56,6 +57,9 @@ struct AppState {
 
     /// Resource manager.
     resource_manager: ResourceManager,
+
+    /// Object chunk cache
+    chunk_cache: ChunkCache,
 }
 
 impl AppState {
@@ -64,10 +68,13 @@ impl AppState {
         let task_limit = args.thread_limit.or_else(|| Some(num_cpus::get() - 1));
         let resource_manager =
             ResourceManager::new(args.s3_connection_limit, args.memory_limit, task_limit);
+        let chunk_cache: ChunkCache = chunk_cache::build(args);
+
         Self {
             args: args.clone(),
             s3_client_map: s3_client::S3ClientMap::new(),
             resource_manager,
+            chunk_cache,
         }
     }
 }
@@ -159,7 +166,7 @@ async fn schema() -> &'static str {
     "Hello, world!"
 }
 
-/// Download an object from S3
+/// Download and optionally cache an object from S3
 ///
 /// Requests a byte range if `offset` or `size` is specified in the request.
 ///
@@ -167,19 +174,35 @@ async fn schema() -> &'static str {
 ///
 /// * `client`: S3 client object
 /// * `request_data`: RequestData object for the request
-#[tracing::instrument(level = "DEBUG", skip(client, request_data, resource_manager))]
-#[io_cached(
-    map_error = r##"|e| ActiveStorageError::CacheError{ error: format!("{:?}", e) }"##,
-    disk = true,
-    create = r##"{ DiskCacheBuilder::new("test-cache").set_disk_directory("./").build().expect("valid disk cache builder") }"##,
-    key = "String",
-    convert = r##"{ format!("{},{:?}", client, request_data) }"##
-)]
+/// * `resource_manager`: ResourceManager object
+/// * `chunk_cache`: ChunkCache object
+/// * `args`: CommandLineArgs object
 async fn download_object<'a>(
     client: &s3_client::S3Client,
     request_data: &models::RequestData,
-    resource_manager: &ResourceManager,
+    resource_manager: &'a ResourceManager,
+    chunk_cache: &ChunkCache,
+    args: &CommandLineArgs,
 ) -> Result<Bytes, ActiveStorageError> {
+
+    let key = format!("{},{:?}", client, request_data);
+
+    // If we're using the chunk cache,
+    // check if the key is in the cache and return the cached bytes if so.
+    if args.use_chunk_cache {
+        match chunk_cache.cache_get(&key) {
+            Ok(cache_value_for_key) => {
+                if let Some(cached_bytes) = cache_value_for_key {
+                    return Ok(cached_bytes);
+                }
+            },
+            Err(e) => {
+                    // Propagate any cache error back as an ActiveStorageError
+                    return Err(ActiveStorageError::CacheError{ error: format!("{:?}", e) });
+            }
+        };
+    }
+
     // If we're given a size in the request data then use this to
     // get an initial guess at the required memory resources.
     let memory = request_data.size.unwrap_or(0);
@@ -188,10 +211,7 @@ async fn download_object<'a>(
     let range = s3_client::get_range(request_data.offset, request_data.size);
     let _conn_permits = resource_manager.s3_connection().await?;
 
-    // Increment the prometheus metric for cache misses
-    LOCAL_CACHE_MISSES.with_label_values(&["disk"]).inc();
-
-    client
+    let data = client
         .download_object(
             &request_data.bucket,
             &request_data.object,
@@ -199,7 +219,25 @@ async fn download_object<'a>(
             resource_manager,
             &mut mem_permits,
         )
-        .await
+        .await;
+
+    // If we're using the chunk cache,
+    // store the data that has been successfully downloaded
+    if args.use_chunk_cache {
+        if let Ok(data_bytes) = &data {
+            match chunk_cache.cache_set(key, data_bytes.clone()) {
+                Ok(_) => {},
+                Err(e) => {
+                    // Propagate any cache error back as an ActiveStorageError
+                    return Err(ActiveStorageError::CacheError{ error: format!("{:?}", e) });
+                }
+            }
+        }
+        // Increment the prometheus metric for cache misses
+        LOCAL_CACHE_MISSES.with_label_values(&["disk"]).inc();
+    }
+
+    data
 }
 
 /// Handler for Active Storage operations
@@ -231,9 +269,17 @@ async fn operation_handler<T: operation::Operation>(
         .get(&request_data.source, credentials)
         .instrument(tracing::Span::current())
         .await;
-    let data = download_object(&s3_client, &request_data, &state.resource_manager)
-        .instrument(tracing::Span::current())
-        .await?;
+
+    let data = download_object(
+        &s3_client,
+        &request_data,
+        &state.resource_manager,
+        &state.chunk_cache,
+        &state.args,
+    )
+    .instrument(tracing::Span::current())
+    .await?;
+
     // All remaining work is synchronous. If the use_rayon argument was specified, delegate to the
     // Rayon thread pool. Otherwise, execute as normal using Tokio.
     if state.args.use_rayon {
