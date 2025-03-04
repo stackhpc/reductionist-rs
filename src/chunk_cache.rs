@@ -253,3 +253,194 @@ impl ChunkCache {
         println!("Finished pruning the cache");
     }
 }
+
+mod test {
+
+    use bytes::Bytes;
+    use num_traits::ToPrimitive;
+    use serde::{Deserialize, Serialize};
+    use std::{collections::HashMap, ops::Add, path::PathBuf, time::{SystemTime, UNIX_EPOCH}};
+    use tokio::fs;
+
+    #[derive(Debug)]
+    struct SimpleDiskCache {
+        /// Cache folder name
+        name: String,
+        /// Cache parent directory
+        dir: PathBuf,
+        /// Max cache size in bytes
+        max_size_bytes: usize,
+        /// Max time to live for a single cache entry
+        ttl_seconds: u64,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    struct Metadata {
+        /// Seconds after unix epoch for ache item expiry
+        expires: u64,
+        /// Cache value size
+        size_bytes: usize,
+    }
+
+    impl Metadata {
+        fn new(size: usize, ttl: u64) -> Self {
+            let expires = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+                .add(ttl);
+            Metadata {
+                expires,
+                size_bytes: size,
+            }
+        }
+    }
+
+    type CacheKeys = HashMap<String, Metadata>;
+
+    impl SimpleDiskCache {
+        pub fn new(name: &str, dir: &str, max_size_bytes: usize, ttl_seconds: u64) -> Self {
+            let name = name.to_string();
+            let dir = PathBuf::from(dir);
+            let path = dir.join(&name);
+            if !dir.as_path().exists() {
+                panic!("Cache parent dir {:?} must exist", dir)
+            } else if path.exists() {
+                panic!("Cache folder {:?} already exists", path.to_str())
+            } else {
+                std::fs::create_dir(path).unwrap();
+            }
+            SimpleDiskCache {
+                name,
+                dir,
+                max_size_bytes,
+                ttl_seconds,
+            }
+        }
+
+        async fn load_metadata(&self) -> CacheKeys {
+            let file = self.dir.join(&self.name).join("metadata.json");
+            if file.exists() {
+                serde_json::from_str(fs::read_to_string(file).await.unwrap().as_str()).unwrap()
+            } else {
+                HashMap::new()
+            }
+        }
+
+        async fn save_metadata(&self, data: CacheKeys) {
+            let file = self.dir.join(&self.name).join("metadata.json");
+            fs::write(file, serde_json::to_string(&data).unwrap())
+                .await
+                .unwrap();
+        }
+
+        async fn get(&self, key: &str) -> Option<Bytes> {
+            match fs::read(self.dir.join(&self.name).join(key)).await {
+                Ok(val) => Some(Bytes::from(val)),
+                Err(err) => match err.kind() {
+                    std::io::ErrorKind::NotFound => {
+                        None
+                    },
+                    _ => panic!("{}", err)
+                }
+            }
+        }
+
+        async fn set(&self, key: &str, value: Bytes) {
+            // Prepare the metadata
+            let size = value.len();
+            let path = self.dir.join(&self.name).join(key);
+            let mut md = self.load_metadata().await;
+            // Write the cache value and then update the metadata
+            fs::write(path, value).await.unwrap();
+            md.insert(key.to_owned(), Metadata::new(size, self.ttl_seconds));
+            self.save_metadata(md).await;
+        }
+
+        async fn remove(&self, key: &str) {
+            let mut md = self.load_metadata().await;
+            if let Some(_) = md.get(key) {
+                let path = self.dir.join(&self.name).join(key);
+                fs::remove_file(path).await.unwrap();
+                md.remove(key);
+                self.save_metadata(md).await;
+            }
+        }
+
+        // Removes expired cache entries
+        async fn prune_expired(&self) {
+            let metadata = self.load_metadata().await;
+            let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+            for (key, data) in metadata.iter() {
+                if data.expires < timestamp {
+                    self.remove(key).await;
+                }
+            }
+        }
+
+        // Removes items which are closest to expiry
+        // to free up disk space
+        async fn prune_disk_space(&self) {
+            let threshold = 0.7;
+            let metadata = self.load_metadata().await;
+            let cache_size = metadata.iter().fold(0, |_, (_, item)| item.size_bytes);
+            if cache_size.to_f64().unwrap() > threshold * self.max_size_bytes.to_f64().unwrap() {
+                // Remove items until cache size is below threshold
+                todo!()
+            }
+        }
+
+        fn wipe(&self) {
+            std::fs::remove_dir_all(self.dir.join(&self.name)).unwrap();
+        }
+
+        // fn keys() {}
+    }
+
+    #[tokio::test]
+    async fn test_simple_disk_cache() {
+        // Arrange
+        let cache = SimpleDiskCache::new("test-cache-1", "./", 1024, 10);
+
+        // Act
+        let key_1 = "item-1";
+        let value_1 = Bytes::from(vec![1, 2, 3, 4]);
+        cache.set(key_1, value_1.clone()).await;
+        let cache_item_1 = cache.get(key_1).await;
+
+        // Assert
+        let metadata = cache.load_metadata().await;
+        println!("{:?}", metadata);
+        assert_eq!(metadata.len(), 1);
+        assert_eq!(metadata.get(key_1).unwrap().size_bytes, value_1.len());
+        assert_eq!(cache_item_1.unwrap(), value_1);
+
+        // Act
+        let key_2 = "item-2";
+        let value_2 = Bytes::from("Test123");
+        cache.set(key_2, value_2.clone()).await;
+        let cache_item_2 = cache.get(key_2).await;
+
+        // Assert
+        let metadata = cache.load_metadata().await;
+        println!("{:?}", metadata);
+        assert_eq!(metadata.len(), 2);
+        assert_eq!(metadata.get(key_2).unwrap().size_bytes, value_2.len());
+        assert_eq!(cache_item_2.unwrap(), value_2);
+
+
+        // Act
+        cache.remove(key_1).await;
+
+        // Assert
+        let metadata = cache.load_metadata().await;
+        println!("{:?}", metadata);
+        assert_eq!(metadata.len(), 1);
+        assert_eq!(metadata.contains_key(key_1), false);
+        assert_eq!(metadata.contains_key(key_2), true);
+        assert_eq!(cache.get(key_1).await, None);
+
+        cache.wipe();
+
+    }
+}
