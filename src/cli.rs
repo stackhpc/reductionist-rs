@@ -64,6 +64,11 @@ pub struct CommandLineArgs {
     /// Default is false.
     #[arg(long, default_value_t = false, env = "REDUCTIONIST_CHUNK_CACHE_AGE_REFRESH")]
     pub chunk_cache_age_refresh: bool,
+    /// Whether to apply an upper size limit to the cache.
+    /// Example values: "300GB", "1TB".
+    /// Default when unset is unlimited.
+    #[arg(long, env = "REDUCTIONIST_CHUNK_CACHE_SIZE_LIMIT")]
+    pub chunk_cache_size_limit: Option<String>,
 }
 
 /// Returns parsed command line arguments.

@@ -1,6 +1,6 @@
 //! Active Storage server API
 
-use crate::chunk_cache::{self, ChunkCache};
+use crate::chunk_cache::SelfPruningChunkCache;
 use crate::cli::CommandLineArgs;
 use crate::error::ActiveStorageError;
 use crate::filter_pipeline;
@@ -23,7 +23,6 @@ use axum::{
     Router, TypedHeader,
 };
 use bytes::Bytes;
-use cached::IOCached;
 
 use std::sync::Arc;
 use tower::Layer;
@@ -59,7 +58,7 @@ struct AppState {
     resource_manager: ResourceManager,
 
     /// Object chunk cache
-    chunk_cache: ChunkCache,
+    chunk_cache: SelfPruningChunkCache,
 }
 
 impl AppState {
@@ -68,7 +67,7 @@ impl AppState {
         let task_limit = args.thread_limit.or_else(|| Some(num_cpus::get() - 1));
         let resource_manager =
             ResourceManager::new(args.s3_connection_limit, args.memory_limit, task_limit);
-        let chunk_cache: ChunkCache = chunk_cache::build(args);
+        let chunk_cache = SelfPruningChunkCache::new(args);
 
         Self {
             args: args.clone(),
@@ -175,13 +174,13 @@ async fn schema() -> &'static str {
 /// * `client`: S3 client object
 /// * `request_data`: RequestData object for the request
 /// * `resource_manager`: ResourceManager object
-/// * `chunk_cache`: ChunkCache object
+/// * `chunk_cache`: SelfPruningChunkCache object
 /// * `args`: CommandLineArgs object
 async fn download_object<'a>(
     client: &s3_client::S3Client,
     request_data: &models::RequestData,
     resource_manager: &'a ResourceManager,
-    chunk_cache: &ChunkCache,
+    chunk_cache: &SelfPruningChunkCache,
     args: &CommandLineArgs,
 ) -> Result<Bytes, ActiveStorageError> {
 
@@ -190,18 +189,23 @@ async fn download_object<'a>(
     // If we're using the chunk cache,
     // check if the key is in the cache and return the cached bytes if so.
     if args.use_chunk_cache {
-        match chunk_cache.cache_get(&key) {
-            Ok(cache_value_for_key) => {
-                if let Some(cached_bytes) = cache_value_for_key {
+        match chunk_cache.get(&key) {
+            Ok(cache_value) => {
+                if let Some(cached_bytes) = cache_value {
+                    // TODO: remove debug
+                    println!("Cache hit for key: {}", key);
                     return Ok(cached_bytes);
                 }
             },
             Err(e) => {
-                    // Propagate any cache error back as an ActiveStorageError
-                    return Err(ActiveStorageError::CacheError{ error: format!("{:?}", e) });
+                // Propagate any cache error back as an ActiveStorageError
+                return Err(ActiveStorageError::CacheError{ error: format!("{:?}", e) });
             }
         };
     }
+
+    // TODO: remove debug
+    println!("Cache miss for key: {}", key);
 
     // If we're given a size in the request data then use this to
     // get an initial guess at the required memory resources.
@@ -225,7 +229,7 @@ async fn download_object<'a>(
     // store the data that has been successfully downloaded
     if args.use_chunk_cache {
         if let Ok(data_bytes) = &data {
-            match chunk_cache.cache_set(key, data_bytes.clone()) {
+            match chunk_cache.set(&key, &data_bytes) {
                 Ok(_) => {},
                 Err(e) => {
                     // Propagate any cache error back as an ActiveStorageError
