@@ -36,6 +36,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--offset", type=int)
     parser.add_argument("--size", type=int)
     parser.add_argument("--shape", type=str)
+    parser.add_argument("--axis", type=int)
     parser.add_argument("--order", default="C") #, choices=["C", "F"]) allow invalid for testing
     parser.add_argument("--selection", type=str)
     parser.add_argument("--compression", type=str)
@@ -72,6 +73,8 @@ def build_request_data(args: argparse.Namespace) -> dict:
         request_data["byte_order"] = args.byte_order
     if args.shape:
         request_data["shape"] = json.loads(args.shape)
+    if args.axis is not None:
+        request_data["axis"] = args.axis
     if args.selection:
         request_data["selection"] = json.loads(args.selection)
     if args.compression:
