@@ -19,6 +19,7 @@ fn get_test_request_data() -> RequestData {
         offset: None,
         size: None,
         shape: None,
+        axis: None,
         order: None,
         selection: None,
         compression: None,

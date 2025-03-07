@@ -136,6 +136,8 @@ pub struct RequestData {
         custom = "validate_shape"
     )]
     pub shape: Option<Vec<usize>>,
+    /// Axis over which to perform the reduction operation
+    pub axis: Option<usize>,
     /// Order of the multi-dimensional array
     pub order: Option<Order>,
     /// Subset of the data to operate on
@@ -222,6 +224,7 @@ fn validate_request_data(request_data: &RequestData) -> Result<(), ValidationErr
             validate_raw_size(*size, request_data.dtype, &request_data.shape)?;
         }
     };
+    // Check selection is compatible with shape
     match (&request_data.shape, &request_data.selection) {
         (Some(shape), Some(selection)) => {
             validate_shape_selection(shape, selection)?;
@@ -230,6 +233,18 @@ fn validate_request_data(request_data: &RequestData) -> Result<(), ValidationErr
             return Err(ValidationError::new(
                 "Selection requires shape to be specified",
             ));
+        }
+        _ => (),
+    };
+    // Check axis is compatible with shape
+    match (&request_data.shape, &request_data.axis) {
+        (Some(shape), Some(axis)) => {
+            if *axis > shape.len() - 1 {
+                return Err(ValidationError::new("Axis must be within shape"));
+            }
+        }
+        (None, Some(_)) => {
+            return Err(ValidationError::new("Axis requires shape to be specified"));
         }
         _ => (),
     };
@@ -335,6 +350,9 @@ mod tests {
                 Token::U32(2),
                 Token::U32(5),
                 Token::SeqEnd,
+                Token::Str("axis"),
+                Token::Some,
+                Token::U32(1),
                 Token::Str("order"),
                 Token::Some,
                 Token::Enum { name: "Order" },
@@ -660,6 +678,23 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "Axis requires shape to be specified")]
+    fn test_axis_without_shape() {
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.axis = Some(1);
+        request_data.validate().unwrap()
+    }
+
+    #[test]
+    #[should_panic(expected = "Axis must be within shape")]
+    fn test_axis_gt_shape() {
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.axis = Some(2);
+        request_data.shape = Some(vec![2, 5]);
+        request_data.validate().unwrap()
+    }
+
+    #[test]
     fn test_invalid_compression() {
         assert_de_tokens_error::<RequestData>(
             &[
@@ -731,7 +766,7 @@ mod tests {
             Token::Str("foo"),
             Token::StructEnd
             ],
-            "unknown field `foo`, expected one of `source`, `bucket`, `object`, `dtype`, `byte_order`, `offset`, `size`, `shape`, `order`, `selection`, `compression`, `filters`, `missing`"
+            "unknown field `foo`, expected one of `source`, `bucket`, `object`, `dtype`, `byte_order`, `offset`, `size`, `shape`, `axis`, `order`, `selection`, `compression`, `filters`, `missing`"
         )
     }
 
@@ -755,6 +790,7 @@ mod tests {
                         "offset": 4,
                         "size": 8,
                         "shape": [2, 5],
+                        "axis": 1,
                         "order": "C",
                         "selection": [[1, 2, 3], [4, 5, 6]],
                         "compression": {"id": "gzip"},
@@ -776,6 +812,7 @@ mod tests {
                         "offset": 4,
                         "size": 8,
                         "shape": [2, 5, 10],
+                        "axis": 2,
                         "order": "F",
                         "selection": [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
                         "compression": {"id": "zlib"},
@@ -787,6 +824,7 @@ mod tests {
         expected.dtype = DType::Float64;
         expected.byte_order = Some(ByteOrder::Big);
         expected.shape = Some(vec![2, 5, 10]);
+        expected.axis = Some(2);
         expected.order = Some(Order::F);
         expected.selection = Some(vec![
             Slice::new(1, 2, 3),
