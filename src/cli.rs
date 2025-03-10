@@ -58,12 +58,8 @@ pub struct CommandLineArgs {
     pub chunk_cache_path: Option<String>,
     /// Lifespan of cached chunks in seconds.
     /// Default is 1 day.
-    #[arg(long, env = "REDUCTIONIST_CHUNK_CACHE_AGE")]
-    pub chunk_cache_age: Option<u64>,
-    /// Whether a cache hit refreshes the age of that chunk.
-    /// Default is false.
-    #[arg(long, default_value_t = false, env = "REDUCTIONIST_CHUNK_CACHE_AGE_REFRESH")]
-    pub chunk_cache_age_refresh: bool,
+    #[arg(long, default_value_t = 86400, env = "REDUCTIONIST_CHUNK_CACHE_AGE")]
+    pub chunk_cache_age: u64,
     /// Whether to apply an upper size limit to the cache.
     /// Example values: "300GB", "1TB".
     /// Default when unset is unlimited.

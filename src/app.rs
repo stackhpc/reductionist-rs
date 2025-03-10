@@ -1,6 +1,6 @@
 //! Active Storage server API
 
-use crate::chunk_cache::SelfPruningChunkCache;
+use crate::chunk_cache::ChunkCache;
 use crate::cli::CommandLineArgs;
 use crate::error::ActiveStorageError;
 use crate::filter_pipeline;
@@ -58,7 +58,7 @@ struct AppState {
     resource_manager: ResourceManager,
 
     /// Object chunk cache
-    chunk_cache: SelfPruningChunkCache,
+    chunk_cache: ChunkCache,
 }
 
 impl AppState {
@@ -67,7 +67,7 @@ impl AppState {
         let task_limit = args.thread_limit.or_else(|| Some(num_cpus::get() - 1));
         let resource_manager =
             ResourceManager::new(args.s3_connection_limit, args.memory_limit, task_limit);
-        let chunk_cache = SelfPruningChunkCache::new(args);
+        let chunk_cache = ChunkCache::new(args);
 
         Self {
             args: args.clone(),
@@ -174,36 +174,29 @@ async fn schema() -> &'static str {
 /// * `client`: S3 client object
 /// * `request_data`: RequestData object for the request
 /// * `resource_manager`: ResourceManager object
-/// * `chunk_cache`: SelfPruningChunkCache object
-/// * `args`: CommandLineArgs object
+/// * `chunk_cache`: ChunkCache object
 async fn download_object<'a>(
     client: &s3_client::S3Client,
     request_data: &models::RequestData,
     resource_manager: &'a ResourceManager,
-    chunk_cache: &SelfPruningChunkCache,
-    args: &CommandLineArgs,
+    chunk_cache: &ChunkCache,
 ) -> Result<Bytes, ActiveStorageError> {
 
     let key = format!("{},{:?}", client, request_data);
 
-    // If we're using the chunk cache,
-    // check if the key is in the cache and return the cached bytes if so.
-    if args.use_chunk_cache {
-        match chunk_cache.get(&key) {
-            Ok(cache_value) => {
-                if let Some(cached_bytes) = cache_value {
-                    // TODO: remove debug
-                    println!("Cache hit for key: {}", key);
-                    return Ok(cached_bytes);
-                }
-            },
-            Err(e) => {
-                // Propagate any cache error back as an ActiveStorageError
-                return Err(ActiveStorageError::CacheError{ error: format!("{:?}", e) });
+    // If we're using the chunk cache and have a hit it'll return Some(bytes), None when disabled.
+    match chunk_cache.get(&key).await {
+        Ok(value) => {
+            if let Some(bytes) = value {
+                // TODO: remove debug
+                println!("Cache hit for key: {}", key);
+                return Ok(bytes);
             }
-        };
+        },
+        Err(e) => {
+            return Err(e);
+        }
     }
-
     // TODO: remove debug
     println!("Cache miss for key: {}", key);
 
@@ -225,21 +218,18 @@ async fn download_object<'a>(
         )
         .await;
 
-    // If we're using the chunk cache,
-    // store the data that has been successfully downloaded
-    if args.use_chunk_cache {
-        if let Ok(data_bytes) = &data {
-            match chunk_cache.set(&key, &data_bytes) {
-                Ok(_) => {},
-                Err(e) => {
-                    // Propagate any cache error back as an ActiveStorageError
-                    return Err(ActiveStorageError::CacheError{ error: format!("{:?}", e) });
-                }
+    if let Ok(data_bytes) = &data {
+        // Store the data against this key if the chunk cache is enabled.
+        match chunk_cache.set(&key, data_bytes.clone()).await {
+            Ok(_) => {},
+            Err(e) => {
+                return Err(e);
             }
         }
-        // Increment the prometheus metric for cache misses
-        LOCAL_CACHE_MISSES.with_label_values(&["disk"]).inc();
     }
+
+    // Increment the prometheus metric for cache misses
+    LOCAL_CACHE_MISSES.with_label_values(&["disk"]).inc();
 
     data
 }
@@ -279,12 +269,11 @@ async fn operation_handler<T: operation::Operation>(
         &request_data,
         &state.resource_manager,
         &state.chunk_cache,
-        &state.args,
     )
     .instrument(tracing::Span::current())
     .await?;
 
-    // All remaining work is synchronous. If the use_rayon argument was specified, delegate to the
+    // All remaining work i s synchronous. If the use_rayon argument was specified, delegate to the
     // Rayon thread pool. Otherwise, execute as normal using Tokio.
     if state.args.use_rayon {
         tokio_rayon::spawn(move || operation::<T>(request_data, data)).await
