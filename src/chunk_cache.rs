@@ -279,11 +279,6 @@ impl SimpleDiskCache {
             self.save_state(state).await;
         }
     }
-
-    #[allow(dead_code)]
-    fn wipe(&self) {
-        std::fs::remove_dir_all(self.dir.join(&self.name)).unwrap();
-    }   
 }
 
 #[cfg(test)]
@@ -341,21 +336,6 @@ mod tests {
         assert_eq!(metadata.contains_key(key_1), false);
         assert_eq!(metadata.contains_key(key_2), true);
         assert_eq!(cache_item_1.unwrap(), None);
-
-        // Action: renew cache keeping parameters to check it's wiped on init.
-        let cache2 = SimpleDiskCache::new(
-            "test-cache-1",
-            "./",
-            10,  // ttl
-            60,  // purge period
-            None // max size
-        );
-
-        // Assert: cache empty
-        let metadata = cache2.load_state().await.metadata;
-        assert_eq!(metadata.len(), 0);
-
-        cache2.wipe();
     }
 
     #[tokio::test]
@@ -395,8 +375,6 @@ mod tests {
         // Assert: cache empty
         let metadata = cache.load_state().await.metadata;
         assert_eq!(metadata.len(), 0);
-
-        cache.wipe();
     }
 
     #[tokio::test]
@@ -444,8 +422,6 @@ mod tests {
         // Assert: cache empty
         let metadata = cache.load_state().await.metadata;
         assert_eq!(metadata.len(), 0);
-
-        cache.wipe();
     }
 
     #[tokio::test]
@@ -486,8 +462,6 @@ mod tests {
         assert_eq!(metadata.len(), 1);
         assert_eq!(metadata.contains_key(key_1), false);
         assert_eq!(metadata.contains_key(key_2), true);
-
-        cache.wipe();
     }
 
     #[tokio::test]
@@ -530,8 +504,6 @@ mod tests {
         assert_eq!(metadata.len(), 1);
         assert_eq!(metadata.contains_key(key_1), false);
         assert_eq!(metadata.contains_key(key_2), true);
-
-        cache.wipe();
     }
 
     #[tokio::test]
@@ -582,7 +554,5 @@ mod tests {
         assert_eq!(metadata.len(), 1);
         assert_eq!(metadata.contains_key(key_2), false);
         assert_eq!(metadata.contains_key(key_3), true);
-        
-        cache.wipe();
     }
 }
