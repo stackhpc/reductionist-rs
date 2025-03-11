@@ -116,11 +116,14 @@ def display(response, verbose=False):
     #print(response.content)
     dtype = response.headers['x-activestorage-dtype']
     shape = json.loads(response.headers['x-activestorage-shape'])
-    result = np.frombuffer(response.content, dtype=dtype)
-    result = result.reshape(shape)
+    counts = json.loads(response.headers['x-activestorage-count'])
+    counts = np.array(counts).reshape(shape)
+    result = np.frombuffer(response.content, dtype=dtype).reshape(shape)
     if verbose:
+        sep = "\n" if len(counts.shape) > 1 else " "
         print("\nResponse headers:", response.headers)
-        print("\nResult:", result)
+        print("\nNon-missing count(s):", counts, sep=sep)
+        print("\nResult:", result, sep=sep)
     else:
         print(result)
 

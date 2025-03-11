@@ -6,7 +6,7 @@ import pathlib
 import s3fs
 import zlib
 
-NUM_ITEMS = 10
+NUM_ITEMS = 12
 OBJECT_PREFIX = "data"
 COMPRESSION_ALGS = [None, "gzip", "zlib"]
 FILTER_ALGS = [None, "shuffle"]

@@ -10,7 +10,7 @@ use crate::operation::{Element, NumOperation};
 use crate::types::Missing;
 
 use axum::body::Bytes;
-use ndarray::ArrayView;
+use ndarray::{ArrayView, Axis};
 use ndarray_stats::{errors::MinMaxError, QuantileExt};
 // Bring trait into scope to use as_bytes method.
 use zerocopy::AsBytes;
@@ -70,7 +70,7 @@ impl NumOperation for Count {
             body,
             models::DType::Int64,
             vec![],
-            count,
+            vec![count],
         ))
     }
 }
@@ -122,7 +122,7 @@ impl NumOperation for Max {
             body,
             request_data.dtype,
             vec![],
-            count,
+            vec![count],
         ))
     }
 }
@@ -174,7 +174,7 @@ impl NumOperation for Min {
             body,
             request_data.dtype,
             vec![],
-            count,
+            vec![count],
         ))
     }
 }
@@ -212,7 +212,7 @@ impl NumOperation for Select {
             body,
             request_data.dtype,
             shape,
-            count,
+            vec![count],
         ))
     }
 }
@@ -228,32 +228,69 @@ impl NumOperation for Sum {
         let array = array::build_array::<T>(request_data, &mut data)?;
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
         let sliced = array.slice(slice_info);
-        let (sum, count) = if let Some(missing) = &request_data.missing {
-            let missing = Missing::<T>::try_from(missing)?;
-            // Use a fold to simultaneously sum and count the non-missing data.
-            sliced
-                .iter()
-                .copied()
-                .filter(missing_filter(&missing))
-                .fold((T::zero(), 0), |(a, count), b| (a + b, count + 1))
+
+        // Convert Missing<Dtype> to Missing<T: Element>
+        let typed_missing: Option<Missing<T>> = if let Some(missing) = &request_data.missing {
+            let m = Missing::try_from(missing)?;
+            Some(m)
         } else {
-            (sliced.sum(), sliced.len())
+            None
         };
-        let count = i64::try_from(count)?;
-        let body = sum.as_bytes();
-        // Need to copy to provide ownership to caller.
-        let body = Bytes::copy_from_slice(body);
-        Ok(models::Response::new(
-            body,
-            request_data.dtype,
-            vec![],
-            count,
-        ))
+
+        // Use ndarray::fold or ndarray::fold_axis depending on whether we're
+        // performing reduction over all axes or only a subset
+        if let Some(axis) = request_data.axis {
+            let result = sliced.fold_axis(Axis(axis), (T::zero(), 0), |(sum, count), val| {
+                if let Some(missing) = &typed_missing {
+                    if !missing.is_missing(val) {
+                        (*sum + *val, count + 1)
+                    } else {
+                        (*sum, *count)
+                    }
+                } else {
+                    (*sum + *val, count + 1)
+                }
+            });
+            // Unpack the result tuples into separate vectors
+            let sums = result.iter().map(|(sum, _)| *sum).collect::<Vec<T>>();
+            let counts = result.iter().map(|(_, count)| *count).collect::<Vec<i64>>();
+            let body = sums.as_bytes();
+            let body = Bytes::copy_from_slice(body);
+            Ok(models::Response::new(
+                body,
+                request_data.dtype,
+                result.shape().into(),
+                counts,
+            ))
+        } else {
+            let (sum, count) = sliced.fold((T::zero(), 0_i64), |(sum, count), val| {
+                if let Some(missing) = &typed_missing {
+                    if !missing.is_missing(val) {
+                        (sum + *val, count + 1)
+                    } else {
+                        (sum, count)
+                    }
+                } else {
+                    (sum + *val, count + 1)
+                }
+            });
+
+            let body = sum.as_bytes();
+            // Need to copy to provide ownership to caller.
+            let body = Bytes::copy_from_slice(body);
+            Ok(models::Response::new(
+                body,
+                request_data.dtype,
+                vec![],
+                vec![count],
+            ))
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     use crate::operation::Operation;
@@ -267,7 +304,7 @@ mod tests {
         let response = Count::execute(&request_data, data).unwrap();
         // A Vec<u8> of 8 elements == a u32 slice with 2 elements
         // Count is always i64.
-        let expected: i64 = 2;
+        let expected = vec![2];
         assert_eq!(expected.as_bytes(), response.body);
         assert_eq!(8, response.body.len()); // Assert that count value is 8 bytes (i.e. i64)
         assert_eq!(models::DType::Int64, response.dtype);
@@ -284,7 +321,7 @@ mod tests {
         let response = Count::execute(&request_data, data).unwrap();
         // A Vec<u8> of 8 elements == a u32 slice with 2 elements
         // Count is always i64.
-        let expected: i64 = 1;
+        let expected = vec![1];
         assert_eq!(expected.as_bytes(), response.body);
         assert_eq!(8, response.body.len()); // Assert that count value is 8 bytes (i.e. i64)
         assert_eq!(models::DType::Int64, response.dtype);
@@ -308,7 +345,7 @@ mod tests {
         assert_eq!(8, response.body.len());
         assert_eq!(models::DType::Int64, response.dtype);
         assert_eq!(vec![0; 0], response.shape);
-        assert_eq!(1, response.count);
+        assert_eq!(vec![1], response.count);
     }
 
     #[test]
@@ -328,7 +365,7 @@ mod tests {
         assert_eq!(8, response.body.len());
         assert_eq!(models::DType::Int64, response.dtype);
         assert_eq!(vec![0; 0], response.shape);
-        assert_eq!(1, response.count);
+        assert_eq!(vec![1], response.count);
     }
 
     #[test]
@@ -343,7 +380,7 @@ mod tests {
         assert_eq!(4, response.body.len());
         assert_eq!(models::DType::Float32, response.dtype);
         assert_eq!(vec![0; 0], response.shape);
-        assert_eq!(2, response.count);
+        assert_eq!(vec![2], response.count);
     }
 
     #[test]
@@ -358,7 +395,7 @@ mod tests {
         assert_eq!(4, response.body.len());
         assert_eq!(models::DType::Float32, response.dtype);
         assert_eq!(vec![0; 0], response.shape);
-        assert_eq!(2, response.count);
+        assert_eq!(vec![2], response.count);
     }
 
     #[test]
@@ -372,7 +409,7 @@ mod tests {
         assert_eq!(8, response.body.len());
         assert_eq!(models::DType::Uint64, response.dtype);
         assert_eq!(vec![0; 0], response.shape);
-        assert_eq!(1, response.count);
+        assert_eq!(vec![1], response.count);
     }
 
     #[test]
@@ -393,7 +430,7 @@ mod tests {
         assert_eq!(8, response.body.len());
         assert_eq!(models::DType::Int64, response.dtype);
         assert_eq!(vec![0; 0], response.shape);
-        assert_eq!(1, response.count);
+        assert_eq!(vec![1], response.count);
     }
 
     #[test]
@@ -408,7 +445,7 @@ mod tests {
         assert_eq!(4, response.body.len());
         assert_eq!(models::DType::Float32, response.dtype);
         assert_eq!(vec![0; 0], response.shape);
-        assert_eq!(2, response.count);
+        assert_eq!(vec![2], response.count);
     }
 
     #[test]
@@ -423,7 +460,7 @@ mod tests {
         assert_eq!(4, response.body.len());
         assert_eq!(models::DType::Float32, response.dtype);
         assert_eq!(vec![0; 0], response.shape);
-        assert_eq!(2, response.count);
+        assert_eq!(vec![2], response.count);
     }
 
     #[test]
@@ -439,7 +476,7 @@ mod tests {
         assert_eq!(4, response.body.len());
         assert_eq!(models::DType::Float32, response.dtype);
         assert_eq!(vec![0; 0], response.shape);
-        assert_eq!(2, response.count);
+        assert_eq!(vec![2], response.count);
     }
 
     #[test]
@@ -455,7 +492,7 @@ mod tests {
         assert_eq!(4, response.body.len());
         assert_eq!(models::DType::Float32, response.dtype);
         assert_eq!(vec![0; 0], response.shape);
-        assert_eq!(2, response.count);
+        assert_eq!(vec![2], response.count);
     }
 
     #[test]
@@ -471,7 +508,7 @@ mod tests {
         assert_eq!(4, response.body.len());
         assert_eq!(models::DType::Float32, response.dtype);
         assert_eq!(vec![0; 0], response.shape);
-        assert_eq!(2, response.count);
+        assert_eq!(vec![2], response.count);
     }
 
     #[test]
@@ -488,7 +525,7 @@ mod tests {
         assert_eq!(4, response.body.len());
         assert_eq!(models::DType::Float32, response.dtype);
         assert_eq!(vec![0; 0], response.shape);
-        assert_eq!(2, response.count);
+        assert_eq!(vec![2], response.count);
     }
 
     #[test]
@@ -502,7 +539,7 @@ mod tests {
         assert_eq!(8, response.body.len());
         assert_eq!(models::DType::Float32, response.dtype);
         assert_eq!(vec![2], response.shape);
-        assert_eq!(2, response.count);
+        assert_eq!(vec![2], response.count);
     }
 
     #[test]
@@ -517,7 +554,7 @@ mod tests {
         assert_eq!(16, response.body.len());
         assert_eq!(models::DType::Float64, response.dtype);
         assert_eq!(vec![2, 1], response.shape);
-        assert_eq!(2, response.count);
+        assert_eq!(vec![2], response.count);
     }
 
     #[test]
@@ -539,7 +576,7 @@ mod tests {
         assert_eq!(8, response.body.len());
         assert_eq!(models::DType::Float32, response.dtype);
         assert_eq!(vec![2, 1], response.shape);
-        assert_eq!(2, response.count);
+        assert_eq!(vec![2], response.count);
     }
 
     #[test]
@@ -553,7 +590,7 @@ mod tests {
         assert_eq!(4, response.body.len());
         assert_eq!(models::DType::Uint32, response.dtype);
         assert_eq!(vec![0; 0], response.shape);
-        assert_eq!(2, response.count);
+        assert_eq!(vec![2], response.count);
     }
 
     #[test]
@@ -568,7 +605,7 @@ mod tests {
         assert_eq!(4, response.body.len());
         assert_eq!(models::DType::Uint32, response.dtype);
         assert_eq!(vec![0; 0], response.shape);
-        assert_eq!(1, response.count);
+        assert_eq!(vec![1], response.count);
     }
 
     #[test]
@@ -583,7 +620,7 @@ mod tests {
         assert_eq!(4, response.body.len());
         assert_eq!(models::DType::Float32, response.dtype);
         assert_eq!(vec![0; 0], response.shape);
-        assert_eq!(2, response.count);
+        assert_eq!(vec![2], response.count);
     }
 
     #[test]
@@ -598,7 +635,82 @@ mod tests {
         assert_eq!(8, response.body.len());
         assert_eq!(models::DType::Float64, response.dtype);
         assert_eq!(vec![0; 0], response.shape);
-        assert_eq!(2, response.count);
+        assert_eq!(vec![2], response.count);
+    }
+
+    /// Test helper for converting response bytes back into a type
+    /// that's easier to assert on
+    fn vec_from_bytes<T: zerocopy::AsBytes + zerocopy::FromBytes + Clone>(data: &Bytes) -> Vec<T> {
+        let mut data = data.to_vec();
+        let data = data.as_mut_slice();
+        let layout = zerocopy::LayoutVerified::<_, [T]>::new_slice(&mut data[..]).unwrap();
+        layout.into_mut_slice().to_vec()
+    }
+
+    #[test]
+    fn sum_u32_1d_axis_0() {
+        // Arrange
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.dtype = models::DType::Uint32;
+        request_data.shape = Some(vec![2, 4]);
+        request_data.axis = Some(0);
+        let data: Vec<u32> = vec![1, 2, 3, 4, 5, 6, 7, 8];
+        // Act
+        let response = Sum::execute(&request_data, data.as_bytes().into()).unwrap();
+        let result = vec_from_bytes::<u32>(&response.body);
+        // Assert
+        let arr = ndarray::Array::from_shape_vec((2, 4), data).unwrap();
+        let expected = arr.sum_axis(Axis(0)).to_vec();
+        assert_eq!(result, expected);
+        assert_eq!(models::DType::Uint32, response.dtype);
+        assert_eq!(16, response.body.len()); // 4 bytes in a u32
+        assert_eq!(vec![4], response.shape);
+        assert_eq!(vec![2, 2, 2, 2], response.count);
+    }
+
+    #[test]
+    fn sum_u32_1d_axis_1_missing() {
+        // Arrange
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.dtype = models::DType::Uint32;
+        request_data.shape = Some(vec![2, 4]);
+        request_data.axis = Some(1);
+        request_data.missing = Some(Missing::MissingValue(0.into()));
+        let data: Vec<u32> = vec![0, 2, 3, 4, 5, 6, 7, 8];
+        // Act
+        let response = Sum::execute(&request_data, data.as_bytes().into()).unwrap();
+        let result = vec_from_bytes::<u32>(&response.body);
+        // Assert
+        let arr = ndarray::Array::from_shape_vec((2, 4), data).unwrap();
+        let expected = arr.sum_axis(Axis(1)).to_vec();
+        assert_eq!(result, expected);
+        assert_eq!(models::DType::Uint32, response.dtype);
+        assert_eq!(8, response.body.len()); // 4 bytes in a u32
+        assert_eq!(vec![2], response.shape);
+        assert_eq!(vec![3, 4], response.count); // Expect a lower count due to 'missing' value
+    }
+
+    #[test]
+    fn sum_f64_1d_axis_1_missing() {
+        // Arrange
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.dtype = models::DType::Float64;
+        request_data.shape = Some(vec![2, 2, 2]);
+        request_data.axis = Some(1);
+        request_data.missing = Some(Missing::MissingValue(0.into()));
+        let data: Vec<f64> = vec![0.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+        // Act
+        let response = Sum::execute(&request_data, data.as_bytes().into()).unwrap();
+        let result = vec_from_bytes::<f64>(&response.body);
+        let result = ndarray::Array::from_shape_vec((2, 2), result).unwrap();
+        // Assert
+        let arr = ndarray::Array::from_shape_vec((2, 2, 2), data).unwrap();
+        let expected = arr.sum_axis(Axis(1));
+        assert_eq!(result, expected);
+        assert_eq!(models::DType::Float64, response.dtype);
+        assert_eq!(32, response.body.len()); // 8 bytes in a f64
+        assert_eq!(vec![2, 2], response.shape);
+        assert_eq!(vec![1, 2, 2, 2], response.count); // Expect a lower count due to 'missing' value
     }
 
     #[test]
