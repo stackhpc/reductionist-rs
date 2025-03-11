@@ -136,17 +136,10 @@ impl SimpleDiskCache {
         let name = name.to_string();
         let dir = PathBuf::from(dir);
         let path = dir.join(&name);
-        // Cache folder must either not exist or exist with metadata.
         if !dir.as_path().exists() {
             panic!("Cache parent dir {:?} must exist", dir)
         } else if path.exists() {
-            let file = path.join(SimpleDiskCache::STATE_FILE);
-            if !file.exists() {
-                panic!("Cache folder {:?} already exists without metadata", path.to_str())
-            }
-            // Wipe existing cache.
-            std::fs::remove_dir_all(&path).unwrap();
-            std::fs::create_dir(&path).unwrap();
+            panic!("Cache folder {:?} already exists", path.to_str())
         } else {
             std::fs::create_dir(&path).unwrap();
         }
@@ -295,16 +288,20 @@ impl SimpleDiskCache {
 
 #[cfg(test)]
 mod tests {
+    extern crate tempdir;
+
     use super::*;
     use std::time::Duration;
+    use tempdir::TempDir;
     use tokio::time::sleep;
 
     #[tokio::test]
     async fn test_simple_disk_cache() {
         // Arrange
+        let tmp_dir = TempDir::new("simple_disk_cache").unwrap();
         let cache = SimpleDiskCache::new(
             "test-cache-1",
-            "./",
+            tmp_dir.path().to_str().unwrap(),
             10,  // ttl
             60,  // purge period
             None // max size
@@ -366,9 +363,10 @@ mod tests {
 
         let ttl = 1;
         let time_between_inserts = 1;
+        let tmp_dir = TempDir::new("simple_disk_cache").unwrap();
         let cache = SimpleDiskCache::new(
             "test-cache-2",
-            "./",
+            tmp_dir.path().to_str().unwrap(),
             ttl,    // ttl for cache entries
             1000, // purge expired interval set large to not trigger expiry on "set"
             None  // max cache size unset
@@ -406,9 +404,10 @@ mod tests {
 
         let ttl = 1;
         let time_between_inserts = ttl;
+        let tmp_dir = TempDir::new("simple_disk_cache").unwrap();
         let cache = SimpleDiskCache::new(
             "test-cache-3",
-            "./",
+            tmp_dir.path().to_str().unwrap(),
             ttl,    // ttl for cache entries
             1000, // purge expired interval set large to not trigger expiry on "set"
             None  // max cache size unset
@@ -458,9 +457,10 @@ mod tests {
         let time_between_inserts = ttl;
         let size = 1000;
         let chunk = vec![0; size];
+        let tmp_dir = TempDir::new("simple_disk_cache").unwrap();
         let cache = SimpleDiskCache::new(
             "test-cache-4",
-            "./",
+            tmp_dir.path().to_str().unwrap(),
             ttl,           // ttl for cache entries
             1000,        // purge expired interval set large to not trigger expiry on "set"
             Some(size*2) // max cache size accomodates two entries
@@ -501,9 +501,10 @@ mod tests {
         let time_between_inserts = 1;
         let size = 1000;
         let chunk = vec![0; size];
+        let tmp_dir = TempDir::new("simple_disk_cache").unwrap();
         let cache = SimpleDiskCache::new(
             "test-cache-5",
-            "./",
+            tmp_dir.path().to_str().unwrap(),
             ttl,           // ttl for cache entries
             1000,        // purge expired interval set large to not trigger expiry on "set"
             Some(size*2) // max cache size accomodates two entries
@@ -540,9 +541,10 @@ mod tests {
         // set(1st) -> prune() -> [no threshold hit] -> set(2nd) -> [periodic expiry hit] -> prune() -> prune_expired() -> [1st removed]
         let ttl = 1;
         let time_between_inserts = ttl;
+        let tmp_dir = TempDir::new("simple_disk_cache").unwrap();
         let cache = SimpleDiskCache::new(
             "test-cache-6",
-            "./",
+            tmp_dir.path().to_str().unwrap(),
             ttl, // ttl for cache entries
             ttl, // purge expired interval
             None
