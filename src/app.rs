@@ -58,7 +58,7 @@ struct AppState {
     resource_manager: ResourceManager,
 
     /// Object chunk cache
-    chunk_cache: ChunkCache,
+    chunk_cache: Option<ChunkCache>,
 }
 
 impl AppState {
@@ -67,7 +67,11 @@ impl AppState {
         let task_limit = args.thread_limit.or_else(|| Some(num_cpus::get() - 1));
         let resource_manager =
             ResourceManager::new(args.s3_connection_limit, args.memory_limit, task_limit);
-        let chunk_cache = ChunkCache::new(args);
+        let chunk_cache = if args.use_chunk_cache {
+            Some(ChunkCache::new(args))
+        } else {
+            None
+        };
 
         Self {
             args: args.clone(),
@@ -165,7 +169,43 @@ async fn schema() -> &'static str {
     "Hello, world!"
 }
 
-/// Download and optionally cache an object from S3
+/// Download an object from S3
+///
+/// Requests a byte range if `offset` or `size` is specified in the request.
+///
+/// # Arguments
+///
+/// * `client`: S3 client object
+/// * `request_data`: RequestData object for the request
+/// * `resource_manager`: ResourceManager object
+async fn download_s3_object<'a>(
+    client: &s3_client::S3Client,
+    request_data: &models::RequestData,
+    resource_manager: &'a ResourceManager,
+) -> Result<Bytes, ActiveStorageError> {
+
+    // If we're given a size in the request data then use this to
+    // get an initial guess at the required memory resources.
+    let memory = request_data.size.unwrap_or(0);
+    let mut mem_permits = resource_manager.memory(memory).await?;
+
+    let range = s3_client::get_range(request_data.offset, request_data.size);
+    let _conn_permits = resource_manager.s3_connection().await?;
+
+    let data = client
+        .download_object(
+            &request_data.bucket,
+            &request_data.object,
+            range,
+            resource_manager,
+            &mut mem_permits,
+        )
+        .await;
+
+    data
+}
+
+/// Download and cache an object from S3
 ///
 /// Requests a byte range if `offset` or `size` is specified in the request.
 ///
@@ -175,7 +215,7 @@ async fn schema() -> &'static str {
 /// * `request_data`: RequestData object for the request
 /// * `resource_manager`: ResourceManager object
 /// * `chunk_cache`: ChunkCache object
-async fn download_object<'a>(
+async fn download_and_cache_s3_object<'a>(
     client: &s3_client::S3Client,
     request_data: &models::RequestData,
     resource_manager: &'a ResourceManager,
@@ -184,12 +224,9 @@ async fn download_object<'a>(
 
     let key = format!("{},{:?}", client, request_data);
 
-    // If we're using the chunk cache and have a hit it'll return Some(bytes), None when disabled.
     match chunk_cache.get(&key).await {
         Ok(value) => {
             if let Some(bytes) = value {
-                // TODO: remove debug
-                println!("Cache hit for key: {}", key);
                 return Ok(bytes);
             }
         },
@@ -197,8 +234,6 @@ async fn download_object<'a>(
             return Err(e);
         }
     }
-    // TODO: remove debug
-    println!("Cache miss for key: {}", key);
 
     // If we're given a size in the request data then use this to
     // get an initial guess at the required memory resources.
@@ -264,14 +299,24 @@ async fn operation_handler<T: operation::Operation>(
         .instrument(tracing::Span::current())
         .await;
 
-    let data = download_object(
-        &s3_client,
-        &request_data,
-        &state.resource_manager,
-        &state.chunk_cache,
-    )
-    .instrument(tracing::Span::current())
-    .await?;
+    let data = if state.args.use_chunk_cache {
+        download_and_cache_s3_object(
+            &s3_client,
+            &request_data,
+            &state.resource_manager,
+            &state.chunk_cache.as_ref().unwrap(),
+        )
+        .instrument(tracing::Span::current())
+        .await?
+    } else {
+        download_s3_object(
+            &s3_client,
+            &request_data,
+            &state.resource_manager,
+        )
+        .instrument(tracing::Span::current())
+        .await?
+    };
 
     // All remaining work i s synchronous. If the use_rayon argument was specified, delegate to the
     // Rayon thread pool. Otherwise, execute as normal using Tokio.

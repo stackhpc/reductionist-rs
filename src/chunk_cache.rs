@@ -8,17 +8,11 @@ use std::{collections::HashMap, ops::Add, path::PathBuf, time::{SystemTime, UNIX
 use tokio::fs;
 
 pub struct ChunkCache {
-    cache: Option<SimpleDiskCache>,
+    cache: SimpleDiskCache,
 }
 
 impl ChunkCache {
     pub fn new(args: &CommandLineArgs) -> Self {
-        if !args.use_chunk_cache {
-            return Self {
-                cache: None,
-            };
-        }
-
         // Path to the cache directory.
         let path = <Option<String> as Clone>::clone(&args.chunk_cache_path)
             .expect("The chunk cache path must be specified when the chunk cache is enabled");
@@ -33,44 +27,36 @@ impl ChunkCache {
         };
 
         Self {
-            cache: Some(SimpleDiskCache::new(
+            cache: SimpleDiskCache::new(
                 "chunk_cache",
                 &path,
                 lifespan,
                 60 * 60,
                 max_size_bytes
-            )),
+            ),
         }
     }
 
     pub async fn set(&self, key: &String, value: Bytes) -> Result<Option<Bytes>, ActiveStorageError> {
-        // Cache will be None with chunk caching disabled.
-        if let Some(cache) = &self.cache {
-            match cache.set(key, value).await {
-                Ok(_) => {
-                    return Ok(None);
-                },
-                Err(e) => {
-                    return Err(ActiveStorageError::ChunkCacheError{ error: format!("{:?}", e) });
-                }
+        match self.cache.set(key, value).await {
+            Ok(_) => {
+                Ok(None)
+            },
+            Err(e) => {
+                Err(ActiveStorageError::ChunkCacheError{ error: format!("{:?}", e) })
             }
         }
-        Ok(None)
     }
 
     pub async fn get(&self, key: &String) -> Result<Option<Bytes>, ActiveStorageError> {
-        // Cache will be None with chunk caching disabled.
-        if let Some(cache) = &self.cache {
-            match cache.get(key).await {
-                Ok(value) => {
-                    return Ok(value);
-                },
-                Err(e) => {
-                    return Err(ActiveStorageError::ChunkCacheError{ error: format!("{:?}", e) });
-                }
+        match self.cache.get(key).await {
+            Ok(value) => {
+                Ok(value)
+            },
+            Err(e) => {
+                Err(ActiveStorageError::ChunkCacheError{ error: format!("{:?}", e) })
             }
         }
-        Ok(None)
     }
 }
 
