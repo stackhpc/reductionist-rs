@@ -20,6 +20,11 @@ reductionist_env:
   REDUCTIONIST_ENABLE_JAEGER: "{{ (groups['jaeger'] | default([]) | length > 0) | string | lower }}"
   REDUCTIONIST_HTTPS: "true"
   REDUCTIONIST_PORT: "8081"
+  REDUCTIONIST_USE_CHUNK_CACHE: "true"
+  REDUCTIONIST_CHUNK_CACHE_PATH: "/mnt/localdisk/mnorton/"
+  REDUCTIONIST_CHUNK_CACHE_AGE: "86400"
+  REDUCTIONIST_CHUNK_CACHE_PRUNE_INTERVAL: "3600"
+  REDUCTIONIST_CHUNK_CACHE_SIZE_LIMIT: "10GB"
 # Path to certificates directory on remote host.
 reductionist_remote_certs_path: "{{ ansible_facts.env.HOME }}/certs"
 # Path to certificates directory in container.
@@ -31,3 +36,4 @@ reductionist_volumes:
 reductionist_host: "{{ hostvars[groups['haproxy'][0]].ansible_facts.default_ipv4.address }}"
 # Certificate validity.
 reductionist_cert_not_after: "24h"
+
