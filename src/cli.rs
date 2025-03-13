@@ -47,6 +47,28 @@ pub struct CommandLineArgs {
     /// when use_rayon is false.
     #[arg(long, env = "REDUCTIONIST_THREAD_LIMIT")]
     pub thread_limit: Option<usize>,
+
+    /// Whether to enable caching of downloaded chunks.
+    /// Default is disabled.
+    #[arg(long, default_value_t = false, env = "REDUCTIONIST_USE_CHUNK_CACHE")]
+    pub use_chunk_cache: bool,
+    /// Path to the chunk cache store.
+    /// This is required when the chunk cache is enabled.
+    #[arg(long, env = "REDUCTIONIST_CHUNK_CACHE_PATH")]
+    pub chunk_cache_path: Option<String>,
+    /// Lifespan of cached chunks in seconds.
+    /// Default is 1 day.
+    #[arg(long, default_value_t = 86400, env = "REDUCTIONIST_CHUNK_CACHE_AGE")]
+    pub chunk_cache_age: u64,
+    /// Minimum interval in seconds between expiring chunks based on ttl.
+    /// Default is 1 hour.
+    #[arg(long, default_value_t = 3600, env = "REDUCTIONIST_CHUNK_CACHE_PRUNE_INTERVAL")]
+    pub chunk_cache_prune_interval: u64,
+    /// Whether to apply an upper size limit to the cache.
+    /// Example values: "300GB", "1TB".
+    /// Default when unset is unlimited.
+    #[arg(long, env = "REDUCTIONIST_CHUNK_CACHE_SIZE_LIMIT")]
+    pub chunk_cache_size_limit: Option<String>,
 }
 
 /// Returns parsed command line arguments.

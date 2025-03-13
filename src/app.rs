@@ -1,9 +1,10 @@
 //! Active Storage server API
 
+use crate::chunk_cache::ChunkCache;
 use crate::cli::CommandLineArgs;
 use crate::error::ActiveStorageError;
 use crate::filter_pipeline;
-use crate::metrics::{metrics_handler, track_metrics};
+use crate::metrics::{metrics_handler, track_metrics, LOCAL_CACHE_MISSES};
 use crate::models;
 use crate::operation;
 use crate::operations;
@@ -14,7 +15,6 @@ use crate::validated_json::ValidatedJson;
 
 use axum::middleware;
 use axum::{
-    body::Bytes,
     extract::{Path, State},
     headers::authorization::{Authorization, Basic},
     http::header,
@@ -22,9 +22,9 @@ use axum::{
     routing::{get, post},
     Router, TypedHeader,
 };
+use bytes::Bytes;
 
 use std::sync::Arc;
-use tokio::sync::SemaphorePermit;
 use tower::Layer;
 use tower::ServiceBuilder;
 use tower_http::normalize_path::NormalizePathLayer;
@@ -56,6 +56,9 @@ struct AppState {
 
     /// Resource manager.
     resource_manager: ResourceManager,
+
+    /// Object chunk cache
+    chunk_cache: Option<ChunkCache>,
 }
 
 impl AppState {
@@ -64,10 +67,17 @@ impl AppState {
         let task_limit = args.thread_limit.or_else(|| Some(num_cpus::get() - 1));
         let resource_manager =
             ResourceManager::new(args.s3_connection_limit, args.memory_limit, task_limit);
+        let chunk_cache = if args.use_chunk_cache {
+            Some(ChunkCache::new(args))
+        } else {
+            None
+        };
+
         Self {
             args: args.clone(),
             s3_client_map: s3_client::S3ClientMap::new(),
             resource_manager,
+            chunk_cache,
         }
     }
 }
@@ -167,27 +177,94 @@ async fn schema() -> &'static str {
 ///
 /// * `client`: S3 client object
 /// * `request_data`: RequestData object for the request
-#[tracing::instrument(
-    level = "DEBUG",
-    skip(client, request_data, resource_manager, mem_permits)
-)]
-async fn download_object<'a>(
+/// * `resource_manager`: ResourceManager object
+async fn download_s3_object<'a>(
     client: &s3_client::S3Client,
     request_data: &models::RequestData,
     resource_manager: &'a ResourceManager,
-    mem_permits: &mut Option<SemaphorePermit<'a>>,
 ) -> Result<Bytes, ActiveStorageError> {
+
+    // If we're given a size in the request data then use this to
+    // get an initial guess at the required memory resources.
+    let memory = request_data.size.unwrap_or(0);
+    let mut mem_permits = resource_manager.memory(memory).await?;
+
     let range = s3_client::get_range(request_data.offset, request_data.size);
     let _conn_permits = resource_manager.s3_connection().await?;
+
     client
+    .download_object(
+        &request_data.bucket,
+        &request_data.object,
+        range,
+        resource_manager,
+        &mut mem_permits,
+    )
+    .await
+}
+
+/// Download and cache an object from S3
+///
+/// Requests a byte range if `offset` or `size` is specified in the request.
+///
+/// # Arguments
+///
+/// * `client`: S3 client object
+/// * `request_data`: RequestData object for the request
+/// * `resource_manager`: ResourceManager object
+/// * `chunk_cache`: ChunkCache object
+async fn download_and_cache_s3_object<'a>(
+    client: &s3_client::S3Client,
+    request_data: &models::RequestData,
+    resource_manager: &'a ResourceManager,
+    chunk_cache: &ChunkCache,
+) -> Result<Bytes, ActiveStorageError> {
+
+    let key = format!("{},{:?}", client, request_data);
+
+    match chunk_cache.get(&key).await {
+        Ok(value) => {
+            if let Some(bytes) = value {
+                return Ok(bytes);
+            }
+        },
+        Err(e) => {
+            return Err(e);
+        }
+    }
+
+    // If we're given a size in the request data then use this to
+    // get an initial guess at the required memory resources.
+    let memory = request_data.size.unwrap_or(0);
+    let mut mem_permits = resource_manager.memory(memory).await?;
+
+    let range = s3_client::get_range(request_data.offset, request_data.size);
+    let _conn_permits = resource_manager.s3_connection().await?;
+
+    let data = client
         .download_object(
             &request_data.bucket,
             &request_data.object,
             range,
             resource_manager,
-            mem_permits,
+            &mut mem_permits,
         )
-        .await
+        .await;
+
+    if let Ok(data_bytes) = &data {
+        // Store the data against this key if the chunk cache is enabled.
+        match chunk_cache.set(&key, data_bytes.clone()).await {
+            Ok(_) => {},
+            Err(e) => {
+                return Err(e);
+            }
+        }
+    }
+
+    // Increment the prometheus metric for cache misses
+    LOCAL_CACHE_MISSES.with_label_values(&["disk"]).inc();
+
+    data
 }
 
 /// Handler for Active Storage operations
@@ -209,8 +286,6 @@ async fn operation_handler<T: operation::Operation>(
     auth: Option<TypedHeader<Authorization<Basic>>>,
     ValidatedJson(request_data): ValidatedJson<models::RequestData>,
 ) -> Result<models::Response, ActiveStorageError> {
-    let memory = request_data.size.unwrap_or(0);
-    let mut _mem_permits = state.resource_manager.memory(memory).await?;
     let credentials = if let Some(TypedHeader(auth)) = auth {
         s3_client::S3Credentials::access_key(auth.username(), auth.password())
     } else {
@@ -221,15 +296,27 @@ async fn operation_handler<T: operation::Operation>(
         .get(&request_data.source, credentials)
         .instrument(tracing::Span::current())
         .await;
-    let data = download_object(
-        &s3_client,
-        &request_data,
-        &state.resource_manager,
-        &mut _mem_permits,
-    )
-    .instrument(tracing::Span::current())
-    .await?;
-    // All remaining work is synchronous. If the use_rayon argument was specified, delegate to the
+
+    let data = if state.args.use_chunk_cache {
+        download_and_cache_s3_object(
+            &s3_client,
+            &request_data,
+            &state.resource_manager,
+            state.chunk_cache.as_ref().unwrap(),
+        )
+        .instrument(tracing::Span::current())
+        .await?
+    } else {
+        download_s3_object(
+            &s3_client,
+            &request_data,
+            &state.resource_manager,
+        )
+        .instrument(tracing::Span::current())
+        .await?
+    };
+
+    // All remaining work i s synchronous. If the use_rayon argument was specified, delegate to the
     // Rayon thread pool. Otherwise, execute as normal using Tokio.
     if state.args.use_rayon {
         tokio_rayon::spawn(move || operation::<T>(request_data, data)).await
