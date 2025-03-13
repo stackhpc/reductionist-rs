@@ -22,7 +22,7 @@ reductionist_env:
   REDUCTIONIST_HTTPS: "true"
   REDUCTIONIST_PORT: "8081"
   REDUCTIONIST_USE_CHUNK_CACHE: "true"
-  REDUCTIONIST_CHUNK_CACHE_PATH: "/mnt/localdisk/mnorton/"
+  REDUCTIONIST_CHUNK_CACHE_PATH: "/cache"
   REDUCTIONIST_CHUNK_CACHE_AGE: "86400"
   REDUCTIONIST_CHUNK_CACHE_PRUNE_INTERVAL: "3600"
   REDUCTIONIST_CHUNK_CACHE_SIZE_LIMIT: "10GB"
@@ -30,9 +30,14 @@ reductionist_env:
 reductionist_remote_certs_path: "{{ ansible_facts.env.HOME }}/certs"
 # Path to certificates directory in container.
 reductionist_container_certs_path: "/root/.config/reductionist/certs"
+# Path to cache directory on remote host.
+reductionist_remote_cache_path: "{{ ansible_facts.env.HOME }}/cache"
+# Path to certificates directory in container.
+reductionist_container_cache_path: "/cache"
 # List of container volume mounts.
 reductionist_volumes:
   - "{{ reductionist_remote_certs_path }}:{{ reductionist_container_certs_path }}"
+  - "{{ reductionist_remote_cache_path }}:{{ reductionist_container_cache_path }}"
 # Host on which HAProxy frontend is exposed.
 reductionist_host: "{{ hostvars[groups['haproxy'][0]].ansible_facts.default_ipv4.address }}"
 # Certificate validity.
