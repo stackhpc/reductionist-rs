@@ -60,6 +60,10 @@ pub struct CommandLineArgs {
     /// Default is 1 day.
     #[arg(long, default_value_t = 86400, env = "REDUCTIONIST_CHUNK_CACHE_AGE")]
     pub chunk_cache_age: u64,
+    /// Minimum interval in seconds between expiring chunks based on ttl.
+    /// Default is 1 hour.
+    #[arg(long, default_value_t = 3600, env = "REDUCTIONIST_CHUNK_CACHE_PRUNE_INTERVAL")]
+    pub chunk_cache_prune_interval: u64,
     /// Whether to apply an upper size limit to the cache.
     /// Example values: "300GB", "1TB".
     /// Default when unset is unlimited.

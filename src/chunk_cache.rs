@@ -35,6 +35,8 @@ impl ChunkCache {
             .expect("The chunk cache path must be specified when the chunk cache is enabled");
         // TTL/lifespan of a cache chunk in seconds. Default is 1 day.
         let lifespan = args.chunk_cache_age;
+        // Minimum period in seconds between pruning the expired chunks on ttl. Default is 1 hour.
+        let prune_interval_seconds = args.chunk_cache_prune_interval;
         // Maximum cache size in bytes. Can be specified as "1TB".
         let max_size_bytes = if let Some(size_limit) = &args.chunk_cache_size_limit {
             let bytes = Byte::parse_str(size_limit, /* ignore case */ true).expect("Invalid cache size limit").as_u64();
@@ -47,7 +49,7 @@ impl ChunkCache {
             "chunk_cache",
             &path,
             lifespan,
-            60 * 60,
+            prune_interval_seconds,
             max_size_bytes
         ));
         let cache_clone = cache.clone();
