@@ -192,17 +192,15 @@ async fn download_s3_object<'a>(
     let range = s3_client::get_range(request_data.offset, request_data.size);
     let _conn_permits = resource_manager.s3_connection().await?;
 
-    let data = client
-        .download_object(
-            &request_data.bucket,
-            &request_data.object,
-            range,
-            resource_manager,
-            &mut mem_permits,
-        )
-        .await;
-
-    data
+    client
+    .download_object(
+        &request_data.bucket,
+        &request_data.object,
+        range,
+        resource_manager,
+        &mut mem_permits,
+    )
+    .await
 }
 
 /// Download and cache an object from S3
@@ -304,7 +302,7 @@ async fn operation_handler<T: operation::Operation>(
             &s3_client,
             &request_data,
             &state.resource_manager,
-            &state.chunk_cache.as_ref().unwrap(),
+            state.chunk_cache.as_ref().unwrap(),
         )
         .instrument(tracing::Span::current())
         .await?

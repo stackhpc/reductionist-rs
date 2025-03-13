@@ -66,7 +66,7 @@ impl ChunkCache {
         }
     }
 
-    pub async fn set(&self, key: &String, value: Bytes) -> Result<Option<Bytes>, ActiveStorageError> {
+    pub async fn set(&self, key: &str, value: Bytes) -> Result<Option<Bytes>, ActiveStorageError> {
         match self.sender.send(KeyValueMessage::new(String::from(key), value)).await {
             Ok(_) => {
                 Ok(None)
@@ -77,7 +77,7 @@ impl ChunkCache {
         }
     }
 
-    pub async fn get(&self, key: &String) -> Result<Option<Bytes>, ActiveStorageError> {
+    pub async fn get(&self, key: &str) -> Result<Option<Bytes>, ActiveStorageError> {
         match self.cache.get(key).await {
             Ok(value) => {
                 Ok(value)
@@ -223,16 +223,13 @@ impl SimpleDiskCache {
         let path = self.dir.join(&self.name).join(self.filename_for_key(key).await);
         // Write the cache value and then update the metadata
         state.metadata.insert(key.to_owned(), Metadata::new(size, self.ttl_seconds));
-        match fs::write(path, value).await {
-            Err(e) => {
-                return Err(format!("{:?}", e));
-            },
-            _ => {},
-        };
+        if let Err(e) = fs::write(path, value).await {
+            return Err(format!("{:?}", e));
+        }
         state.current_size_bytes += size;
         self.save_state(state).await;
         self.prune().await;
-        Ok({})
+        Ok(())
     }
 
     async fn remove(&self, key: &str) {
