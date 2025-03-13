@@ -4,11 +4,28 @@ use crate::error::ActiveStorageError;
 use byte_unit::Byte;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, ops::Add, path::PathBuf, time::{SystemTime, UNIX_EPOCH}};
-use tokio::fs;
+use std::{collections::HashMap, ops::Add, path::PathBuf, sync::Arc, time::{SystemTime, UNIX_EPOCH}};
+use tokio::{fs, sync::mpsc, spawn};
+
+struct KeyValueMessage {
+    key: String,
+    value: Bytes,
+}
+
+impl KeyValueMessage {
+    fn new(key: String, value: Bytes) -> Self {
+        // Make sure the message owns the Bytes so we don't see unexpected, but not incorrect, behaviour caused by zero copy.
+        let value = Bytes::from(value.to_vec());
+        Self {
+            key,
+            value,
+        }
+    }
+}
 
 pub struct ChunkCache {
-    cache: SimpleDiskCache,
+    cache: Arc<SimpleDiskCache>,
+    sender: mpsc::Sender<KeyValueMessage>,
 }
 
 impl ChunkCache {
@@ -26,19 +43,29 @@ impl ChunkCache {
             None
         };
 
+        let cache = Arc::new(SimpleDiskCache::new(
+            "chunk_cache",
+            &path,
+            lifespan,
+            60 * 60,
+            max_size_bytes
+        ));
+        let cache_clone = cache.clone();
+        let (sender, mut receiver) = mpsc::channel::<KeyValueMessage>(32);
+        spawn(async move {
+            while let Some(message) = receiver.recv().await {
+                cache_clone.set(message.key.as_str(), message.value).await.unwrap();
+            }
+        });
+    
         Self {
-            cache: SimpleDiskCache::new(
-                "chunk_cache",
-                &path,
-                lifespan,
-                60 * 60,
-                max_size_bytes
-            ),
+            cache,
+            sender,
         }
     }
 
     pub async fn set(&self, key: &String, value: Bytes) -> Result<Option<Bytes>, ActiveStorageError> {
-        match self.cache.set(key, value).await {
+        match self.sender.send(KeyValueMessage::new(String::from(key), value)).await {
             Ok(_) => {
                 Ok(None)
             },
