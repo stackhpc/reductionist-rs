@@ -10,7 +10,7 @@ reductionist_name: "reductionist"
 # Container image name.
 reductionist_image: "ghcr.io/stackhpc/reductionist-rs"
 # Container tag.
-reductionist_tag: "latest"
+reductionist_tag: "test"
 # List of container networks.
 reductionist_networks:
   - host
