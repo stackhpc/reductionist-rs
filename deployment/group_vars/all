@@ -8,7 +8,8 @@ reductionist_src_version: "deployment/test"
 # Container name.
 reductionist_name: "reductionist"
 # Container image name.
-reductionist_image: "ghcr.io/stackhpc/reductionist-rs"
+#reductionist_image: "ghcr.io/stackhpc/reductionist-rs"
+reductionist_image: "reductionist"
 # Container tag.
 reductionist_tag: "test"
 # List of container networks.
