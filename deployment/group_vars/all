@@ -1,10 +1,10 @@
 ---
 # Whether to build an image from source.
-reductionist_build_image: false
+reductionist_build_image: true
 # Source URL.
 reductionist_src_url: "http://github.com/stackhpc/reductionist-rs"
 # Source version.
-reductionist_src_version: "main"
+reductionist_src_version: "deployment/test"
 # Container name.
 reductionist_name: "reductionist"
 # Container image name.
