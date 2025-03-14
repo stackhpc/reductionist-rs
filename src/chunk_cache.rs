@@ -44,6 +44,8 @@ impl ChunkCache {
         } else {
             None
         };
+        // Size of the MPSC channel buffer, i.e. how many chunks we can queue.
+        let chunk_cache_queue_size = args.chunk_cache_queue_size.unwrap_or(32);
 
         let cache = Arc::new(SimpleDiskCache::new(
             "chunk_cache",
@@ -53,7 +55,7 @@ impl ChunkCache {
             max_size_bytes
         ));
         let cache_clone = cache.clone();
-        let (sender, mut receiver) = mpsc::channel::<KeyValueMessage>(32);
+        let (sender, mut receiver) = mpsc::channel::<KeyValueMessage>(chunk_cache_queue_size);
         spawn(async move {
             while let Some(message) = receiver.recv().await {
                 cache_clone.set(message.key.as_str(), message.value).await.unwrap();
