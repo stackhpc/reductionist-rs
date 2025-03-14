@@ -26,6 +26,7 @@ reductionist_env:
   REDUCTIONIST_CHUNK_CACHE_AGE: "86400"
   REDUCTIONIST_CHUNK_CACHE_PRUNE_INTERVAL: "3600"
   REDUCTIONIST_CHUNK_CACHE_SIZE_LIMIT: "10GB"
+  REDUCTIONIST_CHUNK_CACHE_QUEUE_SIZE: "32"
 # Path to certificates directory on remote host.
 reductionist_remote_certs_path: "{{ ansible_facts.env.HOME }}/certs"
 # Path to certificates directory in container.
