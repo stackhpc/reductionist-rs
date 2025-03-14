@@ -19,8 +19,8 @@ reductionist_networks:
 reductionist_env:
   OTEL_EXPORTER_JAEGER_AGENT_HOST: "{{ hostvars[(groups['jaeger'] | default([]) + [inventory_hostname])[0]].ansible_facts.default_ipv4.address }}"
   REDUCTIONIST_ENABLE_JAEGER: "{{ (groups['jaeger'] | default([]) | length > 0) | string | lower }}"
-  REDUCTIONIST_HTTPS: "true"
-  REDUCTIONIST_PORT: "8081"
+  REDUCTIONIST_HTTPS: "false"
+  REDUCTIONIST_PORT: "8080"
   REDUCTIONIST_USE_CHUNK_CACHE: "true"
   REDUCTIONIST_CHUNK_CACHE_PATH: "/cache"
   REDUCTIONIST_CHUNK_CACHE_AGE: "86400"
