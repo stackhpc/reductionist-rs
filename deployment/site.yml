@@ -373,15 +373,15 @@
     - name: Clone reductionist repo
       ansible.builtin.git:
         repo: "{{ reductionist_src_url }}"
-        dest: "{{ ansible_env.HOME }}/reductionist-rs"
+        dest: "{{ reductionist_repo_location }}"
         version: "{{ reductionist_src_version }}"
-      when: reductionist_build_image | bool
+      when: reductionist_build_image | bool and reductionist_clone_repo | bool
 
     - name: Ensure reductionist image is built
       containers.podman.podman_image:
         name: "{{ reductionist_image }}"
         tag: "{{ reductionist_tag }}"
-        path: "{{ ansible_env.HOME }}/reductionist-rs"
+        path: "{{ reductionist_repo_location }}"
       when: reductionist_build_image | bool
 
     - name: Ensure reductionist container is running
