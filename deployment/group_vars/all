@@ -5,6 +5,11 @@ reductionist_build_image: true
 reductionist_src_url: "http://github.com/stackhpc/reductionist-rs"
 # Source version.
 reductionist_src_version: "deployment/test"
+# Location for the repo
+reductionist_repo_location: "{{ ansible_facts.env.HOME }}/reductionist-rs"
+# Whether to clone and checkout,
+# use this to disable the checkout and use an existing repo with local modifications.
+reductionist_clone_repo: "true"
 # Container name.
 reductionist_name: "reductionist"
 # Container image name.
