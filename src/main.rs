@@ -10,6 +10,7 @@ use reductionist::tracing;
 #[tokio::main]
 async fn main() {
     let args = cli::parse();
+    println!("{:?}", args);
     tracing::init_tracing(&args);
     metrics::register_metrics();
     app::init(&args);
