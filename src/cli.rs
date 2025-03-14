@@ -69,6 +69,10 @@ pub struct CommandLineArgs {
     /// Default when unset is unlimited.
     #[arg(long, env = "REDUCTIONIST_CHUNK_CACHE_SIZE_LIMIT")]
     pub chunk_cache_size_limit: Option<String>,
+    /// Optional buffer size for queuing commits to the cache.
+    /// Default is 32.
+    #[arg(long, env = "REDUCTIONIST_CHUNK_CACHE_QUEUE_SIZE")]
+    pub chunk_cache_queue_size: Option<usize>,
 }
 
 /// Returns parsed command line arguments.
