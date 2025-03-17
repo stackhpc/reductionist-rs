@@ -208,10 +208,6 @@
       become: true
       when: not step_stat.stat.exists
 
-    #
-    # The following were originally Reductionist tasks
-    #
-
     - name: Check whether certificate exists
       ansible.builtin.stat:
         path: "{{ reductionist_remote_certs_path }}/cert.pem"

@@ -143,9 +143,9 @@ ansible-playbook -i deployment/inventory deployment/site.yml -K
 
 To run specific plays the following tags are supported and may be specified via `--tags <tag1,tag2>`:
 
-* `podman` - runs privileged tasks to install packages
+* `podman` - runs privileged tasks to install the required system packages
 * `step-ca`
-* `step` - runs privileged tasks to install and the CA certificate
+* `step` - runs privileged tasks to install the required system packages and Step CA certificate
 * `minio`
 * `prometheus`
 * `jaeger`
@@ -155,7 +155,7 @@ To run specific plays the following tags are supported and may be specified via 
 ### Minimal deployment of Podman and the Reductionist
 
 Podman is a prerequisite for running the Reductionist.
-Podman can run containers as an **non-privileged** user, however this user must have **linger** enabled on their account to allow Podman to continue to run after logging out of the user session.
+Podman can run containers as a **non-privileged** user, however this user must have **linger** enabled on their account to allow Podman to continue to run after logging out of the user session.
 
 To enable **linger** support for the non-privileged user:
 ```sh
@@ -190,8 +190,8 @@ REDUCTIONIST_HTTPS: "true"
 
 Note, this is the default.
 
-Create a `certs` directory under the home directory of the non-privileged deployment user.
-Ensure the following files are added to the this directory:
+Create a `certs` directory under the home directory of the non-privileged deployment user, this will be done automatically and the following files will be added if Step is deployed.
+If using third party certificates the following files must be added manually using the file names shown:
 
 | Filename    | Description |
 | -------- | ------- |
