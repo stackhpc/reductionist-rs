@@ -162,7 +162,7 @@ To enable **linger** support for the non-privileged user:
 sudo loginctl enable-linger <non-privileged user>
 ```
 
-Alternatively, run the optional `podman` play to install Podman as an **non-privileged** user. The following will prompt for the sudo password to escalate privileges only for package installation and for enabling **linger** for the non-privileged user:
+Alternatively, run the optional `podman` play to install Podman as a **non-privileged** user. The following will prompt for the sudo password to escalate privileges only for package installation and for enabling **linger** for the non-privileged user:
 ```sh
 ansible-playbook -i deployment/inventory deployment/site.yml --tags podman -K
 ```
