@@ -82,7 +82,7 @@
         - health_result.json.status == "ok"
 
     - name: Set step config path
-      set_fact:
+      ansible.builtin.set_fact.set_fact:
         step_config_path: "{{ ansible_env.HOME }}/step"
 
     - name: Stat provisioner password file
@@ -160,7 +160,7 @@
       changed_when: false
 
     - name: Set step config path
-      set_fact:
+      ansible.builtin.set_fact.set_fact:
         step_config_path: "{{ ansible_env.HOME }}/step"
 
     - name: Regenerate step config if requested
@@ -203,7 +203,7 @@
 
     # Install CA from unprivileged deployment user's config to system truststore
     - name: Install root certificate to system
-      ansible.builtin.shell: step certificate install {{ reductionist_step_path.stdout }}/certs/root_ca.crt
+      ansible.builtin.command: step certificate install {{ reductionist_step_path.stdout }}/certs/root_ca.crt
       changed_when: false
       become: true
       when: not step_stat.stat.exists
