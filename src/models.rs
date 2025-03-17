@@ -107,6 +107,16 @@ pub enum Filter {
     Shuffle { element_size: usize },
 }
 
+/// Axes over which to perform the reduction
+#[derive(Debug, PartialEq, Default, Deserialize)]
+#[serde(rename_all = "lowercase", untagged)]
+pub enum ReductionAxes {
+    #[default]
+    All,
+    One(usize),
+    Multi(Vec<usize>),
+}
+
 /// Request data for operations
 #[derive(Debug, Deserialize, PartialEq, Validate)]
 #[serde(deny_unknown_fields)]
@@ -137,7 +147,9 @@ pub struct RequestData {
     )]
     pub shape: Option<Vec<usize>>,
     /// Axis over which to perform the reduction operation
-    pub axis: Option<usize>,
+    // pub axis: Option<usize>,
+    #[serde(default)]
+    pub axes: ReductionAxes,
     /// Order of the multi-dimensional array
     pub order: Option<Order>,
     /// Subset of the data to operate on
@@ -237,20 +249,34 @@ fn validate_request_data(request_data: &RequestData) -> Result<(), ValidationErr
         _ => (),
     };
     // Check axis is compatible with shape
-    match (&request_data.shape, &request_data.axis) {
-        (Some(shape), Some(axis)) => {
+    match (&request_data.shape, &request_data.axes) {
+        (Some(shape), ReductionAxes::One(axis)) => {
             if *axis > shape.len() - 1 {
                 return Err(ValidationError::new("Axis must be within shape"));
             }
         }
-        (None, Some(_)) => {
+        (Some(shape), ReductionAxes::Multi(axes)) => {
+            if axes.len() >= shape.len() {
+                return Err(ValidationError::new(
+                    "Number of reduction axes must be less than length of shape",
+                ));
+            }
+            for ax in axes {
+                if *ax > shape.len() - 1 {
+                    return Err(ValidationError::new("All axes must be within shape"));
+                }
+            }
+        }
+        (None, ReductionAxes::One(_) | ReductionAxes::Multi(_)) => {
             return Err(ValidationError::new("Axis requires shape to be specified"));
         }
-        _ => (),
+        (_, ReductionAxes::All) => (),
     };
+    // Validate missing specification
     if let Some(missing) = &request_data.missing {
         missing.validate(request_data.dtype)?;
-    };
+    }
+
     Ok(())
 }
 
@@ -346,13 +372,16 @@ mod tests {
                 Token::U32(8),
                 Token::Str("shape"),
                 Token::Some,
-                Token::Seq { len: Some(2) },
+                Token::Seq { len: Some(3) },
                 Token::U32(2),
                 Token::U32(5),
-                Token::SeqEnd,
-                Token::Str("axis"),
-                Token::Some,
                 Token::U32(1),
+                Token::SeqEnd,
+                Token::Str("axes"),
+                Token::Seq { len: Some(2) },
+                Token::U32(1),
+                Token::U32(2),
+                Token::SeqEnd,
                 Token::Str("order"),
                 Token::Some,
                 Token::Enum { name: "Order" },
@@ -360,7 +389,7 @@ mod tests {
                 Token::Unit,
                 Token::Str("selection"),
                 Token::Some,
-                Token::Seq { len: Some(2) },
+                Token::Seq { len: Some(3) },
                 Token::Seq { len: Some(3) },
                 Token::U32(1),
                 Token::U32(2),
@@ -370,6 +399,11 @@ mod tests {
                 Token::U32(4),
                 Token::U32(5),
                 Token::U32(6),
+                Token::SeqEnd,
+                Token::Seq { len: Some(3) },
+                Token::U32(1),
+                Token::U32(1),
+                Token::U32(1),
                 Token::SeqEnd,
                 Token::SeqEnd,
                 Token::Str("compression"),
@@ -590,7 +624,7 @@ mod tests {
 
     #[test]
     fn test_selection_end_lt_start() {
-        // Numpy sementics: start >= end yields an empty array
+        // Numpy semantics: start >= end yields an empty array
         let mut request_data = test_utils::get_test_request_data();
         request_data.shape = Some(vec![1]);
         request_data.selection = Some(vec![Slice::new(1, 0, 1)]);
@@ -635,7 +669,7 @@ mod tests {
 
     #[test]
     fn test_selection_start_gt_shape() {
-        // Numpy sementics: start > length yields an empty array
+        // Numpy semantics: start > length yields an empty array
         let mut request_data = test_utils::get_test_request_data();
         request_data.shape = Some(vec![4]);
         request_data.selection = Some(vec![Slice::new(5, 5, 1)]);
@@ -644,7 +678,7 @@ mod tests {
 
     #[test]
     fn test_selection_start_lt_negative_shape() {
-        // Numpy sementics: start < -length gets clamped to zero
+        // Numpy semantics: start < -length gets clamped to zero
         let mut request_data = test_utils::get_test_request_data();
         request_data.shape = Some(vec![4]);
         request_data.selection = Some(vec![Slice::new(-5, 5, 1)]);
@@ -681,7 +715,7 @@ mod tests {
     #[should_panic(expected = "Axis requires shape to be specified")]
     fn test_axis_without_shape() {
         let mut request_data = test_utils::get_test_request_data();
-        request_data.axis = Some(1);
+        request_data.axes = ReductionAxes::One(1);
         request_data.validate().unwrap()
     }
 
@@ -689,7 +723,7 @@ mod tests {
     #[should_panic(expected = "Axis must be within shape")]
     fn test_axis_gt_shape() {
         let mut request_data = test_utils::get_test_request_data();
-        request_data.axis = Some(2);
+        request_data.axes = ReductionAxes::One(2);
         request_data.shape = Some(vec![2, 5]);
         request_data.validate().unwrap()
     }
@@ -756,6 +790,7 @@ mod tests {
     fn test_missing_invalid_value_for_dtype() {
         let mut request_data = test_utils::get_test_request_data();
         request_data.missing = Some(Missing::MissingValue(i64::max_value().into()));
+        println!("{:?}", request_data.validate());
         request_data.validate().unwrap()
     }
 
@@ -766,7 +801,7 @@ mod tests {
             Token::Str("foo"),
             Token::StructEnd
             ],
-            "unknown field `foo`, expected one of `source`, `bucket`, `object`, `dtype`, `byte_order`, `offset`, `size`, `shape`, `axis`, `order`, `selection`, `compression`, `filters`, `missing`"
+            "unknown field `foo`, expected one of `source`, `bucket`, `object`, `dtype`, `byte_order`, `offset`, `size`, `shape`, `axes`, `order`, `selection`, `compression`, `filters`, `missing`"
         )
     }
 
@@ -789,10 +824,10 @@ mod tests {
                         "byte_order": "little",
                         "offset": 4,
                         "size": 8,
-                        "shape": [2, 5],
-                        "axis": 1,
+                        "shape": [2, 5, 1],
+                        "axes": [1, 2],
                         "order": "C",
-                        "selection": [[1, 2, 3], [4, 5, 6]],
+                        "selection": [[1, 2, 3], [4, 5, 6], [1, 1, 1]],
                         "compression": {"id": "gzip"},
                         "filters": [{"id": "shuffle", "element_size": 4}],
                         "missing": {"missing_value": 42}
@@ -812,7 +847,7 @@ mod tests {
                         "offset": 4,
                         "size": 8,
                         "shape": [2, 5, 10],
-                        "axis": 2,
+                        "axes": 2,
                         "order": "F",
                         "selection": [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
                         "compression": {"id": "zlib"},
@@ -824,7 +859,7 @@ mod tests {
         expected.dtype = DType::Float64;
         expected.byte_order = Some(ByteOrder::Big);
         expected.shape = Some(vec![2, 5, 10]);
-        expected.axis = Some(2);
+        expected.axes = ReductionAxes::One(2);
         expected.order = Some(Order::F);
         expected.selection = Some(vec![
             Slice::new(1, 2, 3),

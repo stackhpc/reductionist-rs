@@ -5,7 +5,7 @@
 
 use crate::array;
 use crate::error::ActiveStorageError;
-use crate::models;
+use crate::models::{self, ReductionAxes};
 use crate::operation::{Element, NumOperation};
 use crate::types::Missing;
 
@@ -220,6 +220,47 @@ impl NumOperation for Select {
 /// Return the sum of selected elements in the array.
 pub struct Sum {}
 
+fn sum_array_multi_axis<T: Element>(
+    array: ndarray::ArrayView<T, ndarray::IxDyn>,
+    axes: &[usize],
+    missing: Option<Missing<T>>,
+) -> (Vec<T>, Vec<i64>, Vec<usize>) {
+    // Sum over first axis and count elements operated on
+    let mut result = array
+        .fold_axis(Axis(axes[0]), (T::zero(), 0), |(sum, count), val| {
+            if let Some(missing) = &missing {
+                if !missing.is_missing(val) {
+                    (*sum + *val, count + 1)
+                } else {
+                    (*sum, *count)
+                }
+            } else {
+                (*sum + *val, count + 1)
+            }
+        })
+        .into_dyn();
+    // Sum over remaining axes (where total count is now sum of counts)
+    if let Some(remaining_axes) = axes.get(1..) {
+        for (n, axis) in remaining_axes.iter().enumerate() {
+            result = result
+                .fold_axis(
+                    Axis(axis - n - 1),
+                    (T::zero(), 0),
+                    |(total_sum, total_count), (sum, count)| {
+                        (*total_sum + *sum, total_count + count)
+                    },
+                )
+                .into_dyn();
+        }
+    }
+
+    // Result is array of (sum, count) tuples so separate them here
+    let sums = result.iter().map(|(sum, _)| *sum).collect::<Vec<T>>();
+    let counts = result.iter().map(|(_, count)| *count).collect::<Vec<i64>>();
+
+    (sums, counts, result.shape().into())
+}
+
 impl NumOperation for Sum {
     fn execute_t<T: Element>(
         request_data: &models::RequestData,
@@ -239,51 +280,64 @@ impl NumOperation for Sum {
 
         // Use ndarray::fold or ndarray::fold_axis depending on whether we're
         // performing reduction over all axes or only a subset
-        if let Some(axis) = request_data.axis {
-            let result = sliced.fold_axis(Axis(axis), (T::zero(), 0), |(sum, count), val| {
-                if let Some(missing) = &typed_missing {
-                    if !missing.is_missing(val) {
+        match &request_data.axes {
+            ReductionAxes::One(axis) => {
+                let result = sliced.fold_axis(Axis(*axis), (T::zero(), 0), |(sum, count), val| {
+                    if let Some(missing) = &typed_missing {
+                        if !missing.is_missing(val) {
+                            (*sum + *val, count + 1)
+                        } else {
+                            (*sum, *count)
+                        }
+                    } else {
                         (*sum + *val, count + 1)
-                    } else {
-                        (*sum, *count)
                     }
-                } else {
-                    (*sum + *val, count + 1)
-                }
-            });
-            // Unpack the result tuples into separate vectors
-            let sums = result.iter().map(|(sum, _)| *sum).collect::<Vec<T>>();
-            let counts = result.iter().map(|(_, count)| *count).collect::<Vec<i64>>();
-            let body = sums.as_bytes();
-            let body = Bytes::copy_from_slice(body);
-            Ok(models::Response::new(
-                body,
-                request_data.dtype,
-                result.shape().into(),
-                counts,
-            ))
-        } else {
-            let (sum, count) = sliced.fold((T::zero(), 0_i64), |(sum, count), val| {
-                if let Some(missing) = &typed_missing {
-                    if !missing.is_missing(val) {
+                });
+                // Unpack the result tuples into separate vectors
+                let sums = result.iter().map(|(sum, _)| *sum).collect::<Vec<T>>();
+                let counts = result.iter().map(|(_, count)| *count).collect::<Vec<i64>>();
+                let body = sums.as_bytes();
+                let body = Bytes::copy_from_slice(body);
+                Ok(models::Response::new(
+                    body,
+                    request_data.dtype,
+                    result.shape().into(),
+                    counts,
+                ))
+            }
+            ReductionAxes::Multi(axes) => {
+                let (sums, counts, shape) = sum_array_multi_axis(sliced, axes, typed_missing);
+                let body = Bytes::copy_from_slice(sums.as_bytes());
+                Ok(models::Response::new(
+                    body,
+                    request_data.dtype,
+                    shape,
+                    counts,
+                ))
+            }
+            ReductionAxes::All => {
+                let (sum, count) = sliced.fold((T::zero(), 0_i64), |(sum, count), val| {
+                    if let Some(missing) = &typed_missing {
+                        if !missing.is_missing(val) {
+                            (sum + *val, count + 1)
+                        } else {
+                            (sum, count)
+                        }
+                    } else {
                         (sum + *val, count + 1)
-                    } else {
-                        (sum, count)
                     }
-                } else {
-                    (sum + *val, count + 1)
-                }
-            });
+                });
 
-            let body = sum.as_bytes();
-            // Need to copy to provide ownership to caller.
-            let body = Bytes::copy_from_slice(body);
-            Ok(models::Response::new(
-                body,
-                request_data.dtype,
-                vec![],
-                vec![count],
-            ))
+                let body = sum.as_bytes();
+                // Need to copy to provide ownership to caller.
+                let body = Bytes::copy_from_slice(body);
+                Ok(models::Response::new(
+                    body,
+                    request_data.dtype,
+                    vec![],
+                    vec![count],
+                ))
+            }
         }
     }
 }
@@ -293,6 +347,7 @@ mod tests {
 
     use super::*;
 
+    use crate::models::ReductionAxes;
     use crate::operation::Operation;
     use crate::test_utils;
     use crate::types::DValue;
@@ -653,7 +708,7 @@ mod tests {
         let mut request_data = test_utils::get_test_request_data();
         request_data.dtype = models::DType::Uint32;
         request_data.shape = Some(vec![2, 4]);
-        request_data.axis = Some(0);
+        request_data.axes = ReductionAxes::One(0);
         let data: Vec<u32> = vec![1, 2, 3, 4, 5, 6, 7, 8];
         // Act
         let response = Sum::execute(&request_data, data.as_bytes().into()).unwrap();
@@ -674,7 +729,7 @@ mod tests {
         let mut request_data = test_utils::get_test_request_data();
         request_data.dtype = models::DType::Uint32;
         request_data.shape = Some(vec![2, 4]);
-        request_data.axis = Some(1);
+        request_data.axes = ReductionAxes::One(1);
         request_data.missing = Some(Missing::MissingValue(0.into()));
         let data: Vec<u32> = vec![0, 2, 3, 4, 5, 6, 7, 8];
         // Act
@@ -696,7 +751,7 @@ mod tests {
         let mut request_data = test_utils::get_test_request_data();
         request_data.dtype = models::DType::Float64;
         request_data.shape = Some(vec![2, 2, 2]);
-        request_data.axis = Some(1);
+        request_data.axes = ReductionAxes::One(1);
         request_data.missing = Some(Missing::MissingValue(0.into()));
         let data: Vec<f64> = vec![0.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
         // Act
@@ -724,5 +779,64 @@ mod tests {
             f64::INFINITY.partial_cmp(&f64::NEG_INFINITY),
             Some(std::cmp::Ordering::Greater)
         );
+    }
+
+    #[test]
+    #[should_panic(expected = "assertion failed: axis.index() < self.ndim()")]
+    fn test_sum_multi_axis_2d_wrong_axis() {
+        let array = ndarray::Array::from_shape_vec((2, 2), (0..4).collect())
+            .unwrap()
+            .into_dyn();
+        let axes = vec![2];
+        let _ = sum_array_multi_axis(array.view(), &axes, None);
+    }
+
+    #[test]
+    fn test_sum_multi_axis_2d_2ax() {
+        let array = ndarray::Array::from_shape_vec((2, 2), (0..4).collect())
+            .unwrap()
+            .into_dyn();
+        let axes = vec![0, 1];
+        let (sum, count, shape) = sum_array_multi_axis(array.view(), &axes, None);
+        assert_eq!(sum, vec![6]);
+        assert_eq!(count, vec![4]);
+        assert_eq!(shape, Vec::<usize>::new());
+    }
+
+    #[test]
+    fn test_sum_multi_axis_2d_2ax_missing() {
+        let array = ndarray::Array::from_shape_vec((2, 2), (0..4).collect())
+            .unwrap()
+            .into_dyn();
+        let axes = vec![0, 1];
+        let missing = Missing::MissingValue(1);
+        let (sum, count, shape) = sum_array_multi_axis(array.view(), &axes, Some(missing));
+        assert_eq!(sum, vec![5]);
+        assert_eq!(count, vec![3]);
+        assert_eq!(shape, Vec::<usize>::new());
+    }
+
+    #[test]
+    fn test_sum_multi_axis_4d_1ax() {
+        let array = ndarray::Array::from_shape_vec((2, 3, 2, 1), (0..12).collect())
+            .unwrap()
+            .into_dyn();
+        let axes = vec![2];
+        let (sum, count, shape) = sum_array_multi_axis(array.view(), &axes, None);
+        assert_eq!(sum, vec![1, 5, 9, 13, 17, 21]);
+        assert_eq!(count, vec![2, 2, 2, 2, 2, 2]);
+        assert_eq!(shape, vec![2, 3, 1]);
+    }
+
+    #[test]
+    fn test_sum_multi_axis_4d_3ax() {
+        let array = ndarray::Array::from_shape_vec((2, 3, 2, 1), (0..12).collect())
+            .unwrap()
+            .into_dyn();
+        let axes = vec![0, 1, 3];
+        let (sum, count, shape) = sum_array_multi_axis(array.view(), &axes, None);
+        assert_eq!(sum, vec![30, 36]);
+        assert_eq!(count, vec![6, 6]);
+        assert_eq!(shape, vec![2]);
     }
 }

@@ -31,11 +31,11 @@ use crate::types::DValue;
 pub enum Missing<T> {
     /// A single missing value
     MissingValue(T),
-    /// Multple missing values
+    /// Multiple missing values
     MissingValues(Vec<T>),
     /// Valid minimum
     ValidMin(T),
-    /// Valid maxiumum
+    /// Valid maximum
     ValidMax(T),
     /// Valid range
     ValidRange(T, T),

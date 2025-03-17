@@ -14,7 +14,7 @@ fn get_test_request_data() -> RequestData {
         offset: None,
         size: None,
         shape: None,
-        axis: None,
+        axes: reductionist::models::ReductionAxes::All,
         order: None,
         selection: None,
         compression: None,

@@ -19,7 +19,7 @@ fn get_test_request_data() -> RequestData {
         offset: None,
         size: None,
         shape: None,
-        axis: None,
+        axes: reductionist::models::ReductionAxes::All,
         order: None,
         selection: None,
         compression: None,
@@ -35,7 +35,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         let size = size_k * 1024;
         let data: Vec<i64> = (0_i64..size).map(|i| i % 256).collect::<Vec<i64>>();
         let data: Vec<u8> = data.as_bytes().into();
-        let missings = vec![
+        let missing_types = vec![
             None,
             Some(Missing::MissingValue(42.into())),
             Some(Missing::MissingValues(vec![42.into()])),
@@ -51,7 +51,7 @@ fn criterion_benchmark(c: &mut Criterion) {
             ("sum", Box::new(operations::Sum::execute)),
         ];
         for (op_name, execute) in operations {
-            for missing in missings.clone() {
+            for missing in missing_types.clone() {
                 let name = format!("{}({}, {:?})", op_name, size, missing);
                 c.bench_function(&name, |b| {
                     b.iter(|| {
