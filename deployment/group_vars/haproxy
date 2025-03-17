@@ -1,6 +1,6 @@
 ---
 # Global max connections.
-haproxy_max_connections: 40000
+haproxy_max_connections: 20000
 # Number of threads.
 haproxy_threads: 1
 # Default max connections.
