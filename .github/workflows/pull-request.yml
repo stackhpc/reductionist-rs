@@ -148,8 +148,7 @@ jobs:
         run: ansible-galaxy collection install -r deployment/requirements.yml
 
       - name: Run Ansible playbook
-        # GitHub runner already has Docker installed.
-        run: ansible-playbook -i deployment/inventory deployment/site.yml --skip-tags docker
+        run: ansible-playbook -i deployment/inventory deployment/site.yml
 
       - name: Install Python client dependencies
         run: pip install -r scripts/requirements.txt
