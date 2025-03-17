@@ -219,18 +219,18 @@ impl SimpleDiskCache {
     }
 
     async fn set(&self, key: &str, value: Bytes) -> Result<(), String > {
-        let mut state = self.load_state().await;
-        // Prepare the metadata
         let size = value.len();
-        let path = self.dir.join(&self.name).join(self.filename_for_key(key).await);
+        // Run the prune before storing to ensure we have sufficient space
+        self.prune(/* headroom */ size).await?;
         // Write the cache value and then update the metadata
-        state.metadata.insert(key.to_owned(), Metadata::new(size, self.ttl_seconds));
+        let path = self.dir.join(&self.name).join(self.filename_for_key(key).await);
         if let Err(e) = fs::write(path, value).await {
             return Err(format!("{:?}", e));
         }
+        let mut state = self.load_state().await;
+        state.metadata.insert(key.to_owned(), Metadata::new(size, self.ttl_seconds));
         state.current_size_bytes += size;
         self.save_state(state).await;
-        self.prune().await;
         Ok(())
     }
 
@@ -261,10 +261,14 @@ impl SimpleDiskCache {
     }
 
     // Removes items which are closest to expiry to free up disk space
-    async fn prune_disk_space(&self) {
+    async fn prune_disk_space(&self, headroom_bytes: usize) -> Result<(), String> {
         if let Some(max_size_bytes) = self.max_size_bytes {
+            if headroom_bytes > max_size_bytes {
+                return Err("Chunk cannot fit within cache maximum size threshold".to_string());
+            }
             let state = self.load_state().await;
-            let mut current_size_bytes: usize = state.metadata.values().map(|value| value.size_bytes).sum(); // (0, |_, (_, item)| item.size_bytes);
+            let mut current_size_bytes: usize = state.metadata.values().map(|value| value.size_bytes).sum();
+            current_size_bytes += headroom_bytes;
             if current_size_bytes >= max_size_bytes {
                 let mut metadata = state.metadata.iter().collect::<Vec<(&String, &Metadata)>>();
                 metadata.sort_by_key(|key_value_tuple| key_value_tuple.1.expires);
@@ -278,14 +282,15 @@ impl SimpleDiskCache {
                 }
             }
         }
+        Ok(())
     }
 
-    async fn prune(&self) {
+    async fn prune(&self, headroom_bytes: usize) -> Result<(), String> {
         let mut state = self.load_state().await;
         // Prune expired when we go over the size threshold - this is optional.
         let mut prune_expired = false;
         if let Some(max_size_bytes) = self.max_size_bytes {
-            prune_expired = state.current_size_bytes >= max_size_bytes;
+            prune_expired = state.current_size_bytes + headroom_bytes >= max_size_bytes;
         }
         // We also prune expired periodically.
         let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
@@ -297,8 +302,8 @@ impl SimpleDiskCache {
             // Prune oldest but not yet expired chunks to keep within max size threshold.
             state = self.load_state().await;
             if let Some(max_size_bytes) = self.max_size_bytes {
-                if state.current_size_bytes >= max_size_bytes {
-                    self.prune_disk_space().await;
+                if state.current_size_bytes + headroom_bytes >= max_size_bytes {
+                    self.prune_disk_space(headroom_bytes).await?;
                 }
             }
             // Record time for next purge of expired.
@@ -306,6 +311,7 @@ impl SimpleDiskCache {
             state.next_prune = timestamp + self.prune_interval_seconds;
             self.save_state(state).await;
         }
+        Ok(())
     }
 }
 
@@ -582,5 +588,84 @@ mod tests {
         assert_eq!(metadata.len(), 1);
         assert_eq!(metadata.contains_key(key_2), false);
         assert_eq!(metadata.contains_key(key_3), true);
+    }
+
+    #[tokio::test]
+    async fn test_simple_disk_cache_prune_disk_space_headroom() {
+        // Setup the cache with time and size limits that won't trigger pruning
+        // when we insert some test data.
+        // Check we have the content then prune on disk space with a headroom
+        // equal to the cache size, the cache should preemptively clear.
+        let max_size_bytes = 10000;
+        let tmp_dir = TempDir::new("simple_disk_cache").unwrap();
+        let cache = SimpleDiskCache::new(
+            "test-cache-7",
+            tmp_dir.path().to_str().unwrap(),
+            1000, // ttl for cache entries that we shouldn't hit
+            1000, // purge expired interval, too infrequent for us to hit
+            Some(max_size_bytes), // a max size threshold our test data shouldn't hit
+        );
+
+        // Action: populate cache with 1st entry
+        let key_1 = "item-1";
+        let value_1 = Bytes::from(vec![1, 2, 3, 4]);
+        cache.set(key_1, value_1).await.unwrap();
+        let key_2 = "item-2";
+        let value_2 = Bytes::from(vec![1, 2, 3, 4]);
+        cache.set(key_2, value_2).await.unwrap();
+
+        // Assert: no entries should have been purged
+        let metadata = cache.load_state().await.metadata;
+        assert_eq!(metadata.len(), 2);
+
+        // Action: prune disk space setting the headroom to the cache size
+        assert_eq!(cache.prune_disk_space(max_size_bytes).await, Ok(()));
+
+        // Assert: cache is empty
+        let metadata = cache.load_state().await.metadata;
+        assert_eq!(metadata.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_simple_disk_cache_chunk_too_big() {
+        // Setup the cache with a size limit so small it can't accomodate our test data.
+        let max_size_bytes = 100;
+        let tmp_dir = TempDir::new("simple_disk_cache").unwrap();
+        let cache = SimpleDiskCache::new(
+            "test-cache-8",
+            tmp_dir.path().to_str().unwrap(),
+            1,  // ttl irrelevant for test
+            60, // purge interval irrelevant for test
+            Some(max_size_bytes), // a max size threshold too restrictive
+        );
+
+        // Action: populate cache with a chunk that just fits
+        let key_1 = "item-1";
+        let value_1 = Bytes::from(vec![0; max_size_bytes - 1]);
+        cache.set(key_1, value_1).await.unwrap();
+
+        // Assert: cache populated
+        let metadata = cache.load_state().await.metadata;
+        assert_eq!(metadata.len(), 1);
+
+        // Action: populate cache with a chunk that fits exactly if the previously stored chunk is removed
+        let key_2 = "item-2";
+        let value_2 = Bytes::from(vec![0; max_size_bytes]);
+        cache.set(key_2, value_2).await.unwrap();
+
+        // Assert: cache content replaced
+        let metadata = cache.load_state().await.metadata;
+        assert_eq!(metadata.len(), 1);
+        assert_eq!(metadata.contains_key(key_2), true);
+
+        // Action: populate cache with a chunk that can't fit
+        let key_3 = "item-3";
+        let value_3 = Bytes::from(vec![0; max_size_bytes + 1]);
+        assert_eq!(cache.set(key_3, value_3).await, Err(String::from("Chunk cannot fit within cache maximum size threshold")));
+
+        // Assert: cache content hasn't changed
+        let metadata = cache.load_state().await.metadata;
+        assert_eq!(metadata.len(), 1);
+        assert_eq!(metadata.contains_key(key_2), true);
     }
 }
