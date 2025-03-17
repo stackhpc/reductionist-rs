@@ -442,6 +442,17 @@
         volumes:
           - "{{ ansible_env.HOME }}/haproxy:/usr/local/etc/haproxy:ro"
 
+    - name: Value of reductionist_host
+      debug: var=reductionist_host
+    # {{ hostvars[item].ansible_facts.default_ipv4.address }}
+
+    - name: Debug listening sockets
+      ansible.builtin.shell: ss -nl | grep 808
+      register: listening_on_808
+
+    - name: Listening on 808
+      debug: var=listening_on_808
+
     - name: Wait for reductionist server to be accessible via HAProxy
       ansible.builtin.uri:
         url: "https://{{ reductionist_host }}:8080/.well-known/reductionist-schema"
