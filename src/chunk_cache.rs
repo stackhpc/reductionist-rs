@@ -1,105 +1,149 @@
-use crate::cli::CommandLineArgs;
 use crate::error::ActiveStorageError;
 
 use byte_unit::Byte;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, ops::Add, path::PathBuf, sync::Arc, time::{SystemTime, UNIX_EPOCH}};
-use tokio::{fs, sync::mpsc, spawn};
+use std::{
+    collections::HashMap,
+    ops::Add,
+    path::PathBuf,
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
+use tokio::{fs, spawn, sync::mpsc};
 
-struct KeyValueMessage {
+/// ChunkKeyValue stores a chunk ready to be cached.
+struct ChunkKeyValue {
+    /// Key to uniquely identify the chunk in the cache.
     key: String,
+    /// Bytes to be cached.
     value: Bytes,
 }
 
-impl KeyValueMessage {
+impl ChunkKeyValue {
+    /// Return a ChunkKeyValue object
     fn new(key: String, value: Bytes) -> Self {
-        // Make sure the message owns the Bytes so we don't see unexpected, but not incorrect, behaviour caused by zero copy.
+        // Make sure we own the `Bytes` so we don't see unexpected, but not incorrect,
+        // behaviour caused by the zero copy of `Bytes`. i.e. let us choose when to copy.
         let value = Bytes::from(value.to_vec());
-        Self {
-            key,
-            value,
-        }
+        Self { key, value }
     }
 }
 
+/// ChunkCache wraps a SimpleDiskCache object
+/// and makes it async multi-thread safe by buffering all write operations
+/// through an async MPSC channel.
+/// SimpleDiskCache reads are inherently thread safe
+/// and the ChunkCache passes these through unbuffered.
+/// Cache writes are MPSC buffered. The task caching the chunk will not be blocked
+/// unless the buffer is full, upon which the task will be blocked until
+/// buffered space becomes available.
+/// Buffer size is configurable.
 pub struct ChunkCache {
+    /// The underlying cache object.
     cache: Arc<SimpleDiskCache>,
-    sender: mpsc::Sender<KeyValueMessage>,
+    /// Sync primitive for managing write access to the cache.
+    sender: mpsc::Sender<ChunkKeyValue>,
 }
 
 impl ChunkCache {
-    pub fn new(args: &CommandLineArgs) -> Self {
-        // Path to the cache directory.
-        let path = <Option<String> as Clone>::clone(&args.chunk_cache_path)
-            .expect("The chunk cache path must be specified when the chunk cache is enabled");
-        // TTL/lifespan of a cache chunk in seconds. Default is 1 day.
-        let lifespan = args.chunk_cache_age;
-        // Minimum period in seconds between pruning the expired chunks on ttl. Default is 1 hour.
-        let prune_interval_seconds = args.chunk_cache_prune_interval;
-        // Maximum cache size in bytes. Can be specified as "1TB".
-        let max_size_bytes = if let Some(size_limit) = &args.chunk_cache_size_limit {
-            let bytes = Byte::parse_str(size_limit, /* ignore case */ true).expect("Invalid cache size limit").as_u64();
+    /// Returns a ChunkCache object.
+    ///
+    /// # Arguments
+    ///
+    /// * `path`: Filesystem path where the "chunk_cache" folder is created, such as "/tmp"
+    /// * `ttl_seconds`: Time in seconds to keep a chunk in the cache
+    /// * `prune_interval_seconds`: Interval in seconds to routinely check and prune the cache of expired chunks
+    /// * `max_size_bytes`: An optional maximum cache size expressed as a string, i.e. "100GB"
+    /// * `buffer_size`: An optional size for the chunk write buffer
+    pub fn new(
+        path: String,
+        ttl_seconds: u64,
+        prune_interval_seconds: u64,
+        max_size_bytes: Option<String>,
+        buffer_size: Option<usize>,
+    ) -> Self {
+        let max_size_bytes = if let Some(size_limit) = max_size_bytes {
+            let bytes = Byte::parse_str(size_limit, /* ignore case */ true)
+                .expect("Invalid cache size limit")
+                .as_u64();
             Some(usize::try_from(bytes).unwrap())
         } else {
             None
         };
-        // Size of the MPSC channel buffer, i.e. how many chunks we can queue.
-        let chunk_cache_queue_size = args.chunk_cache_queue_size.unwrap_or(32);
-
         let cache = Arc::new(SimpleDiskCache::new(
             "chunk_cache",
             &path,
-            lifespan,
+            ttl_seconds,
             prune_interval_seconds,
-            max_size_bytes
+            max_size_bytes,
         ));
+        // Clone the cache, i.e. increment the Arc's reference counter,
+        // give this to an async task we spawn for handling all cache writes.
         let cache_clone = cache.clone();
-        let (sender, mut receiver) = mpsc::channel::<KeyValueMessage>(chunk_cache_queue_size);
+        // Create a MPSC channel, give the single consumer receiving end to the write task
+        // and store the sending end for use in our `set` method.
+        // A download request storing to the cache need only wait for the chunk
+        // to be sent to the channel.
+        let buffer_size = buffer_size.unwrap_or(num_cpus::get() - 1);
+        let (sender, mut receiver) = mpsc::channel::<ChunkKeyValue>(buffer_size);
         spawn(async move {
             while let Some(message) = receiver.recv().await {
-                cache_clone.set(message.key.as_str(), message.value).await.unwrap();
+                cache_clone
+                    .set(message.key.as_str(), message.value)
+                    .await
+                    .unwrap();
             }
         });
-    
-        Self {
-            cache,
-            sender,
-        }
+
+        Self { cache, sender }
     }
 
+    /// Stores chunk `Bytes` in the cache against an unique key.
+    ///
+    /// # Arguments
+    ///
+    /// * `key`: Unique key identifying the chunk
+    /// * `value`: Chunk `Bytes` to be cached
     pub async fn set(&self, key: &str, value: Bytes) -> Result<Option<Bytes>, ActiveStorageError> {
-        match self.sender.send(KeyValueMessage::new(String::from(key), value)).await {
-            Ok(_) => {
-                Ok(None)
-            },
-            Err(e) => {
-                Err(ActiveStorageError::ChunkCacheError{ error: format!("{:?}", e) })
-            }
+        match self
+            .sender
+            .send(ChunkKeyValue::new(String::from(key), value))
+            .await
+        {
+            Ok(_) => Ok(None),
+            Err(e) => Err(ActiveStorageError::ChunkCacheError {
+                error: format!("{:?}", e),
+            }),
         }
     }
 
+    /// Retrieves chunk `Bytes` from the cache for an unique key.
+    ///
+    /// # Arguments
+    ///
+    /// * `key`: Unique key identifying the chunk
     pub async fn get(&self, key: &str) -> Result<Option<Bytes>, ActiveStorageError> {
         match self.cache.get(key).await {
-            Ok(value) => {
-                Ok(value)
-            },
-            Err(e) => {
-                Err(ActiveStorageError::ChunkCacheError{ error: format!("{:?}", e) })
-            }
+            Ok(value) => Ok(value),
+            Err(e) => Err(ActiveStorageError::ChunkCacheError {
+                error: format!("{:?}", e),
+            }),
         }
     }
 }
 
+/// Metadata stored against each cache chunk.
 #[derive(Debug, Serialize, Deserialize)]
 struct Metadata {
-    /// Seconds after unix epoch for ache item expiry
+    /// Seconds after unix epoch for ache item expiry.
     expires: u64,
-    /// Cache value size
+    /// Cache value size.
     size_bytes: usize,
 }
 
 impl Metadata {
+    /// Returns a Metadata object.
     fn new(size: usize, ttl: u64) -> Self {
         let expires = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -115,22 +159,28 @@ impl Metadata {
 
 type CacheKeys = HashMap<String, Metadata>;
 
+/// State stores the metadata for all cached chunks,
+/// the total size of the cache,
+/// and the time, as seconds from epoch, when the cache will next be checked
+/// and pruned of chunks whose ttl has expired.
 #[derive(Debug, Serialize, Deserialize)]
 struct State {
-    /// Per cached chunk metadata
+    /// Per cached chunk metadata indexed by chunk key.
     metadata: CacheKeys,
-    /// Current cache size
+    /// Current cache size in bytes.
     current_size_bytes: usize,
-    /// Next expiry in seconds from epoch
+    /// When to next check and prune the cache for expired chunks, as seconds from epoch.
     next_prune: u64,
 }
 
 impl State {
+    /// Returns a State object.
     fn new(prune_interval_secs: u64) -> Self {
         let next_prune = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
-            .as_secs() + prune_interval_secs;
+            .as_secs()
+            + prune_interval_secs;
         State {
             metadata: CacheKeys::new(),
             current_size_bytes: 0,
@@ -139,38 +189,47 @@ impl State {
     }
 }
 
+/// The SimpleDiskCache takes chunks of `Bytes` data, identified by an unique key,
+/// storing each chunk as a separate file on disk. Keys are stored in a hashmap
+/// serialised to a JSON state file on disk.
+/// Each chunk stored has a TTL, time to live, stored as a number seconds from epoch,
+/// after which the chunk will have expired and can be pruned from the cache.
+/// Pruning takes place at time intervals or when the total size of the cache
+/// reaches a maximum size threshold.
+/// The decision whether to prune the cache is made when chunks are stored.
 #[derive(Debug)]
 struct SimpleDiskCache {
-    /// Cache folder name
+    /// Cache folder name.
     name: String,
-    /// Cache parent directory
+    /// Cache parent directory for the cache folder, such as "/tmp", which must exist.
     dir: PathBuf,
-    /// Max time to live for a single cache entry
+    /// Max time to live for a single cache entry.
     ttl_seconds: u64,
-    /// Prune expired chunks at interval seconds
+    /// Interval in seconds to routinely check and prune the cache of expired chunks.
     prune_interval_seconds: u64,
-    /// Option to limit maximum cache size in bytes
+    /// Optional, a maximum size for the cache.
     max_size_bytes: Option<usize>,
 }
 
 impl SimpleDiskCache {
-
+    /// Names the JSON file used to store all cache keys and metadata.
     const STATE_FILE: &'static str = "state.json";
 
+    /// Returns a SimpleDiskCache object.
     pub fn new(
         name: &str,
         dir: &str,
         ttl_seconds: u64,
         prune_interval_seconds: u64,
-        max_size_bytes: Option<usize>
+        max_size_bytes: Option<usize>,
     ) -> Self {
         let name = name.to_string();
         let dir = PathBuf::from(dir);
         let path = dir.join(&name);
         if !dir.as_path().exists() {
-            panic!("Cache parent dir {:?} must exist", dir)
+            panic!("Cache parent dir {} must exist", dir.to_str().unwrap())
         } else if path.exists() {
-            panic!("Cache folder {:?} already exists", path.to_str())
+            panic!("Cache folder {} already exists", path.to_str().unwrap())
         } else {
             std::fs::create_dir(&path).unwrap();
         }
@@ -183,6 +242,9 @@ impl SimpleDiskCache {
         }
     }
 
+    /// Loads the cache state information from disk.
+    ///
+    /// Returns a `State` object.
     async fn load_state(&self) -> State {
         let file = self.dir.join(&self.name).join(SimpleDiskCache::STATE_FILE);
         if file.exists() {
@@ -192,6 +254,11 @@ impl SimpleDiskCache {
         }
     }
 
+    /// Saves the cache state information to disk.
+    ///
+    /// # Arguments
+    ///
+    /// * `state`: Cache `State` object.
     async fn save_state(&self, data: State) {
         let file = self.dir.join(&self.name).join(SimpleDiskCache::STATE_FILE);
         fs::write(file, serde_json::to_string(&data).unwrap())
@@ -199,41 +266,82 @@ impl SimpleDiskCache {
             .unwrap();
     }
 
+    /// Converts a chunk key into a string that can be used for a filename.
+    /// Keys must be unique but if too long may overstep the file name limits
+    /// of the underlying filesystem used to store the chunk.
+    ///
+    /// Returns a String.
+    ///
+    /// # Arguments
+    ///
+    /// * `key`: Unique key identifying the chunk
     async fn filename_for_key(&self, key: &str) -> String {
         // Cater for long URL keys causing filename too long filesystem errors.
         format!("{:?}", md5::compute(key))
     }
 
+    /// Retrieves chunk `Bytes` from the cache for an unique key.
+    /// The chunk simply needs to exist on disk to be returned.
+    /// For performance, metadata, including TTL, isn't checked and it's possible
+    /// to retrieve an expired chunk within the time window between the chunk expiring
+    /// and the next cache pruning.
+    /// This function does not modify the state of the cache and is thread safe.
+    ///
+    /// # Arguments
+    ///
+    /// * `key`: Unique key identifying the chunk
     async fn get(&self, key: &str) -> Result<Option<Bytes>, String> {
-        match fs::read(self.dir.join(&self.name).join(self.filename_for_key(key).await)).await {
+        match fs::read(
+            self.dir
+                .join(&self.name)
+                .join(self.filename_for_key(key).await),
+        )
+        .await
+        {
             Ok(val) => Ok(Some(Bytes::from(val))),
             Err(err) => match err.kind() {
-                std::io::ErrorKind::NotFound => {
-                    Ok(None)
-                },
-                _ => {
-                    Err(format!("{}", err))
-                }
-            }   
+                std::io::ErrorKind::NotFound => Ok(None),
+                _ => Err(format!("{}", err)),
+            },
         }
     }
 
-    async fn set(&self, key: &str, value: Bytes) -> Result<(), String > {
+    /// Stores chunk `Bytes` in the cache against an unique key.
+    /// The cache is checked and if necessary pruned before storing the chunk.
+    /// Where a maximum size limit has been set the check will take into account the size
+    /// of the chunk being stored and ensure sufficient storage space is available.
+    /// This function modifies the state of the cache and is not thread safe.
+    ///
+    /// # Arguments
+    ///
+    /// * `key`: Unique key identifying the chunk
+    /// * `value`: Chunk `Bytes` to be cached
+    async fn set(&self, key: &str, value: Bytes) -> Result<(), String> {
         let size = value.len();
         // Run the prune before storing to ensure we have sufficient space
         self.prune(/* headroom */ size).await?;
         // Write the cache value and then update the metadata
-        let path = self.dir.join(&self.name).join(self.filename_for_key(key).await);
+        let path = self
+            .dir
+            .join(&self.name)
+            .join(self.filename_for_key(key).await);
         if let Err(e) = fs::write(path, value).await {
             return Err(format!("{:?}", e));
         }
         let mut state = self.load_state().await;
-        state.metadata.insert(key.to_owned(), Metadata::new(size, self.ttl_seconds));
+        state
+            .metadata
+            .insert(key.to_owned(), Metadata::new(size, self.ttl_seconds));
         state.current_size_bytes += size;
         self.save_state(state).await;
         Ok(())
     }
 
+    /// Removes a chunk from the cache, identified by its key.
+    ///
+    /// # Arguments
+    ///
+    /// * `key`: Unique key identifying the chunk
     async fn remove(&self, key: &str) {
         let mut state = self.load_state().await;
         let (mut remove, mut size_bytes) = (false, 0);
@@ -241,18 +349,24 @@ impl SimpleDiskCache {
             (remove, size_bytes) = (true, data.size_bytes);
         }
         if remove {
-            let path = self.dir.join(&self.name).join(self.filename_for_key(key).await);
-            fs::remove_file(path).await.unwrap();   
+            let path = self
+                .dir
+                .join(&self.name)
+                .join(self.filename_for_key(key).await);
+            fs::remove_file(path).await.unwrap();
             state.metadata.remove(key);
             state.current_size_bytes -= size_bytes;
             self.save_state(state).await;
         }
     }
 
-    // Removes expired cache entries
+    /// Removes all cache entries whose TTL has expired.
     async fn prune_expired(&self) {
         let state = self.load_state().await;
-        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
         for (key, data) in state.metadata.iter() {
             if data.expires <= timestamp {
                 self.remove(key).await;
@@ -260,21 +374,31 @@ impl SimpleDiskCache {
         }
     }
 
-    // Removes items which are closest to expiry to free up disk space
+    /// If the optional maximum cache size has been set, this function removes cache entries
+    /// to ensure the total size of the cache is within the size limit.
+    /// Entries are removed in order of TTL, oldest first.
+    /// Entries whose TTL hasn't yet expired can be removed to make space.
+    /// A value of `headroom_byres` can be specified and this ensures the specified number
+    /// of bytes are left available after pruning, to ensure the next chunk can be saved.
+    ///
+    /// # Arguments
+    ///
+    /// * `headroom_bytes`: specifies additional free space that must be left available
     async fn prune_disk_space(&self, headroom_bytes: usize) -> Result<(), String> {
         if let Some(max_size_bytes) = self.max_size_bytes {
             if headroom_bytes > max_size_bytes {
                 return Err("Chunk cannot fit within cache maximum size threshold".to_string());
             }
             let state = self.load_state().await;
-            let mut current_size_bytes: usize = state.metadata.values().map(|value| value.size_bytes).sum();
+            let mut current_size_bytes: usize =
+                state.metadata.values().map(|value| value.size_bytes).sum();
             current_size_bytes += headroom_bytes;
             if current_size_bytes >= max_size_bytes {
                 let mut metadata = state.metadata.iter().collect::<Vec<(&String, &Metadata)>>();
                 metadata.sort_by_key(|key_value_tuple| key_value_tuple.1.expires);
                 for (key, data) in metadata {
                     self.remove(key).await;
-                    // Repeat size calculation (outside of remove) to avoid reloading state.
+                    // Repeat size calculation (outside of `remove`) to avoid reloading state.
                     current_size_bytes -= data.size_bytes;
                     if current_size_bytes < max_size_bytes {
                         break;
@@ -285,28 +409,40 @@ impl SimpleDiskCache {
         Ok(())
     }
 
+    /// Prune the cache, this will be called before storing a chunk.
+    /// First, entries will be expired based on their TTL.
+    /// Second, if there's a maximum size limit on the cache it will be checked.
+    /// A value of `headroom_byres` can be specified and this ensures the specified number
+    /// of bytes are left available after pruning, to ensure the next chunk can be saved.
+    ///
+    /// # Arguments
+    ///
+    /// * `headroom_bytes`: specifies additional free space that must be left available
     async fn prune(&self, headroom_bytes: usize) -> Result<(), String> {
         let mut state = self.load_state().await;
-        // Prune expired when we go over the size threshold - this is optional.
+        // Prune when we go over the size threshold - this is optional.
         let mut prune_expired = false;
         if let Some(max_size_bytes) = self.max_size_bytes {
             prune_expired = state.current_size_bytes + headroom_bytes >= max_size_bytes;
         }
-        // We also prune expired periodically.
-        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        // We also prune at time intervals.
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
         prune_expired |= state.next_prune <= timestamp;
-        // Prune if size or expiry threshold crossed.
+        // Prune if either of the above thresholds were crossed.
         if prune_expired {
-            // Prune cache of expired chunks.
+            // First prune on TTL.
             self.prune_expired().await;
-            // Prune oldest but not yet expired chunks to keep within max size threshold.
+            // Do we need to prune further to keep within a maximum size threshold?
             state = self.load_state().await;
             if let Some(max_size_bytes) = self.max_size_bytes {
                 if state.current_size_bytes + headroom_bytes >= max_size_bytes {
                     self.prune_disk_space(headroom_bytes).await?;
                 }
             }
-            // Record time for next purge of expired.
+            // Update state with the time of the next periodic pruning.
             state = self.load_state().await;
             state.next_prune = timestamp + self.prune_interval_seconds;
             self.save_state(state).await;
@@ -331,9 +467,9 @@ mod tests {
         let cache = SimpleDiskCache::new(
             "test-cache-1",
             tmp_dir.path().to_str().unwrap(),
-            10,  // ttl
-            60,  // purge period
-            None // max size
+            10,   // ttl
+            60,   // purge period
+            None, // max size
         );
 
         // Act
@@ -374,16 +510,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_simple_disk_cache_prune_expired_all() {
-
         let ttl = 1;
         let time_between_inserts = 1;
         let tmp_dir = TempDir::new("simple_disk_cache").unwrap();
         let cache = SimpleDiskCache::new(
             "test-cache-2",
             tmp_dir.path().to_str().unwrap(),
-            ttl,    // ttl for cache entries
+            ttl,  // ttl for cache entries
             1000, // purge expired interval set large to not trigger expiry on "set"
-            None  // max cache size unset
+            None, // max cache size unset
         );
 
         // Action: populate cache
@@ -413,16 +548,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_simple_disk_cache_prune_expired_stepped() {
-
         let ttl = 1;
         let time_between_inserts = ttl;
         let tmp_dir = TempDir::new("simple_disk_cache").unwrap();
         let cache = SimpleDiskCache::new(
             "test-cache-3",
             tmp_dir.path().to_str().unwrap(),
-            ttl,    // ttl for cache entries
+            ttl,  // ttl for cache entries
             1000, // purge expired interval set large to not trigger expiry on "set"
-            None  // max cache size unset
+            None, // max cache size unset
         );
 
         // Action: populate cache with 2 entries ttl seconds apart
@@ -471,9 +605,9 @@ mod tests {
         let cache = SimpleDiskCache::new(
             "test-cache-4",
             tmp_dir.path().to_str().unwrap(),
-            ttl,           // ttl for cache entries
-            1000,        // purge expired interval set large to not trigger expiry on "set"
-            Some(size*2) // max cache size accomodates two entries
+            ttl,            // ttl for cache entries
+            1000,           // purge expired interval set large to not trigger expiry on "set"
+            Some(size * 2), // max cache size accomodates two entries
         );
 
         // Action: populate cache with large entry
@@ -513,9 +647,9 @@ mod tests {
         let cache = SimpleDiskCache::new(
             "test-cache-5",
             tmp_dir.path().to_str().unwrap(),
-            ttl,           // ttl for cache entries
-            1000,        // purge expired interval set large to not trigger expiry on "set"
-            Some(size*2) // max cache size accomodates two entries
+            ttl,            // ttl for cache entries
+            1000,           // purge expired interval set large to not trigger expiry on "set"
+            Some(size * 2), // max cache size accomodates two entries
         );
 
         // Action: populate cache with large entry
@@ -553,7 +687,7 @@ mod tests {
             tmp_dir.path().to_str().unwrap(),
             ttl, // ttl for cache entries
             ttl, // purge expired interval
-            None
+            None,
         );
 
         // Action: populate cache with 1st entry
@@ -601,8 +735,8 @@ mod tests {
         let cache = SimpleDiskCache::new(
             "test-cache-7",
             tmp_dir.path().to_str().unwrap(),
-            1000, // ttl for cache entries that we shouldn't hit
-            1000, // purge expired interval, too infrequent for us to hit
+            1000,                 // ttl for cache entries that we shouldn't hit
+            1000,                 // purge expired interval, too infrequent for us to hit
             Some(max_size_bytes), // a max size threshold our test data shouldn't hit
         );
 
@@ -634,8 +768,8 @@ mod tests {
         let cache = SimpleDiskCache::new(
             "test-cache-8",
             tmp_dir.path().to_str().unwrap(),
-            1,  // ttl irrelevant for test
-            60, // purge interval irrelevant for test
+            1,                    // ttl irrelevant for test
+            60,                   // purge interval irrelevant for test
             Some(max_size_bytes), // a max size threshold too restrictive
         );
 
@@ -661,7 +795,12 @@ mod tests {
         // Action: populate cache with a chunk that can't fit
         let key_3 = "item-3";
         let value_3 = Bytes::from(vec![0; max_size_bytes + 1]);
-        assert_eq!(cache.set(key_3, value_3).await, Err(String::from("Chunk cannot fit within cache maximum size threshold")));
+        assert_eq!(
+            cache.set(key_3, value_3).await,
+            Err(String::from(
+                "Chunk cannot fit within cache maximum size threshold"
+            ))
+        );
 
         // Assert: cache content hasn't changed
         let metadata = cache.load_state().await.metadata;

@@ -60,9 +60,13 @@ pub struct CommandLineArgs {
     /// Default is 1 day.
     #[arg(long, default_value_t = 86400, env = "REDUCTIONIST_CHUNK_CACHE_AGE")]
     pub chunk_cache_age: u64,
-    /// Minimum interval in seconds between expiring chunks based on ttl.
+    /// Minimum interval in seconds between checking for expired chunks based on ttl.
     /// Default is 1 hour.
-    #[arg(long, default_value_t = 3600, env = "REDUCTIONIST_CHUNK_CACHE_PRUNE_INTERVAL")]
+    #[arg(
+        long,
+        default_value_t = 3600,
+        env = "REDUCTIONIST_CHUNK_CACHE_PRUNE_INTERVAL"
+    )]
     pub chunk_cache_prune_interval: u64,
     /// Whether to apply an upper size limit to the cache.
     /// Example values: "300GB", "1TB".
@@ -70,9 +74,9 @@ pub struct CommandLineArgs {
     #[arg(long, env = "REDUCTIONIST_CHUNK_CACHE_SIZE_LIMIT")]
     pub chunk_cache_size_limit: Option<String>,
     /// Optional buffer size for queuing commits to the cache.
-    /// Default is 32.
+    /// Defaults to the number of CPUs detected.
     #[arg(long, env = "REDUCTIONIST_CHUNK_CACHE_QUEUE_SIZE")]
-    pub chunk_cache_queue_size: Option<usize>,
+    pub chunk_cache_buffer_size: Option<usize>,
 }
 
 /// Returns parsed command line arguments.

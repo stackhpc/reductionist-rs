@@ -68,7 +68,18 @@ impl AppState {
         let resource_manager =
             ResourceManager::new(args.s3_connection_limit, args.memory_limit, task_limit);
         let chunk_cache = if args.use_chunk_cache {
-            Some(ChunkCache::new(args))
+            let path = args
+                .chunk_cache_path
+                .as_ref()
+                .expect("The chunk cache path must be specified when the chunk cache is enabled")
+                .clone();
+            Some(ChunkCache::new(
+                path,
+                args.chunk_cache_age,
+                args.chunk_cache_prune_interval,
+                args.chunk_cache_size_limit.clone(),
+                args.chunk_cache_buffer_size,
+            ))
         } else {
             None
         };
@@ -183,7 +194,6 @@ async fn download_s3_object<'a>(
     request_data: &models::RequestData,
     resource_manager: &'a ResourceManager,
 ) -> Result<Bytes, ActiveStorageError> {
-
     // If we're given a size in the request data then use this to
     // get an initial guess at the required memory resources.
     let memory = request_data.size.unwrap_or(0);
@@ -193,14 +203,14 @@ async fn download_s3_object<'a>(
     let _conn_permits = resource_manager.s3_connection().await?;
 
     client
-    .download_object(
-        &request_data.bucket,
-        &request_data.object,
-        range,
-        resource_manager,
-        &mut mem_permits,
-    )
-    .await
+        .download_object(
+            &request_data.bucket,
+            &request_data.object,
+            range,
+            resource_manager,
+            &mut mem_permits,
+        )
+        .await
 }
 
 /// Download and cache an object from S3
@@ -219,7 +229,6 @@ async fn download_and_cache_s3_object<'a>(
     resource_manager: &'a ResourceManager,
     chunk_cache: &ChunkCache,
 ) -> Result<Bytes, ActiveStorageError> {
-
     let key = format!("{},{:?}", client, request_data);
 
     match chunk_cache.get(&key).await {
@@ -227,34 +236,18 @@ async fn download_and_cache_s3_object<'a>(
             if let Some(bytes) = value {
                 return Ok(bytes);
             }
-        },
+        }
         Err(e) => {
             return Err(e);
         }
     }
 
-    // If we're given a size in the request data then use this to
-    // get an initial guess at the required memory resources.
-    let memory = request_data.size.unwrap_or(0);
-    let mut mem_permits = resource_manager.memory(memory).await?;
-
-    let range = s3_client::get_range(request_data.offset, request_data.size);
-    let _conn_permits = resource_manager.s3_connection().await?;
-
-    let data = client
-        .download_object(
-            &request_data.bucket,
-            &request_data.object,
-            range,
-            resource_manager,
-            &mut mem_permits,
-        )
-        .await;
+    let data = download_s3_object(client, request_data, resource_manager).await;
 
     if let Ok(data_bytes) = &data {
         // Store the data against this key if the chunk cache is enabled.
         match chunk_cache.set(&key, data_bytes.clone()).await {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(e) => {
                 return Err(e);
             }
@@ -307,13 +300,9 @@ async fn operation_handler<T: operation::Operation>(
         .instrument(tracing::Span::current())
         .await?
     } else {
-        download_s3_object(
-            &s3_client,
-            &request_data,
-            &state.resource_manager,
-        )
-        .instrument(tracing::Span::current())
-        .await?
+        download_s3_object(&s3_client, &request_data, &state.resource_manager)
+            .instrument(tracing::Span::current())
+            .await?
     };
 
     // All remaining work i s synchronous. If the use_rayon argument was specified, delegate to the
