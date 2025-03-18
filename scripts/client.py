@@ -117,7 +117,9 @@ def display(response, verbose=False):
     dtype = response.headers['x-activestorage-dtype']
     shape = json.loads(response.headers['x-activestorage-shape'])
     counts = json.loads(response.headers['x-activestorage-count'])
-    counts = np.array(counts).reshape(shape)
+    counts = np.array(counts)
+    if len(counts) > 1:
+        counts = counts.reshape(shape)
     result = np.frombuffer(response.content, dtype=dtype).reshape(shape)
     if verbose:
         sep = "\n" if len(counts.shape) > 1 else " "

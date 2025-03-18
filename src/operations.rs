@@ -46,6 +46,43 @@ fn count_non_missing<T: Element>(
     Ok(array.iter().copied().filter(filter).count())
 }
 
+/// Counts the number of non-missing elements along
+/// one or more axes of the provided array
+fn count_array_multi_axis<T: Element>(
+    array: ndarray::ArrayView<T, ndarray::IxDyn>,
+    axes: &[usize],
+    missing: Option<Missing<T>>,
+) -> (Vec<i64>, Vec<usize>) {
+    // Count non-missing over first axis
+    let mut result = array
+        .fold_axis(Axis(axes[0]), 0, |running_count, val| {
+            if let Some(missing) = &missing {
+                if !missing.is_missing(val) {
+                    running_count + 1
+                } else {
+                    *running_count
+                }
+            } else {
+                running_count + 1
+            }
+        })
+        .into_dyn();
+    // Sum counts over remaining axes
+    if let Some(remaining_axes) = axes.get(1..) {
+        for (n, axis) in remaining_axes.iter().enumerate() {
+            result = result
+                .fold_axis(Axis(axis - n - 1), 0, |total_count, count| {
+                    total_count + count
+                })
+                .into_dyn();
+        }
+    }
+
+    // Convert result to owned vec
+    let counts = result.iter().copied().collect::<Vec<i64>>();
+    (counts, result.shape().into())
+}
+
 /// Return the number of selected elements in the array.
 pub struct Count {}
 
@@ -57,22 +94,69 @@ impl NumOperation for Count {
         let array = array::build_array::<T>(request_data, &mut data)?;
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
         let sliced = array.slice(slice_info);
-        let count = if let Some(missing) = &request_data.missing {
-            let missing = Missing::<T>::try_from(missing)?;
-            count_non_missing(&sliced, &missing)?
+
+        let typed_missing: Option<Missing<T>> = if let Some(missing) = &request_data.missing {
+            let m = Missing::try_from(missing)?;
+            Some(m)
         } else {
-            sliced.len()
+            None
         };
-        let count = i64::try_from(count)?;
-        let body = count.to_ne_bytes();
-        // Need to copy to provide ownership to caller.
-        let body = Bytes::copy_from_slice(&body);
-        Ok(models::Response::new(
-            body,
-            models::DType::Int64,
-            vec![],
-            vec![count],
-        ))
+
+        match &request_data.axis {
+            ReductionAxes::All => {
+                let count = if let Some(missing) = &request_data.missing {
+                    let missing = Missing::<T>::try_from(missing)?;
+                    count_non_missing(&sliced, &missing)?
+                } else {
+                    sliced.len()
+                };
+                let count = i64::try_from(count)?;
+                let body = count.to_ne_bytes();
+                // Need to copy to provide ownership to caller.
+                let body = Bytes::copy_from_slice(&body);
+                Ok(models::Response::new(
+                    body,
+                    models::DType::Int64,
+                    vec![],
+                    vec![count],
+                ))
+            }
+            ReductionAxes::One(axis) => {
+                let result = sliced.fold_axis(Axis(*axis), 0, |count, val| {
+                    if let Some(missing) = &typed_missing {
+                        if !missing.is_missing(val) {
+                            count + 1
+                        } else {
+                            *count
+                        }
+                    } else {
+                        count + 1
+                    }
+                });
+                let counts = result.iter().copied().collect::<Vec<i64>>();
+                let body = counts.as_bytes();
+                // Need to copy to provide ownership to caller.
+                let body = Bytes::copy_from_slice(body);
+                Ok(models::Response::new(
+                    body,
+                    models::DType::Int64,
+                    result.shape().into(),
+                    counts,
+                ))
+            }
+            ReductionAxes::Multi(axes) => {
+                let (counts, shape) = count_array_multi_axis(sliced.view(), axes, typed_missing);
+                let body = counts.as_bytes();
+                // Need to copy to provide ownership to caller.
+                let body = Bytes::copy_from_slice(body);
+                Ok(models::Response::new(
+                    body,
+                    models::DType::Int64,
+                    shape,
+                    counts,
+                ))
+            }
+        }
     }
 }
 
@@ -1173,6 +1257,78 @@ mod tests {
         let (result, counts, shape) = max_array_multi_axis(arr.view(), &axes, Some(missing));
         // Assert
         assert_eq!(result, vec![8, 11]);
+        assert_eq!(counts, vec![5, 6]);
+        assert_eq!(shape, vec![2]);
+    }
+
+    #[test]
+    #[should_panic(expected = "assertion failed: axis.index() < self.ndim()")]
+    fn count_multi_axis_2d_wrong_axis() {
+        // Arrange
+        let array = ndarray::Array::from_shape_vec((2, 2), (0..4).collect())
+            .unwrap()
+            .into_dyn();
+        let axes = vec![2];
+        // Act
+        let _ = count_array_multi_axis(array.view(), &axes, None);
+    }
+
+    #[test]
+    fn count_multi_axis_2d_2ax() {
+        // Arrange
+        let axes = vec![0, 1];
+        let missing = None;
+        let arr = ndarray::Array::from_shape_vec((2, 3), (0..6).collect())
+            .unwrap()
+            .into_dyn();
+        // Act
+        let (counts, shape) = count_array_multi_axis(arr.view(), &axes, missing);
+        // Assert
+        assert_eq!(counts, vec![6]);
+        assert_eq!(shape, Vec::<usize>::new());
+    }
+
+    #[test]
+    fn count_multi_axis_2d_1ax_missing() {
+        // Arrange
+        let axes = vec![1];
+        let missing = Missing::MissingValue(0);
+        let arr = ndarray::Array::from_shape_vec((2, 3), (0..6).collect())
+            .unwrap()
+            .into_dyn();
+        // Act
+        let (counts, shape) = count_array_multi_axis(arr.view(), &axes, Some(missing));
+        // Assert
+        assert_eq!(counts, vec![2, 3]);
+        assert_eq!(shape, vec![2]);
+    }
+
+    #[test]
+    fn count_multi_axis_4d_3ax_multi_missing() {
+        // Arrange
+        let arr = ndarray::Array::from_shape_vec((2, 3, 2, 1), (0..12).collect())
+            .unwrap()
+            .into_dyn();
+        let axes = vec![0, 1, 3];
+        let missing = Missing::MissingValues(vec![9, 10, 11]);
+        // Act
+        let (counts, shape) = count_array_multi_axis(arr.view(), &axes, Some(missing));
+        // Assert
+        assert_eq!(counts, vec![5, 4]);
+        assert_eq!(shape, vec![2]);
+    }
+
+    #[test]
+    fn count_multi_axis_4d_3ax_missing() {
+        // Arrange
+        let arr = ndarray::Array::from_shape_vec((2, 3, 2, 1), (0..12).collect())
+            .unwrap()
+            .into_dyn();
+        let axes = vec![0, 1, 3];
+        let missing = Missing::MissingValue(10);
+        // Act
+        let (counts, shape) = count_array_multi_axis(arr.view(), &axes, Some(missing));
+        // Assert
         assert_eq!(counts, vec![5, 6]);
         assert_eq!(shape, vec![2]);
     }
