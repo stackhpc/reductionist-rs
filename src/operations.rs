@@ -3,7 +3,7 @@
 //! Each operation is implemented as a struct that implements the
 //! [Operation](crate::operation::Operation) trait.
 
-use std::cmp::min_by;
+use std::cmp::{max_by, min_by};
 
 use crate::array;
 use crate::error::ActiveStorageError;
@@ -13,7 +13,6 @@ use crate::types::Missing;
 
 use axum::body::Bytes;
 use ndarray::{ArrayView, Axis};
-use ndarray_stats::{errors::MinMaxError, QuantileExt};
 // Bring trait into scope to use as_bytes method.
 use zerocopy::AsBytes;
 
@@ -80,6 +79,72 @@ impl NumOperation for Count {
 /// Return the maximum of selected elements in the array.
 pub struct Max {}
 
+fn max_element_pairwise<T: Element>(x: &&T, y: &&T) -> std::cmp::Ordering {
+    // TODO: How to handle NaN correctly?
+    // Numpy seems to behave as follows:
+    //
+    // np.min([np.nan, 1]) == np.nan
+    // np.max([np.nan, 1]) == np.nan
+    // np.nan != np.nan
+    // np.min([np.nan, 1]) != np.max([np.nan, 1])
+    //
+    // There are also separate np.nan{min,max} functions
+    // which ignore nans instead.
+    //
+    // Which behaviour do we want to follow?
+    //
+    // Panic for now (TODO: Make this a user-facing error response instead)
+    x.partial_cmp(y)
+        // .unwrap_or(std::cmp::Ordering::Less)
+        .unwrap_or_else(|| panic!("unexpected undefined order error for min"))
+}
+
+/// Performs a max over one or more axes of the provided array
+fn max_array_multi_axis<T: Element>(
+    array: ndarray::ArrayView<T, ndarray::IxDyn>,
+    axes: &[usize],
+    missing: Option<Missing<T>>,
+) -> (Vec<T>, Vec<i64>, Vec<usize>) {
+    // Find maximum over first axis and count elements operated on
+    let init = T::min_value();
+    let mut result = array
+        .fold_axis(Axis(axes[0]), (init, 0), |(running_max, count), val| {
+            if let Some(missing) = &missing {
+                if !missing.is_missing(val) {
+                    let new_max = max_by(running_max, val, max_element_pairwise);
+                    (*new_max, count + 1)
+                } else {
+                    (*running_max, *count)
+                }
+            } else {
+                let new_max = max_by(running_max, val, max_element_pairwise);
+                (*new_max, count + 1)
+            }
+        })
+        .into_dyn();
+    // Find max over remaining axes (where total count is now sum of counts)
+    if let Some(remaining_axes) = axes.get(1..) {
+        for (n, axis) in remaining_axes.iter().enumerate() {
+            result = result
+                .fold_axis(
+                    Axis(axis - n - 1),
+                    (init, 0),
+                    |(global_max, total_count), (running_max, count)| {
+                        let new_max = max_by(global_max, running_max, max_element_pairwise);
+                        (*new_max, total_count + count)
+                    },
+                )
+                .into_dyn();
+        }
+    }
+
+    // Result is array of (max, count) tuples so separate them here
+    let maxes = result.iter().map(|(max, _)| *max).collect::<Vec<T>>();
+    let counts = result.iter().map(|(_, count)| *count).collect::<Vec<i64>>();
+
+    (maxes, counts, result.shape().into())
+}
+
 impl NumOperation for Max {
     fn execute_t<T: Element>(
         request_data: &models::RequestData,
@@ -88,44 +153,74 @@ impl NumOperation for Max {
         let array = array::build_array::<T>(request_data, &mut data)?;
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
         let sliced = array.slice(slice_info);
-        let (max, count) = if let Some(missing) = &request_data.missing {
-            let missing = Missing::<T>::try_from(missing)?;
-            // Use a fold to simultaneously max and count the non-missing data.
-            // TODO: separate float impl?
-            // TODO: inifinite/NaN
-            let (max, count) = sliced
-                .iter()
-                .copied()
-                .filter(missing_filter(&missing))
-                .fold((None, 0), |(a, count), b| {
-                    let max = match (a, b) {
-                        (None, b) => Some(b), //FIXME: if b.is_finite() { Some(b) } else { None },
-                        (Some(a), b) => Some(std::cmp::max_by(a, b, |x, y| {
-                            x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Greater)
-                        })),
-                    };
-                    (max, count + 1)
-                });
-            let max = max.ok_or(ActiveStorageError::EmptyArray { operation: "max" })?;
-            (max, count)
+
+        let typed_missing: Option<Missing<T>> = if let Some(missing) = &request_data.missing {
+            let m = Missing::try_from(missing)?;
+            Some(m)
         } else {
-            let max = *sliced.max().map_err(|err| match err {
-                MinMaxError::EmptyInput => ActiveStorageError::EmptyArray { operation: "max" },
-                MinMaxError::UndefinedOrder => panic!("unexpected undefined order error for max"),
-            })?;
-            let count = sliced.len();
-            (max, count)
+            None
         };
-        let count = i64::try_from(count)?;
-        let body = max.as_bytes();
-        // Need to copy to provide ownership to caller.
-        let body = Bytes::copy_from_slice(body);
-        Ok(models::Response::new(
-            body,
-            request_data.dtype,
-            vec![],
-            vec![count],
-        ))
+
+        match &request_data.axis {
+            ReductionAxes::One(axis) => {
+                let init = T::min_value();
+                let result =
+                    sliced.fold_axis(Axis(*axis), (init, 0), |(running_max, count), val| {
+                        if let Some(missing) = &typed_missing {
+                            if !missing.is_missing(val) {
+                                (*max_by(running_max, val, max_element_pairwise), count + 1)
+                            } else {
+                                (*running_max, *count)
+                            }
+                        } else {
+                            (*max_by(running_max, val, max_element_pairwise), count + 1)
+                        }
+                    });
+                let maxes = result.iter().map(|(max, _)| *max).collect::<Vec<T>>();
+                let counts = result.iter().map(|(_, count)| *count).collect::<Vec<i64>>();
+                let body = maxes.as_bytes();
+                let body = Bytes::copy_from_slice(body);
+                Ok(models::Response::new(
+                    body,
+                    request_data.dtype,
+                    result.shape().into(),
+                    counts,
+                ))
+            }
+            ReductionAxes::Multi(axes) => {
+                let (maxes, counts, shape) = max_array_multi_axis(sliced, axes, typed_missing);
+                let body = Bytes::copy_from_slice(maxes.as_bytes());
+                Ok(models::Response::new(
+                    body,
+                    request_data.dtype,
+                    shape,
+                    counts,
+                ))
+            }
+            ReductionAxes::All => {
+                let init = T::min_value();
+                let (max, count) = sliced.fold((init, 0_i64), |(running_max, count), val| {
+                    if let Some(missing) = &typed_missing {
+                        if !missing.is_missing(val) {
+                            (*max_by(&running_max, val, max_element_pairwise), count + 1)
+                        } else {
+                            (running_max, count)
+                        }
+                    } else {
+                        (*max_by(&running_max, val, max_element_pairwise), count + 1)
+                    }
+                });
+
+                let body = max.as_bytes();
+                let body = Bytes::copy_from_slice(body);
+                Ok(models::Response::new(
+                    body,
+                    request_data.dtype,
+                    vec![],
+                    vec![count],
+                ))
+            }
+        }
     }
 }
 
@@ -146,7 +241,7 @@ fn min_element_pairwise<T: Element>(x: &&T, y: &&T) -> std::cmp::Ordering {
     //
     // Which behaviour do we want to follow?
     //
-    // Panic is probably the best option for now...
+    // Panic for now (TODO: Make this a user-facing error response instead)
     x.partial_cmp(y)
         // .unwrap_or(std::cmp::Ordering::Less)
         .unwrap_or_else(|| panic!("unexpected undefined order error for min"))
@@ -164,13 +259,13 @@ fn min_array_multi_axis<T: Element>(
         .fold_axis(Axis(axes[0]), (init, 0), |(running_min, count), val| {
             if let Some(missing) = &missing {
                 if !missing.is_missing(val) {
-                    let new_min = std::cmp::min_by(running_min, val, min_element_pairwise);
+                    let new_min = min_by(running_min, val, min_element_pairwise);
                     (*new_min, count + 1)
                 } else {
                     (*running_min, *count)
                 }
             } else {
-                let new_min = std::cmp::min_by(running_min, val, min_element_pairwise);
+                let new_min = min_by(running_min, val, min_element_pairwise);
                 (*new_min, count + 1)
             }
         })
@@ -184,8 +279,7 @@ fn min_array_multi_axis<T: Element>(
                     (init, 0),
                     |(global_min, total_count), (running_min, count)| {
                         // (*global_min.min(running_min), total_count + count)
-                        let new_min =
-                            std::cmp::min_by(global_min, running_min, min_element_pairwise);
+                        let new_min = min_by(global_min, running_min, min_element_pairwise);
                         (*new_min, total_count + count)
                     },
                 )
@@ -1002,6 +1096,66 @@ mod tests {
 
         assert_eq!(result, vec![0, 3]);
         assert_eq!(counts, vec![6, 5]);
+        assert_eq!(shape, vec![2]);
+    }
+
+    #[test]
+    #[should_panic(expected = "assertion failed: axis.index() < self.ndim()")]
+    fn max_multi_axis_2d_wrong_axis() {
+        // Arrange
+        let array = ndarray::Array::from_shape_vec((2, 2), (0..4).collect())
+            .unwrap()
+            .into_dyn();
+        let axes = vec![2];
+        // Act
+        let _ = max_array_multi_axis(array.view(), &axes, None);
+    }
+
+    #[test]
+    fn max_multi_axis_2d_2ax() {
+        // Arrange
+        let axes = vec![0, 1];
+        let missing = None;
+        let arr = ndarray::Array::from_shape_vec((2, 3), (0..6).collect())
+            .unwrap()
+            .into_dyn();
+        // Act
+        let (result, counts, shape) = max_array_multi_axis(arr.view(), &axes, missing);
+        // Assert
+        assert_eq!(result, vec![5]);
+        assert_eq!(counts, vec![6]);
+        assert_eq!(shape, Vec::<usize>::new());
+    }
+
+    #[test]
+    fn max_multi_axis_2d_1ax_missing() {
+        // Arrange
+        let axes = vec![1];
+        let missing = Missing::MissingValue(0);
+        let arr = ndarray::Array::from_shape_vec((2, 3), (0..6).collect())
+            .unwrap()
+            .into_dyn();
+        // Act
+        let (result, counts, shape) = max_array_multi_axis(arr.view(), &axes, Some(missing));
+        // Assert
+        assert_eq!(result, vec![2, 5]);
+        assert_eq!(counts, vec![2, 3]);
+        assert_eq!(shape, vec![2]);
+    }
+
+    #[test]
+    fn max_multi_axis_4d_3ax_missing() {
+        // Arrange
+        let arr = ndarray::Array::from_shape_vec((2, 3, 2, 1), (0..12).collect())
+            .unwrap()
+            .into_dyn();
+        let axes = vec![0, 1, 3];
+        let missing = Missing::MissingValue(10);
+        // Act
+        let (result, counts, shape) = max_array_multi_axis(arr.view(), &axes, Some(missing));
+        // Assert
+        assert_eq!(result, vec![8, 11]);
+        assert_eq!(counts, vec![5, 6]);
         assert_eq!(shape, vec![2]);
     }
 }
