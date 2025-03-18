@@ -3,6 +3,8 @@
 //! Each operation is implemented as a struct that implements the
 //! [Operation](crate::operation::Operation) trait.
 
+use std::cmp::min_by;
+
 use crate::array;
 use crate::error::ActiveStorageError;
 use crate::models::{self, ReductionAxes};
@@ -130,6 +132,74 @@ impl NumOperation for Max {
 /// Return the minimum of selected elements in the array.
 pub struct Min {}
 
+fn min_element_pairwise<T: Element>(x: &&T, y: &&T) -> std::cmp::Ordering {
+    // TODO: How to handle NaN correctly?
+    // Numpy seems to behave as follows:
+    //
+    // np.min([np.nan, 1]) == np.nan
+    // np.max([np.nan, 1]) == np.nan
+    // np.nan != np.nan
+    // np.min([np.nan, 1]) != np.max([np.nan, 1])
+    //
+    // There are also separate np.nan{min,max} functions
+    // which ignore nans instead.
+    //
+    // Which behaviour do we want to follow?
+    //
+    // Panic is probably the best option for now...
+    x.partial_cmp(y)
+        // .unwrap_or(std::cmp::Ordering::Less)
+        .unwrap_or_else(|| panic!("unexpected undefined order error for min"))
+}
+
+/// Finds the minimum value over one or more axes of the provided array
+fn min_array_multi_axis<T: Element>(
+    array: ndarray::ArrayView<T, ndarray::IxDyn>,
+    axes: &[usize],
+    missing: Option<Missing<T>>,
+) -> (Vec<T>, Vec<i64>, Vec<usize>) {
+    // Find minimum over first axis and count elements operated on
+    let init = T::max_value();
+    let mut result = array
+        .fold_axis(Axis(axes[0]), (init, 0), |(running_min, count), val| {
+            if let Some(missing) = &missing {
+                if !missing.is_missing(val) {
+                    let new_min = std::cmp::min_by(running_min, val, min_element_pairwise);
+                    (*new_min, count + 1)
+                } else {
+                    (*running_min, *count)
+                }
+            } else {
+                let new_min = std::cmp::min_by(running_min, val, min_element_pairwise);
+                (*new_min, count + 1)
+            }
+        })
+        .into_dyn();
+    // Find min over remaining axes (where total count is now sum of counts)
+    if let Some(remaining_axes) = axes.get(1..) {
+        for (n, axis) in remaining_axes.iter().enumerate() {
+            result = result
+                .fold_axis(
+                    Axis(axis - n - 1),
+                    (init, 0),
+                    |(global_min, total_count), (running_min, count)| {
+                        // (*global_min.min(running_min), total_count + count)
+                        let new_min =
+                            std::cmp::min_by(global_min, running_min, min_element_pairwise);
+                        (*new_min, total_count + count)
+                    },
+                )
+                .into_dyn();
+        }
+    }
+
+    // Result is array of (mins, count) tuples so separate them here
+    let mins = result.iter().map(|(min, _)| *min).collect::<Vec<T>>();
+    let counts = result.iter().map(|(_, count)| *count).collect::<Vec<i64>>();
+
+    (mins, counts, result.shape().into())
+}
+
 impl NumOperation for Min {
     fn execute_t<T: Element>(
         request_data: &models::RequestData,
@@ -138,44 +208,80 @@ impl NumOperation for Min {
         let array = array::build_array::<T>(request_data, &mut data)?;
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
         let sliced = array.slice(slice_info);
-        let (min, count) = if let Some(missing) = &request_data.missing {
-            let missing = Missing::<T>::try_from(missing)?;
-            // Use a fold to simultaneously min and count the non-missing data.
-            // TODO: separate float impl?
-            // TODO: inifinite/NaN
-            let (min, count) = sliced
-                .iter()
-                .copied()
-                .filter(missing_filter(&missing))
-                .fold((None, 0), |(a, count), b| {
-                    let min = match (a, b) {
-                        (None, b) => Some(b), //FIXME: if b.is_finite() { Some(b) } else { None },
-                        (Some(a), b) => Some(std::cmp::min_by(a, b, |x, y| {
-                            x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Less)
-                        })),
-                    };
-                    (min, count + 1)
-                });
-            let min = min.ok_or(ActiveStorageError::EmptyArray { operation: "min" })?;
-            (min, count)
+
+        // Convert Missing<Dtype> to Missing<T: Element>
+        let typed_missing: Option<Missing<T>> = if let Some(missing) = &request_data.missing {
+            let m = Missing::try_from(missing)?;
+            Some(m)
         } else {
-            let min = *sliced.min().map_err(|err| match err {
-                MinMaxError::EmptyInput => ActiveStorageError::EmptyArray { operation: "min" },
-                MinMaxError::UndefinedOrder => panic!("unexpected undefined order error for min"),
-            })?;
-            let count = sliced.len();
-            (min, count)
+            None
         };
-        let count = i64::try_from(count)?;
-        let body = min.as_bytes();
-        // Need to copy to provide ownership to caller.
-        let body = Bytes::copy_from_slice(body);
-        Ok(models::Response::new(
-            body,
-            request_data.dtype,
-            vec![],
-            vec![count],
-        ))
+
+        // Use ndarray::fold, ndarray::fold_axis or dispatch to specialised
+        // multi-axis function depending on whether we're performing reduction
+        // over all axes or only a subset
+        match &request_data.axes {
+            ReductionAxes::One(axis) => {
+                let init = T::max_value();
+                let result =
+                    sliced.fold_axis(Axis(*axis), (init, 0), |(running_min, count), val| {
+                        if let Some(missing) = &typed_missing {
+                            if !missing.is_missing(val) {
+                                (*min_by(running_min, val, min_element_pairwise), count + 1)
+                            } else {
+                                (*running_min, *count)
+                            }
+                        } else {
+                            (*min_by(running_min, val, min_element_pairwise), count + 1)
+                        }
+                    });
+                // Unpack the result tuples into separate vectors
+                let mins = result.iter().map(|(min, _)| *min).collect::<Vec<T>>();
+                let counts = result.iter().map(|(_, count)| *count).collect::<Vec<i64>>();
+                let body = mins.as_bytes();
+                let body = Bytes::copy_from_slice(body);
+                Ok(models::Response::new(
+                    body,
+                    request_data.dtype,
+                    result.shape().into(),
+                    counts,
+                ))
+            }
+            ReductionAxes::Multi(axes) => {
+                let (mins, counts, shape) = min_array_multi_axis(sliced, axes, typed_missing);
+                let body = Bytes::copy_from_slice(mins.as_bytes());
+                Ok(models::Response::new(
+                    body,
+                    request_data.dtype,
+                    shape,
+                    counts,
+                ))
+            }
+            ReductionAxes::All => {
+                let init = T::max_value();
+                let (min, count) = sliced.fold((init, 0_i64), |(running_min, count), val| {
+                    if let Some(missing) = &typed_missing {
+                        if !missing.is_missing(val) {
+                            (*min_by(&running_min, val, min_element_pairwise), count + 1)
+                        } else {
+                            (running_min, count)
+                        }
+                    } else {
+                        (*min_by(&running_min, val, min_element_pairwise), count + 1)
+                    }
+                });
+
+                let body = min.as_bytes();
+                // Need to copy to provide ownership to caller.
+                let body = Bytes::copy_from_slice(body);
+                Ok(models::Response::new(
+                    body,
+                    request_data.dtype,
+                    vec![],
+                    vec![count],
+                ))
+            }
+        }
     }
 }
 
@@ -220,6 +326,7 @@ impl NumOperation for Select {
 /// Return the sum of selected elements in the array.
 pub struct Sum {}
 
+/// Performs a sum over one or more axes of the provided array
 fn sum_array_multi_axis<T: Element>(
     array: ndarray::ArrayView<T, ndarray::IxDyn>,
     axes: &[usize],
@@ -551,6 +658,7 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "unexpected undefined order error for min")]
     fn min_f32_1d_nan_missing_value() {
         let mut request_data = test_utils::get_test_request_data();
         request_data.dtype = models::DType::Float32;
@@ -567,6 +675,7 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "unexpected undefined order error for min")]
     fn min_f32_1d_nan_first_missing_value() {
         let mut request_data = test_utils::get_test_request_data();
         request_data.dtype = models::DType::Float32;
@@ -783,7 +892,7 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "assertion failed: axis.index() < self.ndim()")]
-    fn test_sum_multi_axis_2d_wrong_axis() {
+    fn sum_multi_axis_2d_wrong_axis() {
         let array = ndarray::Array::from_shape_vec((2, 2), (0..4).collect())
             .unwrap()
             .into_dyn();
@@ -792,7 +901,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sum_multi_axis_2d_2ax() {
+    fn sum_multi_axis_2d_2ax() {
         let array = ndarray::Array::from_shape_vec((2, 2), (0..4).collect())
             .unwrap()
             .into_dyn();
@@ -804,7 +913,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sum_multi_axis_2d_2ax_missing() {
+    fn sum_multi_axis_2d_2ax_missing() {
         let array = ndarray::Array::from_shape_vec((2, 2), (0..4).collect())
             .unwrap()
             .into_dyn();
@@ -817,7 +926,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sum_multi_axis_4d_1ax() {
+    fn sum_multi_axis_4d_1ax() {
         let array = ndarray::Array::from_shape_vec((2, 3, 2, 1), (0..12).collect())
             .unwrap()
             .into_dyn();
@@ -829,7 +938,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sum_multi_axis_4d_3ax() {
+    fn sum_multi_axis_4d_3ax() {
         let array = ndarray::Array::from_shape_vec((2, 3, 2, 1), (0..12).collect())
             .unwrap()
             .into_dyn();
@@ -837,6 +946,62 @@ mod tests {
         let (sum, count, shape) = sum_array_multi_axis(array.view(), &axes, None);
         assert_eq!(sum, vec![30, 36]);
         assert_eq!(count, vec![6, 6]);
+        assert_eq!(shape, vec![2]);
+    }
+
+    #[test]
+    #[should_panic(expected = "assertion failed: axis.index() < self.ndim()")]
+    fn min_multi_axis_2d_wrong_axis() {
+        let array = ndarray::Array::from_shape_vec((2, 2), (0..4).collect())
+            .unwrap()
+            .into_dyn();
+        let axes = vec![2];
+        let _ = min_array_multi_axis(array.view(), &axes, None);
+    }
+
+    #[test]
+    fn min_multi_axis_2d_2ax() {
+        // Arrrange
+        let axes = vec![0, 1];
+        let missing = None;
+        let arr = ndarray::Array::from_shape_vec((2, 3), (0..6).collect())
+            .unwrap()
+            .into_dyn();
+        // Act
+        let (result, counts, shape) = min_array_multi_axis(arr.view(), &axes, missing);
+        // Assert
+        assert_eq!(result, vec![0]);
+        assert_eq!(counts, vec![6]);
+        assert_eq!(shape, Vec::<usize>::new());
+    }
+
+    #[test]
+    fn min_multi_axis_2d_1ax_missing() {
+        // Arrange
+        let axes = vec![1];
+        let missing = Missing::MissingValue(0);
+        let arr = ndarray::Array::from_shape_vec((2, 3), (0..6).collect())
+            .unwrap()
+            .into_dyn();
+        // Act
+        let (result, counts, shape) = min_array_multi_axis(arr.view(), &axes, Some(missing));
+        // Assert
+        assert_eq!(result, vec![1, 3]);
+        assert_eq!(counts, vec![2, 3]);
+        assert_eq!(shape, vec![2]);
+    }
+
+    #[test]
+    fn min_multi_axis_4d_3ax_missing() {
+        let arr = ndarray::Array::from_shape_vec((2, 3, 2, 1), (0..12).collect())
+            .unwrap()
+            .into_dyn();
+        let axes = vec![0, 1, 3];
+        let missing = Missing::MissingValue(1);
+        let (result, counts, shape) = min_array_multi_axis(arr.view(), &axes, Some(missing));
+
+        assert_eq!(result, vec![0, 3]);
+        assert_eq!(counts, vec![6, 5]);
         assert_eq!(shape, vec![2]);
     }
 }

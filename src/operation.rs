@@ -13,6 +13,7 @@ pub trait Element:
     + num_traits::FromPrimitive
     + num_traits::ToBytes
     + num_traits::Zero
+    + num_traits::Bounded
     + std::convert::From<u16>
     + std::fmt::Debug
     + std::iter::Sum
@@ -34,6 +35,7 @@ impl<T> Element for T where
         + num_traits::One
         + num_traits::ToBytes
         + num_traits::Zero
+        + num_traits::Bounded
         + std::convert::From<u16>
         + std::fmt::Debug
         + std::iter::Sum
