@@ -801,6 +801,24 @@ mod tests {
     }
 
     #[test]
+    fn select_f32_1d_1ax() {
+        // Arrange
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.dtype = models::DType::Float32;
+        request_data.axis = ReductionAxes::Multi(vec![0]);
+        let data = vec![1, 2, 3, 4, 5, 6, 7, 8];
+        // Act
+        let response = Select::execute(&request_data, data).unwrap();
+        // Assert (check that axis value is ignored)
+        let expected: [u8; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
+        assert_eq!(expected.as_bytes(), response.body);
+        assert_eq!(8, response.body.len());
+        assert_eq!(models::DType::Float32, response.dtype);
+        assert_eq!(vec![2], response.shape);
+        assert_eq!(vec![2], response.count);
+    }
+
+    #[test]
     fn select_f64_2d() {
         let mut request_data = test_utils::get_test_request_data();
         request_data.dtype = models::DType::Float64;
