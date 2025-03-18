@@ -220,7 +220,7 @@ impl NumOperation for Min {
         // Use ndarray::fold, ndarray::fold_axis or dispatch to specialised
         // multi-axis function depending on whether we're performing reduction
         // over all axes or only a subset
-        match &request_data.axes {
+        match &request_data.axis {
             ReductionAxes::One(axis) => {
                 let init = T::max_value();
                 let result =
@@ -387,7 +387,7 @@ impl NumOperation for Sum {
 
         // Use ndarray::fold or ndarray::fold_axis depending on whether we're
         // performing reduction over all axes or only a subset
-        match &request_data.axes {
+        match &request_data.axis {
             ReductionAxes::One(axis) => {
                 let result = sliced.fold_axis(Axis(*axis), (T::zero(), 0), |(sum, count), val| {
                     if let Some(missing) = &typed_missing {
@@ -817,7 +817,7 @@ mod tests {
         let mut request_data = test_utils::get_test_request_data();
         request_data.dtype = models::DType::Uint32;
         request_data.shape = Some(vec![2, 4]);
-        request_data.axes = ReductionAxes::One(0);
+        request_data.axis = ReductionAxes::One(0);
         let data: Vec<u32> = vec![1, 2, 3, 4, 5, 6, 7, 8];
         // Act
         let response = Sum::execute(&request_data, data.as_bytes().into()).unwrap();
@@ -838,7 +838,7 @@ mod tests {
         let mut request_data = test_utils::get_test_request_data();
         request_data.dtype = models::DType::Uint32;
         request_data.shape = Some(vec![2, 4]);
-        request_data.axes = ReductionAxes::One(1);
+        request_data.axis = ReductionAxes::One(1);
         request_data.missing = Some(Missing::MissingValue(0.into()));
         let data: Vec<u32> = vec![0, 2, 3, 4, 5, 6, 7, 8];
         // Act
@@ -860,7 +860,7 @@ mod tests {
         let mut request_data = test_utils::get_test_request_data();
         request_data.dtype = models::DType::Float64;
         request_data.shape = Some(vec![2, 2, 2]);
-        request_data.axes = ReductionAxes::One(1);
+        request_data.axis = ReductionAxes::One(1);
         request_data.missing = Some(Missing::MissingValue(0.into()));
         let data: Vec<f64> = vec![0.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
         // Act

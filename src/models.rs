@@ -149,7 +149,7 @@ pub struct RequestData {
     /// Axis over which to perform the reduction operation
     // pub axis: Option<usize>,
     #[serde(default)]
-    pub axes: ReductionAxes,
+    pub axis: ReductionAxes,
     /// Order of the multi-dimensional array
     pub order: Option<Order>,
     /// Subset of the data to operate on
@@ -249,7 +249,7 @@ fn validate_request_data(request_data: &RequestData) -> Result<(), ValidationErr
         _ => (),
     };
     // Check axis is compatible with shape
-    match (&request_data.shape, &request_data.axes) {
+    match (&request_data.shape, &request_data.axis) {
         (Some(shape), ReductionAxes::One(axis)) => {
             if *axis > shape.len() - 1 {
                 return Err(ValidationError::new("Axis must be within shape"));
@@ -377,7 +377,7 @@ mod tests {
                 Token::U32(5),
                 Token::U32(1),
                 Token::SeqEnd,
-                Token::Str("axes"),
+                Token::Str("axis"),
                 Token::Seq { len: Some(2) },
                 Token::U32(1),
                 Token::U32(2),
@@ -715,7 +715,7 @@ mod tests {
     #[should_panic(expected = "Axis requires shape to be specified")]
     fn test_axis_without_shape() {
         let mut request_data = test_utils::get_test_request_data();
-        request_data.axes = ReductionAxes::One(1);
+        request_data.axis = ReductionAxes::One(1);
         request_data.validate().unwrap()
     }
 
@@ -723,7 +723,7 @@ mod tests {
     #[should_panic(expected = "Axis must be within shape")]
     fn test_axis_gt_shape() {
         let mut request_data = test_utils::get_test_request_data();
-        request_data.axes = ReductionAxes::One(2);
+        request_data.axis = ReductionAxes::One(2);
         request_data.shape = Some(vec![2, 5]);
         request_data.validate().unwrap()
     }
@@ -801,7 +801,7 @@ mod tests {
             Token::Str("foo"),
             Token::StructEnd
             ],
-            "unknown field `foo`, expected one of `source`, `bucket`, `object`, `dtype`, `byte_order`, `offset`, `size`, `shape`, `axes`, `order`, `selection`, `compression`, `filters`, `missing`"
+            "unknown field `foo`, expected one of `source`, `bucket`, `object`, `dtype`, `byte_order`, `offset`, `size`, `shape`, `axis`, `order`, `selection`, `compression`, `filters`, `missing`"
         )
     }
 
@@ -825,7 +825,7 @@ mod tests {
                         "offset": 4,
                         "size": 8,
                         "shape": [2, 5, 1],
-                        "axes": [1, 2],
+                        "axis": [1, 2],
                         "order": "C",
                         "selection": [[1, 2, 3], [4, 5, 6], [1, 1, 1]],
                         "compression": {"id": "gzip"},
@@ -847,7 +847,7 @@ mod tests {
                         "offset": 4,
                         "size": 8,
                         "shape": [2, 5, 10],
-                        "axes": 2,
+                        "axis": 2,
                         "order": "F",
                         "selection": [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
                         "compression": {"id": "zlib"},
@@ -859,7 +859,7 @@ mod tests {
         expected.dtype = DType::Float64;
         expected.byte_order = Some(ByteOrder::Big);
         expected.shape = Some(vec![2, 5, 10]);
-        expected.axes = ReductionAxes::One(2);
+        expected.axis = ReductionAxes::One(2);
         expected.order = Some(Order::F);
         expected.selection = Some(vec![
             Slice::new(1, 2, 3),

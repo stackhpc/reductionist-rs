@@ -13,7 +13,7 @@ pub(crate) fn get_test_request_data() -> RequestData {
         byte_order: None,
         offset: None,
         size: None,
-        axes: ReductionAxes::All,
+        axis: ReductionAxes::All,
         shape: None,
         order: None,
         selection: None,
@@ -33,7 +33,7 @@ pub(crate) fn get_test_request_data_optional() -> RequestData {
         byte_order: Some(ByteOrder::Little),
         offset: Some(4),
         size: Some(8),
-        axes: ReductionAxes::Multi(vec![1, 2]),
+        axis: ReductionAxes::Multi(vec![1, 2]),
         shape: Some(vec![2, 5, 1]),
         order: Some(Order::C),
         selection: Some(vec![
