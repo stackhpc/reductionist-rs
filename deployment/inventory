@@ -35,7 +35,7 @@ localhost ansible_connection=local
 reductionist
 
 # Do not edit.
-[docker:children]
+[podman:children]
 haproxy
 jaeger
 minio
