@@ -146,8 +146,7 @@ pub struct RequestData {
         custom = "validate_shape"
     )]
     pub shape: Option<Vec<usize>>,
-    /// Axis over which to perform the reduction operation
-    // pub axis: Option<usize>,
+    /// Axis or axes over which to perform the reduction operation
     #[serde(default)]
     pub axis: ReductionAxes,
     /// Order of the multi-dimensional array
@@ -252,18 +251,20 @@ fn validate_request_data(request_data: &RequestData) -> Result<(), ValidationErr
     match (&request_data.shape, &request_data.axis) {
         (Some(shape), ReductionAxes::One(axis)) => {
             if *axis > shape.len() - 1 {
-                return Err(ValidationError::new("Axis must be within shape"));
+                return Err(ValidationError::new("Reduction axis must be within shape"));
             }
         }
         (Some(shape), ReductionAxes::Multi(axes)) => {
             if axes.len() >= shape.len() {
                 return Err(ValidationError::new(
-                    "Number of reduction axes must be less than length of shape",
+                    "Number of reduction axes must be less than length of shape - to reduce over all axes omit the axis field completely",
                 ));
             }
             for ax in axes {
                 if *ax > shape.len() - 1 {
-                    return Err(ValidationError::new("All axes must be within shape"));
+                    return Err(ValidationError::new(
+                        "All reduction axes must be within shape",
+                    ));
                 }
             }
         }
@@ -275,7 +276,7 @@ fn validate_request_data(request_data: &RequestData) -> Result<(), ValidationErr
     // Validate missing specification
     if let Some(missing) = &request_data.missing {
         missing.validate(request_data.dtype)?;
-    }
+    };
 
     Ok(())
 }
@@ -288,7 +289,8 @@ pub struct Response {
     pub dtype: DType,
     /// Shape of the response
     pub shape: Vec<usize>,
-    /// Number of non-missing elements operated on to generate response
+    /// Number of non-missing elements operated
+    /// along each reduction axis
     pub count: Vec<i64>,
 }
 
@@ -720,7 +722,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Axis must be within shape")]
+    #[should_panic(expected = "Reduction axis must be within shape")]
     fn test_axis_gt_shape() {
         let mut request_data = test_utils::get_test_request_data();
         request_data.axis = ReductionAxes::One(2);
@@ -790,7 +792,6 @@ mod tests {
     fn test_missing_invalid_value_for_dtype() {
         let mut request_data = test_utils::get_test_request_data();
         request_data.missing = Some(Missing::MissingValue(i64::max_value().into()));
-        println!("{:?}", request_data.validate());
         request_data.validate().unwrap()
     }
 
