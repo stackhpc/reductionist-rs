@@ -5,6 +5,11 @@ reductionist_build_image: false
 reductionist_src_url: "http://github.com/stackhpc/reductionist-rs"
 # Source version.
 reductionist_src_version: "main"
+# Location for repo checkout if using a local build.
+reductionist_repo_location: "{{ ansible_facts.env.HOME }}/reductionist-rs"
+# With the following "reductionist_clone_repo" set true
+# an existing checkout in "reductionist_repo_location" will lose any local changes.
+reductionist_clone_repo: "true"
 # Container name.
 reductionist_name: "reductionist"
 # Container image name.
@@ -20,13 +25,24 @@ reductionist_env:
   REDUCTIONIST_ENABLE_JAEGER: "{{ (groups['jaeger'] | default([]) | length > 0) | string | lower }}"
   REDUCTIONIST_HTTPS: "true"
   REDUCTIONIST_PORT: "8081"
+  REDUCTIONIST_USE_CHUNK_CACHE: "true"
+  REDUCTIONIST_CHUNK_CACHE_PATH: "{{ reductionist_container_cache_path }}
+  REDUCTIONIST_CHUNK_CACHE_AGE: "86400"
+  REDUCTIONIST_CHUNK_CACHE_PRUNE_INTERVAL: "3600"
+  REDUCTIONIST_CHUNK_CACHE_SIZE_LIMIT: "10GB"
+  REDUCTIONIST_CHUNK_CACHE_QUEUE_SIZE: "32"
 # Path to certificates directory on remote host.
 reductionist_remote_certs_path: "{{ ansible_facts.env.HOME }}/certs"
 # Path to certificates directory in container.
 reductionist_container_certs_path: "/root/.config/reductionist/certs"
+# Path to cache directory on remote host.
+reductionist_remote_cache_path: "{{ ansible_facts.env.HOME }}/cache"
+# Path to cache directory in container.
+reductionist_container_cache_path: "/cache"
 # List of container volume mounts.
 reductionist_volumes:
   - "{{ reductionist_remote_certs_path }}:{{ reductionist_container_certs_path }}"
+  - "{{ reductionist_remote_cache_path }}:{{ reductionist_container_cache_path }}"
 # Host on which HAProxy frontend is exposed.
 reductionist_host: "{{ hostvars[groups['haproxy'][0]].ansible_facts.default_ipv4.address }}"
 # Certificate validity.
