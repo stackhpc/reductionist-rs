@@ -501,8 +501,8 @@ mod tests {
         // Assert
         let metadata = cache.load_state().await.metadata;
         assert_eq!(metadata.len(), 1);
-        assert_eq!(metadata.contains_key(key_1), false);
-        assert_eq!(metadata.contains_key(key_2), true);
+        assert!(!metadata.contains_key(key_1));
+        assert!(metadata.contains_key(key_2));
         assert_eq!(cache_item_1.unwrap(), None);
     }
 
@@ -578,8 +578,8 @@ mod tests {
         // Assert: first entry pruned
         let metadata = cache.load_state().await.metadata;
         assert_eq!(metadata.len(), 1);
-        assert_eq!(metadata.contains_key(key_1), false);
-        assert_eq!(metadata.contains_key(key_2), true);
+        assert!(!metadata.contains_key(key_1));
+        assert!(metadata.contains_key(key_2));
 
         // Action: sleep ttl then prune expired
         sleep(Duration::from_secs(time_between_inserts)).await;
@@ -626,8 +626,8 @@ mod tests {
         // Assert: 1st entry has been pruned
         let metadata = cache.load_state().await.metadata;
         assert_eq!(metadata.len(), 1);
-        assert_eq!(metadata.contains_key(key_1), false);
-        assert_eq!(metadata.contains_key(key_2), true);
+        assert!(!metadata.contains_key(key_1));
+        assert!(metadata.contains_key(key_2));
     }
 
     #[tokio::test]
@@ -668,8 +668,8 @@ mod tests {
         // Assert: 1st entry has been pruned
         let metadata = cache.load_state().await.metadata;
         assert_eq!(metadata.len(), 1);
-        assert_eq!(metadata.contains_key(key_1), false);
-        assert_eq!(metadata.contains_key(key_2), true);
+        assert!(!metadata.contains_key(key_1));
+        assert!(metadata.contains_key(key_2));
     }
 
     #[tokio::test]
@@ -706,8 +706,8 @@ mod tests {
         // Assert: 1st entry has been pruned
         let metadata = cache.load_state().await.metadata;
         assert_eq!(metadata.len(), 1);
-        assert_eq!(metadata.contains_key(key_1), false);
-        assert_eq!(metadata.contains_key(key_2), true);
+        assert!(!metadata.contains_key(key_1));
+        assert!(metadata.contains_key(key_2));
 
         // Action: wait ttl sec and populate cache with 3rd entry
         sleep(Duration::from_secs(time_between_inserts)).await;
@@ -718,8 +718,8 @@ mod tests {
         // Assert: 2nd entry has been pruned
         let metadata = cache.load_state().await.metadata;
         assert_eq!(metadata.len(), 1);
-        assert_eq!(metadata.contains_key(key_2), false);
-        assert_eq!(metadata.contains_key(key_3), true);
+        assert!(!metadata.contains_key(key_2));
+        assert!(metadata.contains_key(key_3));
     }
 
     #[tokio::test]
@@ -788,7 +788,7 @@ mod tests {
         // Assert: cache content replaced
         let metadata = cache.load_state().await.metadata;
         assert_eq!(metadata.len(), 1);
-        assert_eq!(metadata.contains_key(key_2), true);
+        assert!(metadata.contains_key(key_2));
 
         // Action: populate cache with a chunk that can't fit
         let key_3 = "item-3";
@@ -803,6 +803,6 @@ mod tests {
         // Assert: cache content hasn't changed
         let metadata = cache.load_state().await.metadata;
         assert_eq!(metadata.len(), 1);
-        assert_eq!(metadata.contains_key(key_2), true);
+        assert!(metadata.contains_key(key_2));
     }
 }
