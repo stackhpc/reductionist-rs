@@ -89,6 +89,10 @@ pub enum ActiveStorageError {
     /// Unsupported operation requested
     #[error("unsupported operation {operation}")]
     UnsupportedOperation { operation: String },
+
+    /// Error using chunk cache
+    #[error("chunk cache error {error}")]
+    ChunkCacheError { error: String },
 }
 
 impl IntoResponse for ActiveStorageError {
@@ -270,6 +274,7 @@ impl From<ActiveStorageError> for ErrorResponse {
                     _ => Self::internal_server_error(&error),
                 }
             }
+            ActiveStorageError::ChunkCacheError { error: _ } => Self::internal_server_error(&error),
         };
 
         // Log server errors.
