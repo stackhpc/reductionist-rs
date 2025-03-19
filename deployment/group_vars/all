@@ -36,7 +36,7 @@ reductionist_remote_certs_path: "{{ ansible_facts.env.HOME }}/certs"
 # Path to certificates directory in container.
 reductionist_container_certs_path: "/root/.config/reductionist/certs"
 # Path to cache directory on remote host.
-reductionist_remote_cache_path: "{{ ansible_facts.env.HOME }}/cache"
+reductionist_remote_cache_path: "/tmp"
 # Path to cache directory in container.
 reductionist_container_cache_path: "/cache"
 # List of container volume mounts.
