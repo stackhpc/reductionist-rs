@@ -453,17 +453,15 @@ impl SimpleDiskCache {
 
 #[cfg(test)]
 mod tests {
-    extern crate tempdir;
-
     use super::*;
     use std::time::Duration;
-    use tempdir::TempDir;
+    use tempfile::TempDir;
     use tokio::time::sleep;
 
     #[tokio::test]
     async fn test_simple_disk_cache() {
         // Arrange
-        let tmp_dir = TempDir::new("simple_disk_cache").unwrap();
+        let tmp_dir = TempDir::new().unwrap();
         let cache = SimpleDiskCache::new(
             "test-cache-1",
             tmp_dir.path().to_str().unwrap(),
@@ -512,7 +510,7 @@ mod tests {
     async fn test_simple_disk_cache_prune_expired_all() {
         let ttl = 1;
         let time_between_inserts = 1;
-        let tmp_dir = TempDir::new("simple_disk_cache").unwrap();
+        let tmp_dir = TempDir::new().unwrap();
         let cache = SimpleDiskCache::new(
             "test-cache-2",
             tmp_dir.path().to_str().unwrap(),
@@ -550,7 +548,7 @@ mod tests {
     async fn test_simple_disk_cache_prune_expired_stepped() {
         let ttl = 1;
         let time_between_inserts = ttl;
-        let tmp_dir = TempDir::new("simple_disk_cache").unwrap();
+        let tmp_dir = TempDir::new().unwrap();
         let cache = SimpleDiskCache::new(
             "test-cache-3",
             tmp_dir.path().to_str().unwrap(),
@@ -601,7 +599,7 @@ mod tests {
         let time_between_inserts = ttl;
         let size = 1000;
         let chunk = vec![0; size];
-        let tmp_dir = TempDir::new("simple_disk_cache").unwrap();
+        let tmp_dir = TempDir::new().unwrap();
         let cache = SimpleDiskCache::new(
             "test-cache-4",
             tmp_dir.path().to_str().unwrap(),
@@ -643,7 +641,7 @@ mod tests {
         let time_between_inserts = 1;
         let size = 1000;
         let chunk = vec![0; size];
-        let tmp_dir = TempDir::new("simple_disk_cache").unwrap();
+        let tmp_dir = TempDir::new().unwrap();
         let cache = SimpleDiskCache::new(
             "test-cache-5",
             tmp_dir.path().to_str().unwrap(),
@@ -681,7 +679,7 @@ mod tests {
         // set(1st) -> prune() -> [no threshold hit] -> set(2nd) -> [periodic expiry hit] -> prune() -> prune_expired() -> [1st removed]
         let ttl = 1;
         let time_between_inserts = ttl;
-        let tmp_dir = TempDir::new("simple_disk_cache").unwrap();
+        let tmp_dir = TempDir::new().unwrap();
         let cache = SimpleDiskCache::new(
             "test-cache-6",
             tmp_dir.path().to_str().unwrap(),
@@ -731,7 +729,7 @@ mod tests {
         // Check we have the content then prune on disk space with a headroom
         // equal to the cache size, the cache should preemptively clear.
         let max_size_bytes = 10000;
-        let tmp_dir = TempDir::new("simple_disk_cache").unwrap();
+        let tmp_dir = TempDir::new().unwrap();
         let cache = SimpleDiskCache::new(
             "test-cache-7",
             tmp_dir.path().to_str().unwrap(),
@@ -764,7 +762,7 @@ mod tests {
     async fn test_simple_disk_cache_chunk_too_big() {
         // Setup the cache with a size limit so small it can't accomodate our test data.
         let max_size_bytes = 100;
-        let tmp_dir = TempDir::new("simple_disk_cache").unwrap();
+        let tmp_dir = TempDir::new().unwrap();
         let cache = SimpleDiskCache::new(
             "test-cache-8",
             tmp_dir.path().to_str().unwrap(),
