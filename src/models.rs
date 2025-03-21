@@ -255,16 +255,34 @@ fn validate_request_data(request_data: &RequestData) -> Result<(), ValidationErr
             }
         }
         (Some(shape), ReductionAxes::Multi(axes)) => {
+            // Check we've not been given too many axes
             if axes.len() >= shape.len() {
                 return Err(ValidationError::new(
                     "Number of reduction axes must be less than length of shape - to reduce over all axes omit the axis field completely",
                 ));
             }
+            // Check axes are ordered correctly
+            // NOTE(sd109): We could mutate request data to sort the axes
+            // but it's also trivial to do on the Python client side
+            let mut sorted_axes = axes.clone();
+            sorted_axes.sort();
+            if &sorted_axes != axes {
+                return Err(ValidationError::new(
+                    "Reduction axes must be provided in ascending order",
+                ));
+            }
+            // Check axes are valid for given shape
             for ax in axes {
                 if *ax > shape.len() - 1 {
                     return Err(ValidationError::new(
                         "All reduction axes must be within shape",
                     ));
+                }
+            }
+            // Check we've not been given duplicate axes
+            for ax in axes {
+                if axes.iter().filter(|val| *val == ax).count() != 1 {
+                    return Err(ValidationError::new("Reduction axes contains duplicates"));
                 }
             }
         }
@@ -727,6 +745,24 @@ mod tests {
         let mut request_data = test_utils::get_test_request_data();
         request_data.axis = ReductionAxes::One(2);
         request_data.shape = Some(vec![2, 5]);
+        request_data.validate().unwrap()
+    }
+
+    #[test]
+    #[should_panic(expected = "Reduction axes must be provided in ascending order")]
+    fn test_axis_unsorted() {
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.axis = ReductionAxes::Multi(vec![1, 0]);
+        request_data.shape = Some(vec![2, 5, 1]);
+        request_data.validate().unwrap()
+    }
+
+    #[test]
+    #[should_panic(expected = "Reduction axes contains duplicates")]
+    fn test_axis_duplicated() {
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.axis = ReductionAxes::Multi(vec![1, 1]);
+        request_data.shape = Some(vec![2, 5, 1]);
         request_data.validate().unwrap()
     }
 
