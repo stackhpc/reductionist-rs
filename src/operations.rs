@@ -122,7 +122,7 @@ impl NumOperation for Count {
             None
         };
 
-        match &request_data.axis {
+        let (body, shape, counts) = match &request_data.axis {
             ReductionAxes::All => {
                 let count = if let Some(missing) = typed_missing {
                     count_non_missing(&sliced, &missing)
@@ -131,51 +131,34 @@ impl NumOperation for Count {
                 };
                 let count = i64::try_from(count)?;
                 let body = count.to_ne_bytes();
-                // Need to copy to provide ownership to caller.
+                // Need to copy to provide ownership to caller
+                // and ensure match arm types are aligned
                 let body = Bytes::copy_from_slice(&body);
-                Ok(models::Response::new(
-                    body,
-                    models::DType::Int64,
-                    vec![],
-                    vec![count],
-                ))
+                (body, vec![], vec![count])
             }
             ReductionAxes::One(axis) => {
-                let result = sliced.fold_axis(Axis(*axis), 0, |count, val| {
-                    if let Some(missing) = &typed_missing {
-                        if !missing.is_missing(val) {
-                            count + 1
-                        } else {
-                            *count
-                        }
-                    } else {
-                        count + 1
-                    }
-                });
-                let counts = result.iter().copied().collect::<Vec<i64>>();
+                // Single axis case is just a special case of the multi-axis case
+                let (counts, shape) =
+                    count_array_multi_axis(sliced.view(), &[*axis], typed_missing);
                 let body = counts.as_bytes();
                 // Need to copy to provide ownership to caller.
                 let body = Bytes::copy_from_slice(body);
-                Ok(models::Response::new(
-                    body,
-                    models::DType::Int64,
-                    result.shape().into(),
-                    counts,
-                ))
+                (body, shape, counts)
             }
             ReductionAxes::Multi(axes) => {
                 let (counts, shape) = count_array_multi_axis(sliced.view(), axes, typed_missing);
                 let body = counts.as_bytes();
                 // Need to copy to provide ownership to caller.
                 let body = Bytes::copy_from_slice(body);
-                Ok(models::Response::new(
-                    body,
-                    models::DType::Int64,
-                    shape,
-                    counts,
-                ))
+                (body, shape, counts)
             }
-        }
+        };
+        Ok(models::Response::new(
+            body,
+            models::DType::Int64,
+            shape,
+            counts,
+        ))
     }
 }
 
@@ -301,42 +284,24 @@ impl NumOperation for Max {
             None
         };
 
-        match &request_data.axis {
+        let (body, counts, shape) = match &request_data.axis {
             ReductionAxes::One(axis) => {
-                let init = T::min_value();
-                let result =
-                    sliced.fold_axis(Axis(*axis), (init, 0), |(running_max, count), val| {
-                        if let Some(missing) = &typed_missing {
-                            if !missing.is_missing(val) {
-                                (*max_by(running_max, val, max_element_pairwise), count + 1)
-                            } else {
-                                (*running_max, *count)
-                            }
-                        } else {
-                            (*max_by(running_max, val, max_element_pairwise), count + 1)
-                        }
-                    });
-                let maxes = result.iter().map(|(max, _)| *max).collect::<Vec<T>>();
-                let counts = result.iter().map(|(_, count)| *count).collect::<Vec<i64>>();
-                let body = maxes.as_bytes();
-                let body = Bytes::copy_from_slice(body);
-                Ok(models::Response::new(
-                    body,
-                    request_data.dtype,
-                    result.shape().into(),
-                    counts,
-                ))
+                // Reduction over one axis is just a special case of
+                // the general multi-axis reduction.
+                let (maxes, counts, shape) = max_array_multi_axis(
+                    sliced.view(),
+                    &[*axis],
+                    typed_missing,
+                    &request_data.order,
+                );
+                let body = Bytes::copy_from_slice(maxes.as_bytes());
+                (body, counts, shape)
             }
             ReductionAxes::Multi(axes) => {
                 let (maxes, counts, shape) =
                     max_array_multi_axis(sliced, axes, typed_missing, &request_data.order);
                 let body = Bytes::copy_from_slice(maxes.as_bytes());
-                Ok(models::Response::new(
-                    body,
-                    request_data.dtype,
-                    shape,
-                    counts,
-                ))
+                (body, counts, shape)
             }
             ReductionAxes::All => {
                 let init = T::min_value();
@@ -351,17 +316,17 @@ impl NumOperation for Max {
                         (*max_by(&running_max, val, max_element_pairwise), count + 1)
                     }
                 });
-
-                let body = max.as_bytes();
-                let body = Bytes::copy_from_slice(body);
-                Ok(models::Response::new(
-                    body,
-                    request_data.dtype,
-                    vec![],
-                    vec![count],
-                ))
+                let body = Bytes::copy_from_slice(max.as_bytes());
+                (body, vec![count], vec![])
             }
-        }
+        };
+
+        Ok(models::Response::new(
+            body,
+            request_data.dtype,
+            shape,
+            counts,
+        ))
     }
 }
 
@@ -371,15 +336,18 @@ pub struct Min {}
 fn min_element_pairwise<T: Element>(x: &&T, y: &&T) -> std::cmp::Ordering {
     // TODO: How to handle NaN correctly?
     // Numpy seems to behave as follows:
-    //
+
     // np.min([np.nan, 1]) == np.nan
     // np.max([np.nan, 1]) == np.nan
     // np.nan != np.nan
     // np.min([np.nan, 1]) != np.max([np.nan, 1])
-    //
+
     // There are also separate np.nan{min,max} functions
-    // which ignore nans instead.
-    //
+    // which ignore nans instead so that
+
+    // np.nanmin([np.nan, 1]) == 1
+    // np.nanmax([np.nan, 1]) == 1
+
     // Which behaviour do we want to follow?
     //
     // Panic for now (TODO: Make this a user-facing error response instead)
@@ -466,43 +434,24 @@ impl NumOperation for Min {
         // Use ndarray::fold, ndarray::fold_axis or dispatch to specialised
         // multi-axis function depending on whether we're performing reduction
         // over all axes or only a subset
-        match &request_data.axis {
+        let (body, counts, shape) = match &request_data.axis {
             ReductionAxes::One(axis) => {
-                let init = T::max_value();
-                let result =
-                    sliced.fold_axis(Axis(*axis), (init, 0), |(running_min, count), val| {
-                        if let Some(missing) = &typed_missing {
-                            if !missing.is_missing(val) {
-                                (*min_by(running_min, val, min_element_pairwise), count + 1)
-                            } else {
-                                (*running_min, *count)
-                            }
-                        } else {
-                            (*min_by(running_min, val, min_element_pairwise), count + 1)
-                        }
-                    });
-                // Unpack the result tuples into separate vectors
-                let mins = result.iter().map(|(min, _)| *min).collect::<Vec<T>>();
-                let counts = result.iter().map(|(_, count)| *count).collect::<Vec<i64>>();
-                let body = mins.as_bytes();
-                let body = Bytes::copy_from_slice(body);
-                Ok(models::Response::new(
-                    body,
-                    request_data.dtype,
-                    result.shape().into(),
-                    counts,
-                ))
+                // Reduction over one axis is just a special case of
+                // the general multi-axis reduction.
+                let (mins, counts, shape) = min_array_multi_axis(
+                    sliced.view(),
+                    &[*axis],
+                    typed_missing,
+                    &request_data.order,
+                );
+                let body = Bytes::copy_from_slice(mins.as_bytes());
+                (body, counts, shape)
             }
             ReductionAxes::Multi(axes) => {
                 let (mins, counts, shape) =
                     min_array_multi_axis(sliced, axes, typed_missing, &request_data.order);
                 let body = Bytes::copy_from_slice(mins.as_bytes());
-                Ok(models::Response::new(
-                    body,
-                    request_data.dtype,
-                    shape,
-                    counts,
-                ))
+                (body, counts, shape)
             }
             ReductionAxes::All => {
                 let init = T::max_value();
@@ -517,18 +466,17 @@ impl NumOperation for Min {
                         (*min_by(&running_min, val, min_element_pairwise), count + 1)
                     }
                 });
-
-                let body = min.as_bytes();
                 // Need to copy to provide ownership to caller.
-                let body = Bytes::copy_from_slice(body);
-                Ok(models::Response::new(
-                    body,
-                    request_data.dtype,
-                    vec![],
-                    vec![count],
-                ))
+                let body = Bytes::copy_from_slice(min.as_bytes());
+                (body, vec![count], vec![])
             }
-        }
+        };
+        Ok(models::Response::new(
+            body,
+            request_data.dtype,
+            shape,
+            counts,
+        ))
     }
 }
 
@@ -540,6 +488,8 @@ impl NumOperation for Select {
         request_data: &models::RequestData,
         mut data: Vec<u8>,
     ) -> Result<models::Response, ActiveStorageError> {
+        // NOTE(sd109): We explicitly ignore the request_data.axis field
+        // here because the 'select' operation is not a actually reduction
         let array = array::build_array::<T>(request_data, &mut data)?;
         let slice_info = array::build_slice_info::<T>(&request_data.selection, array.shape());
         let sliced = array.slice(slice_info);
@@ -646,41 +596,22 @@ impl NumOperation for Sum {
 
         // Use ndarray::fold or ndarray::fold_axis depending on whether we're
         // performing reduction over all axes or only a subset
-        match &request_data.axis {
+        let (body, counts, shape) = match &request_data.axis {
             ReductionAxes::One(axis) => {
-                let result = sliced.fold_axis(Axis(*axis), (T::zero(), 0), |(sum, count), val| {
-                    if let Some(missing) = &typed_missing {
-                        if !missing.is_missing(val) {
-                            (*sum + *val, count + 1)
-                        } else {
-                            (*sum, *count)
-                        }
-                    } else {
-                        (*sum + *val, count + 1)
-                    }
-                });
-                // Unpack the result tuples into separate vectors
-                let sums = result.iter().map(|(sum, _)| *sum).collect::<Vec<T>>();
-                let counts = result.iter().map(|(_, count)| *count).collect::<Vec<i64>>();
-                let body = sums.as_bytes();
-                let body = Bytes::copy_from_slice(body);
-                Ok(models::Response::new(
-                    body,
-                    request_data.dtype,
-                    result.shape().into(),
-                    counts,
-                ))
+                let (sums, counts, shape) = sum_array_multi_axis(
+                    sliced.view(),
+                    &[*axis],
+                    typed_missing,
+                    &request_data.order,
+                );
+                let body = Bytes::copy_from_slice(sums.as_bytes());
+                (body, counts, shape)
             }
             ReductionAxes::Multi(axes) => {
                 let (sums, counts, shape) =
                     sum_array_multi_axis(sliced, axes, typed_missing, &request_data.order);
                 let body = Bytes::copy_from_slice(sums.as_bytes());
-                Ok(models::Response::new(
-                    body,
-                    request_data.dtype,
-                    shape,
-                    counts,
-                ))
+                (body, counts, shape)
             }
             ReductionAxes::All => {
                 let (sum, count) = sliced.fold((T::zero(), 0_i64), |(sum, count), val| {
@@ -695,17 +626,18 @@ impl NumOperation for Sum {
                     }
                 });
 
-                let body = sum.as_bytes();
-                // Need to copy to provide ownership to caller.
-                let body = Bytes::copy_from_slice(body);
-                Ok(models::Response::new(
-                    body,
-                    request_data.dtype,
-                    vec![],
-                    vec![count],
-                ))
+                // Convert to generic owned Bytes instance
+                let body = Bytes::copy_from_slice(sum.as_bytes());
+                (body, vec![count], vec![])
             }
-        }
+        };
+
+        Ok(models::Response::new(
+            body,
+            request_data.dtype,
+            shape,
+            counts,
+        ))
     }
 }
 
