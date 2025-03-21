@@ -13,6 +13,7 @@ pub trait Element:
     + num_traits::FromPrimitive
     + num_traits::ToBytes
     + num_traits::Zero
+    + num_traits::Bounded
     + std::convert::From<u16>
     + std::fmt::Debug
     + std::iter::Sum
@@ -34,6 +35,7 @@ impl<T> Element for T where
         + num_traits::One
         + num_traits::ToBytes
         + num_traits::Zero
+        + num_traits::Bounded
         + std::convert::From<u16>
         + std::fmt::Debug
         + std::iter::Sum
@@ -111,7 +113,7 @@ mod tests {
                 data.into(),
                 request_data.dtype,
                 vec![3],
-                3,
+                vec![3],
             ))
         }
     }
@@ -125,7 +127,7 @@ mod tests {
         assert_eq!(&[1, 2, 3, 4][..], response.body);
         assert_eq!(models::DType::Uint32, response.dtype);
         assert_eq!(vec![3], response.shape);
-        assert_eq!(3, response.count);
+        assert_eq!(vec![3], response.count);
     }
 
     struct TestNumOp {}
@@ -141,7 +143,7 @@ mod tests {
                 body.into(),
                 request_data.dtype,
                 vec![1, 2],
-                2,
+                vec![2],
             ))
         }
     }
@@ -155,6 +157,6 @@ mod tests {
         assert_eq!("i64", response.body);
         assert_eq!(models::DType::Int64, response.dtype);
         assert_eq!(vec![1, 2], response.shape);
-        assert_eq!(2, response.count);
+        assert_eq!(vec![2], response.count);
     }
 }

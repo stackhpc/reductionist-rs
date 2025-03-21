@@ -36,6 +36,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--offset", type=int)
     parser.add_argument("--size", type=int)
     parser.add_argument("--shape", type=str)
+    parser.add_argument("--axis", type=str)
     parser.add_argument("--order", default="C") #, choices=["C", "F"]) allow invalid for testing
     parser.add_argument("--selection", type=str)
     parser.add_argument("--compression", type=str)
@@ -72,6 +73,8 @@ def build_request_data(args: argparse.Namespace) -> dict:
         request_data["byte_order"] = args.byte_order
     if args.shape:
         request_data["shape"] = json.loads(args.shape)
+    if args.axis is not None:
+        request_data["axis"] = json.loads(args.axis)
     if args.selection:
         request_data["selection"] = json.loads(args.selection)
     if args.compression:
@@ -113,11 +116,16 @@ def display(response, verbose=False):
     #print(response.content)
     dtype = response.headers['x-activestorage-dtype']
     shape = json.loads(response.headers['x-activestorage-shape'])
-    result = np.frombuffer(response.content, dtype=dtype)
-    result = result.reshape(shape)
+    counts = json.loads(response.headers['x-activestorage-count'])
+    counts = np.array(counts)
+    if len(counts) > 1:
+        counts = counts.reshape(shape)
+    result = np.frombuffer(response.content, dtype=dtype).reshape(shape)
     if verbose:
+        sep = "\n" if len(counts.shape) > 1 else " "
         print("\nResponse headers:", response.headers)
-        print("\nResult:", result)
+        print("\nNon-missing count(s):", counts, sep=sep)
+        print("\nResult:", result, sep=sep)
     else:
         print(result)
 
