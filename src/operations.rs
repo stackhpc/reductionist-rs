@@ -53,48 +53,49 @@ fn count_array_multi_axis<T: Element>(
     axes: &[usize],
     missing: Option<Missing<T>>,
 ) -> (Vec<i64>, Vec<usize>) {
-    let result = if axes.is_empty() {
-        // Emulate numpy semantics of axis = () being
-        // equivalent to a 'reduction over no axes'
-        array.map(|val| {
-            if let Some(missing) = &missing {
-                if !missing.is_missing(val) {
-                    1
-                } else {
-                    0
-                }
-            } else {
-                1
-            }
-        })
-    } else {
-        // Should never panic here due to axis.is_empty() branch above
-        let first_axis = axes.first().expect("axes list to be non-empty");
-        // Count non-missing over first axis
-        let mut result = array
-            .fold_axis(Axis(*first_axis), 0, |running_count, val| {
+    let result = match axes.first() {
+        None => {
+            // Emulate numpy semantics of axis = () being
+            // equivalent to a 'reduction over no axes'
+            array.map(|val| {
                 if let Some(missing) = &missing {
                     if !missing.is_missing(val) {
-                        running_count + 1
+                        1
                     } else {
-                        *running_count
+                        0
                     }
                 } else {
-                    running_count + 1
+                    1
                 }
             })
-            .into_dyn();
-        // Sum counts over remaining axes
-        if let Some(remaining_axes) = axes.get(1..) {
-            for (n, axis) in remaining_axes.iter().enumerate() {
-                result = result
-                    .fold_axis(Axis(axis - n - 1), 0, |total_count, count| {
-                        total_count + count
-                    })
-                    .into_dyn();
-            }
         }
-        result
+        Some(first_axis) => {
+            // Count non-missing over first axis
+            let mut result = array
+                .fold_axis(Axis(*first_axis), 0, |running_count, val| {
+                    if let Some(missing) = &missing {
+                        if !missing.is_missing(val) {
+                            running_count + 1
+                        } else {
+                            *running_count
+                        }
+                    } else {
+                        running_count + 1
+                    }
+                })
+                .into_dyn();
+            // Sum counts over remaining axes
+            if let Some(remaining_axes) = axes.get(1..) {
+                for (n, axis) in remaining_axes.iter().enumerate() {
+                    result = result
+                        .fold_axis(Axis(axis - n - 1), 0, |total_count, count| {
+                            total_count + count
+                        })
+                        .into_dyn();
+                }
+            }
+            result
+        }
     };
 
     // Convert result to owned vec
@@ -233,45 +234,48 @@ fn max_array_multi_axis<T: Element>(
     missing: Option<Missing<T>>,
     order: &Option<Order>,
 ) -> (Vec<T>, Vec<i64>, Vec<usize>) {
-    let (result, shape) = if axes.is_empty() {
-        // Emulate numpy behaviour of 'reduction over no axes'
-        let result = reduction_over_zero_axes(&array, missing, order);
-        (result, array.shape().to_owned())
-    } else {
-        // Find maximum over first axis and count elements operated on
-        let init = T::min_value();
-        let mut result = array
-            .fold_axis(Axis(axes[0]), (init, 0), |(running_max, count), val| {
-                if let Some(missing) = &missing {
-                    if !missing.is_missing(val) {
+    let (result, shape) = match axes.first() {
+        None => {
+            // Emulate numpy behaviour of 'reduction over no axes'
+            let result = reduction_over_zero_axes(&array, missing, order);
+            (result, array.shape().to_owned())
+        }
+        Some(first_axis) => {
+            // Find maximum over first axis and count elements operated on
+            let init = T::min_value();
+            let mut result = array
+                .fold_axis(Axis(*first_axis), (init, 0), |(running_max, count), val| {
+                    if let Some(missing) = &missing {
+                        if !missing.is_missing(val) {
+                            let new_max = max_by(running_max, val, max_element_pairwise);
+                            (*new_max, count + 1)
+                        } else {
+                            (*running_max, *count)
+                        }
+                    } else {
                         let new_max = max_by(running_max, val, max_element_pairwise);
                         (*new_max, count + 1)
-                    } else {
-                        (*running_max, *count)
                     }
-                } else {
-                    let new_max = max_by(running_max, val, max_element_pairwise);
-                    (*new_max, count + 1)
+                })
+                .into_dyn();
+            // Find max over remaining axes (where total count is now sum of counts)
+            if let Some(remaining_axes) = axes.get(1..) {
+                for (n, axis) in remaining_axes.iter().enumerate() {
+                    result = result
+                        .fold_axis(
+                            Axis(axis - n - 1),
+                            (init, 0),
+                            |(global_max, total_count), (running_max, count)| {
+                                let new_max = max_by(global_max, running_max, max_element_pairwise);
+                                (*new_max, total_count + count)
+                            },
+                        )
+                        .into_dyn();
                 }
-            })
-            .into_dyn();
-        // Find max over remaining axes (where total count is now sum of counts)
-        if let Some(remaining_axes) = axes.get(1..) {
-            for (n, axis) in remaining_axes.iter().enumerate() {
-                result = result
-                    .fold_axis(
-                        Axis(axis - n - 1),
-                        (init, 0),
-                        |(global_max, total_count), (running_max, count)| {
-                            let new_max = max_by(global_max, running_max, max_element_pairwise);
-                            (*new_max, total_count + count)
-                        },
-                    )
-                    .into_dyn();
             }
+            let shape = result.shape().to_owned();
+            (result, shape)
         }
-        let shape = result.shape().to_owned();
-        (result, shape)
     };
 
     // Result is array of (max, count) tuples so separate them here
@@ -391,46 +395,48 @@ fn min_array_multi_axis<T: Element>(
     missing: Option<Missing<T>>,
     order: &Option<Order>,
 ) -> (Vec<T>, Vec<i64>, Vec<usize>) {
-    let (result, shape) = if axes.is_empty() {
-        // Emulate numpy behaviour of 'reduction over no axes'
-        let result = reduction_over_zero_axes(&array, missing, order);
-        (result, array.shape().to_owned())
-    } else {
-        // Find minimum over first axis and count elements operated on
-        let init = T::max_value();
-        let mut result = array
-            .fold_axis(Axis(axes[0]), (init, 0), |(running_min, count), val| {
-                if let Some(missing) = &missing {
-                    if !missing.is_missing(val) {
+    let (result, shape) = match axes.first() {
+        None => {
+            // Emulate numpy behaviour of 'reduction over no axes'
+            let result = reduction_over_zero_axes(&array, missing, order);
+            (result, array.shape().to_owned())
+        }
+        Some(first_axis) => {
+            // Find minimum over first axis and count elements operated on
+            let init = T::max_value();
+            let mut result = array
+                .fold_axis(Axis(*first_axis), (init, 0), |(running_min, count), val| {
+                    if let Some(missing) = &missing {
+                        if !missing.is_missing(val) {
+                            let new_min = min_by(running_min, val, min_element_pairwise);
+                            (*new_min, count + 1)
+                        } else {
+                            (*running_min, *count)
+                        }
+                    } else {
                         let new_min = min_by(running_min, val, min_element_pairwise);
                         (*new_min, count + 1)
-                    } else {
-                        (*running_min, *count)
                     }
-                } else {
-                    let new_min = min_by(running_min, val, min_element_pairwise);
-                    (*new_min, count + 1)
+                })
+                .into_dyn();
+            // Find min over remaining axes (where total count is now sum of counts)
+            if let Some(remaining_axes) = axes.get(1..) {
+                for (n, axis) in remaining_axes.iter().enumerate() {
+                    result = result
+                        .fold_axis(
+                            Axis(axis - n - 1),
+                            (init, 0),
+                            |(global_min, total_count), (running_min, count)| {
+                                let new_min = min_by(global_min, running_min, min_element_pairwise);
+                                (*new_min, total_count + count)
+                            },
+                        )
+                        .into_dyn();
                 }
-            })
-            .into_dyn();
-        // Find min over remaining axes (where total count is now sum of counts)
-        if let Some(remaining_axes) = axes.get(1..) {
-            for (n, axis) in remaining_axes.iter().enumerate() {
-                result = result
-                    .fold_axis(
-                        Axis(axis - n - 1),
-                        (init, 0),
-                        |(global_min, total_count), (running_min, count)| {
-                            // (*global_min.min(running_min), total_count + count)
-                            let new_min = min_by(global_min, running_min, min_element_pairwise);
-                            (*new_min, total_count + count)
-                        },
-                    )
-                    .into_dyn();
             }
+            let shape = result.shape().to_owned();
+            (result, shape)
         }
-        let shape = result.shape().to_owned();
-        (result, shape)
     };
 
     // Result is array of (mins, count) tuples so separate them here
@@ -574,41 +580,44 @@ fn sum_array_multi_axis<T: Element>(
     missing: Option<Missing<T>>,
     order: &Option<Order>,
 ) -> (Vec<T>, Vec<i64>, Vec<usize>) {
-    let (result, shape) = if axes.is_empty() {
-        // Emulate numpy behaviour of 'reduction over no axes'
-        let result = reduction_over_zero_axes(&array, missing, order);
-        (result, array.shape().to_owned())
-    } else {
-        // Sum over first axis and count elements operated on
-        let mut result = array
-            .fold_axis(Axis(axes[0]), (T::zero(), 0), |(sum, count), val| {
-                if let Some(missing) = &missing {
-                    if !missing.is_missing(val) {
-                        (*sum + *val, count + 1)
-                    } else {
-                        (*sum, *count)
-                    }
-                } else {
-                    (*sum + *val, count + 1)
-                }
-            })
-            .into_dyn();
-        // Sum over remaining axes (where total count is now sum of counts)
-        if let Some(remaining_axes) = axes.get(1..) {
-            for (n, axis) in remaining_axes.iter().enumerate() {
-                result = result
-                    .fold_axis(
-                        Axis(axis - n - 1),
-                        (T::zero(), 0),
-                        |(total_sum, total_count), (sum, count)| {
-                            (*total_sum + *sum, total_count + count)
-                        },
-                    )
-                    .into_dyn();
-            }
+    let (result, shape) = match axes.first() {
+        None => {
+            // Emulate numpy behaviour of 'reduction over no axes'
+            let result = reduction_over_zero_axes(&array, missing, order);
+            (result, array.shape().to_owned())
         }
-        let shape = result.shape().to_owned();
-        (result, shape)
+        Some(first_axis) => {
+            // Sum over first axis and count elements operated on
+            let mut result = array
+                .fold_axis(Axis(*first_axis), (T::zero(), 0), |(sum, count), val| {
+                    if let Some(missing) = &missing {
+                        if !missing.is_missing(val) {
+                            (*sum + *val, count + 1)
+                        } else {
+                            (*sum, *count)
+                        }
+                    } else {
+                        (*sum + *val, count + 1)
+                    }
+                })
+                .into_dyn();
+            // Sum over remaining axes (where total count is now sum of counts)
+            if let Some(remaining_axes) = axes.get(1..) {
+                for (n, axis) in remaining_axes.iter().enumerate() {
+                    result = result
+                        .fold_axis(
+                            Axis(axis - n - 1),
+                            (T::zero(), 0),
+                            |(total_sum, total_count), (sum, count)| {
+                                (*total_sum + *sum, total_count + count)
+                            },
+                        )
+                        .into_dyn();
+                }
+            }
+            let shape = result.shape().to_owned();
+            (result, shape)
+        }
     };
 
     // Result is array of (sum, count) tuples so separate them here
