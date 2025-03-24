@@ -37,6 +37,11 @@ The request body should be a JSON object of the form:
     // - optional, defaults to a simple 1D array
     "shape": [20, 5],
 
+    // The axis or axes over which to perform the reduction operation
+    // - optional, can be either a single axis or list of axes, defaults
+    // to a reduction over all axes
+    "axis": 0,
+
     // Indicates whether the data is in C order (row major)
     // or Fortran order (column major, indicated by 'F')
     // - optional, defaults to 'C'
@@ -78,10 +83,10 @@ Unauthenticated access to S3 is possible by omitting the basic auth header.
 On success, all operations return HTTP 200 OK with the response using the same datatype as specified in the request except for `count` which always returns the result as `int64`.
 The server returns the following headers with the HTTP response:
 
-* `x-activestorage-dtype`: The data type of the data in the response payload. One of `int32`, `int64`, `uint32`, `uint64`, `float32` or `float64`.
-* `x-activestorage-byte-order`: The byte order of the data in the response payload. Either `big` or `little`.
-* `x-activestorage-shape`: A JSON-encoded list of numbers describing the shape of the data in the response payload. May be an empty list for a scalar result.
-* `x-activestorage-count`: The number of non-missing array elements operated on while performing the requested reduction. This header is useful, for example, to calculate the mean over multiple requests where the number of items operated on may differ between chunks.
+- `x-activestorage-dtype`: The data type of the data in the response payload. One of `int32`, `int64`, `uint32`, `uint64`, `float32` or `float64`.
+- `x-activestorage-byte-order`: The byte order of the data in the response payload. Either `big` or `little`.
+- `x-activestorage-shape`: A JSON-encoded list of numbers describing the shape of the data in the response payload. May be an empty list for a scalar result.
+- `x-activestorage-count`: The number of non-missing array elements operated on while performing the requested reduction. This header is useful, for example, to calculate the mean over multiple requests where the number of items operated on may differ between chunks.
 
 On error, an HTTP 4XX (client) or 5XX (server) response code will be returned, with the response body being a JSON object of the following format:
 
