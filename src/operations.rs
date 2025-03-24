@@ -204,6 +204,8 @@ fn reduction_over_zero_axes<T: Element>(
         }
     };
     let result = match order {
+        // Account for the fact that map always
+        // iterates in C-order.
         Some(Order::F) => array.t().map(func),
         _ => array.map(func),
     };
