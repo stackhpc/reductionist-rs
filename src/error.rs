@@ -231,7 +231,10 @@ impl From<ActiveStorageError> for ErrorResponse {
             ActiveStorageError::FromBytes { type_name: _ }
             | ActiveStorageError::TryFromInt(_)
             | ActiveStorageError::S3ByteStream(_)
-            | ActiveStorageError::SemaphoreAcquireError(_) => Self::internal_server_error(&error),
+            | ActiveStorageError::SemaphoreAcquireError(_)
+            | ActiveStorageError::ChunkCacheError { error: _ } => {
+                Self::internal_server_error(&error)
+            }
 
             ActiveStorageError::S3GetObject(sdk_error) => {
                 // Tailor the response based on the specific SdkError variant.
@@ -274,7 +277,6 @@ impl From<ActiveStorageError> for ErrorResponse {
                     _ => Self::internal_server_error(&error),
                 }
             }
-            ActiveStorageError::ChunkCacheError { error: _ } => Self::internal_server_error(&error),
         };
 
         // Log server errors.

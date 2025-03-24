@@ -5,27 +5,28 @@ use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    ops::Add,
     path::PathBuf,
+    process::exit,
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
 use tokio::{fs, spawn, sync::mpsc};
 
-/// ChunkKeyValue stores a chunk ready to be cached.
-struct ChunkKeyValue {
+/// ChunkCacheEntry stores a chunk ready to be cached.
+struct ChunkCacheEntry {
     /// Key to uniquely identify the chunk in the cache.
     key: String,
     /// Bytes to be cached.
     value: Bytes,
 }
 
-impl ChunkKeyValue {
-    /// Return a ChunkKeyValue object
-    fn new(key: String, value: Bytes) -> Self {
+impl ChunkCacheEntry {
+    /// Return a ChunkCacheEntry object
+    fn new(key: &str, value: Bytes) -> Self {
+        let key = key.to_owned();
         // Make sure we own the `Bytes` so we don't see unexpected, but not incorrect,
         // behaviour caused by the zero copy of `Bytes`. i.e. let us choose when to copy.
-        let value = Bytes::from(value.to_vec());
+        let value = Bytes::copy_from_slice(&value);
         Self { key, value }
     }
 }
@@ -43,7 +44,7 @@ pub struct ChunkCache {
     /// The underlying cache object.
     cache: Arc<SimpleDiskCache>,
     /// Sync primitive for managing write access to the cache.
-    sender: mpsc::Sender<ChunkKeyValue>,
+    sender: mpsc::Sender<ChunkCacheEntry>,
 }
 
 impl ChunkCache {
@@ -57,7 +58,7 @@ impl ChunkCache {
     /// * `max_size_bytes`: An optional maximum cache size expressed as a string, i.e. "100GB"
     /// * `buffer_size`: An optional size for the chunk write buffer
     pub fn new(
-        path: String,
+        path: &str,
         ttl_seconds: u64,
         prune_interval_seconds: u64,
         max_size_bytes: Option<String>,
@@ -73,7 +74,7 @@ impl ChunkCache {
         };
         let cache = Arc::new(SimpleDiskCache::new(
             "chunk_cache",
-            &path,
+            path,
             ttl_seconds,
             prune_interval_seconds,
             max_size_bytes,
@@ -86,13 +87,10 @@ impl ChunkCache {
         // A download request storing to the cache need only wait for the chunk
         // to be sent to the channel.
         let buffer_size = buffer_size.unwrap_or(num_cpus::get() - 1);
-        let (sender, mut receiver) = mpsc::channel::<ChunkKeyValue>(buffer_size);
+        let (sender, mut receiver) = mpsc::channel::<ChunkCacheEntry>(buffer_size);
         spawn(async move {
             while let Some(message) = receiver.recv().await {
-                cache_clone
-                    .set(message.key.as_str(), message.value)
-                    .await
-                    .unwrap();
+                cache_clone.set(&message.key, message.value).await.unwrap();
             }
         });
 
@@ -105,15 +103,11 @@ impl ChunkCache {
     ///
     /// * `key`: Unique key identifying the chunk
     /// * `value`: Chunk `Bytes` to be cached
-    pub async fn set(&self, key: &str, value: Bytes) -> Result<Option<Bytes>, ActiveStorageError> {
-        match self
-            .sender
-            .send(ChunkKeyValue::new(String::from(key), value))
-            .await
-        {
-            Ok(_) => Ok(None),
+    pub async fn set(&self, key: &str, value: Bytes) -> Result<(), ActiveStorageError> {
+        match self.sender.send(ChunkCacheEntry::new(key, value)).await {
+            Ok(_) => Ok(()),
             Err(e) => Err(ActiveStorageError::ChunkCacheError {
-                error: format!("{:?}", e),
+                error: format!("{}", e),
             }),
         }
     }
@@ -136,7 +130,7 @@ impl ChunkCache {
 /// Metadata stored against each cache chunk.
 #[derive(Debug, Serialize, Deserialize)]
 struct Metadata {
-    /// Seconds after unix epoch for ache item expiry.
+    /// Seconds after unix epoch for cache item expiry.
     expires: u64,
     /// Cache value size.
     size_bytes: usize,
@@ -147,9 +141,10 @@ impl Metadata {
     fn new(size: usize, ttl: u64) -> Self {
         let expires = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            // Only panics if 'now' is before epoch
+            .expect("System time to be set correctly")
             .as_secs()
-            .add(ttl);
+            + ttl;
         Metadata {
             expires,
             size_bytes: size,
@@ -178,7 +173,8 @@ impl State {
     fn new(prune_interval_secs: u64) -> Self {
         let next_prune = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            // Only panics if 'now' is before epoch
+            .expect("System time to be set correctly")
             .as_secs()
             + prune_interval_secs;
         State {
@@ -192,9 +188,10 @@ impl State {
 /// The SimpleDiskCache takes chunks of `Bytes` data, identified by an unique key,
 /// storing each chunk as a separate file on disk. Keys are stored in a hashmap
 /// serialised to a JSON state file on disk.
-/// Each chunk stored has a TTL, time to live, stored as a number seconds from epoch,
-/// after which the chunk will have expired and can be pruned from the cache.
-/// Pruning takes place at time intervals or when the total size of the cache
+/// Each chunk stored has a 'time to live' (TTL) stored as a number seconds from
+/// the unix epoch, after which the chunk will have expired and can be pruned from
+/// the cache.
+/// Pruning takes place periodically or when the total size of the cache
 /// reaches a maximum size threshold.
 /// The decision whether to prune the cache is made when chunks are stored.
 #[derive(Debug)]
@@ -229,10 +226,27 @@ impl SimpleDiskCache {
         if !dir.as_path().exists() {
             panic!("Cache parent dir {} must exist", dir.to_str().unwrap())
         } else if path.exists() {
-            panic!("Cache folder {} already exists", path.to_str().unwrap())
-        } else {
-            std::fs::create_dir(&path).unwrap();
+            let stdin = std::io::stdin();
+            println!(
+                "Cache folder {} already exists. Do you want to wipe it? (y/n)",
+                path.to_str().unwrap()
+            );
+            for line in stdin.lines() {
+                match line {
+                    Ok(response) => match response.to_lowercase().as_str() {
+                        "y" | "yes" => {
+                            std::fs::remove_dir_all(&path).expect("failed to delete cache dir");
+                            println!("Cache dir cleared");
+                            break;
+                        }
+                        "n" | "no" => exit(0),
+                        _ => println!("Please entry 'y' for yes or 'n' for no"),
+                    },
+                    Err(e) => panic!("{}", e),
+                };
+            }
         }
+        std::fs::create_dir(&path).expect("failed to create cache dir");
         SimpleDiskCache {
             name,
             dir,
@@ -344,18 +358,13 @@ impl SimpleDiskCache {
     /// * `key`: Unique key identifying the chunk
     async fn remove(&self, key: &str) {
         let mut state = self.load_state().await;
-        let (mut remove, mut size_bytes) = (false, 0);
-        if let Some(data) = state.metadata.get(key) {
-            (remove, size_bytes) = (true, data.size_bytes);
-        }
-        if remove {
+        if let Some(data) = state.metadata.remove(key) {
             let path = self
                 .dir
                 .join(&self.name)
                 .join(self.filename_for_key(key).await);
             fs::remove_file(path).await.unwrap();
-            state.metadata.remove(key);
-            state.current_size_bytes -= size_bytes;
+            state.current_size_bytes -= data.size_bytes;
             self.save_state(state).await;
         }
     }
@@ -365,7 +374,7 @@ impl SimpleDiskCache {
         let state = self.load_state().await;
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .expect("System time to be set correctly")
             .as_secs();
         for (key, data) in state.metadata.iter() {
             if data.expires <= timestamp {
@@ -386,6 +395,7 @@ impl SimpleDiskCache {
     /// * `headroom_bytes`: specifies additional free space that must be left available
     async fn prune_disk_space(&self, headroom_bytes: usize) -> Result<(), String> {
         if let Some(max_size_bytes) = self.max_size_bytes {
+            // TODO: Make this a std::io::ErrorKind::QuotaExceeded error once MSRV is 1.85
             if headroom_bytes > max_size_bytes {
                 return Err("Chunk cannot fit within cache maximum size threshold".to_string());
             }
@@ -428,7 +438,7 @@ impl SimpleDiskCache {
         // We also prune at time intervals.
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .expect("System time to be set correctly")
             .as_secs();
         prune_expired |= state.next_prune <= timestamp;
         // Prune if either of the above thresholds were crossed.
@@ -605,7 +615,7 @@ mod tests {
             tmp_dir.path().to_str().unwrap(),
             ttl,            // ttl for cache entries
             1000,           // purge expired interval set large to not trigger expiry on "set"
-            Some(size * 2), // max cache size accomodates two entries
+            Some(size * 2), // max cache size accommodates two entries
         );
 
         // Action: populate cache with large entry
@@ -647,7 +657,7 @@ mod tests {
             tmp_dir.path().to_str().unwrap(),
             ttl,            // ttl for cache entries
             1000,           // purge expired interval set large to not trigger expiry on "set"
-            Some(size * 2), // max cache size accomodates two entries
+            Some(size * 2), // max cache size accommodates two entries
         );
 
         // Action: populate cache with large entry
@@ -760,7 +770,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_simple_disk_cache_chunk_too_big() {
-        // Setup the cache with a size limit so small it can't accomodate our test data.
+        // Setup the cache with a size limit so small it can't accommodate our test data.
         let max_size_bytes = 100;
         let tmp_dir = TempDir::new().unwrap();
         let cache = SimpleDiskCache::new(

@@ -71,8 +71,7 @@ impl AppState {
             let path = args
                 .chunk_cache_path
                 .as_ref()
-                .expect("The chunk cache path must be specified when the chunk cache is enabled")
-                .clone();
+                .expect("The chunk cache path must be specified when the chunk cache is enabled");
             Some(ChunkCache::new(
                 path,
                 args.chunk_cache_age,
@@ -189,6 +188,7 @@ async fn schema() -> &'static str {
 /// * `client`: S3 client object
 /// * `request_data`: RequestData object for the request
 /// * `resource_manager`: ResourceManager object
+#[tracing::instrument(level = "DEBUG", skip(client, request_data, resource_manager))]
 async fn download_s3_object<'a>(
     client: &s3_client::S3Client,
     request_data: &models::RequestData,
@@ -223,6 +223,10 @@ async fn download_s3_object<'a>(
 /// * `request_data`: RequestData object for the request
 /// * `resource_manager`: ResourceManager object
 /// * `chunk_cache`: ChunkCache object
+#[tracing::instrument(
+    level = "DEBUG",
+    skip(client, request_data, resource_manager, chunk_cache)
+)]
 async fn download_and_cache_s3_object<'a>(
     client: &s3_client::S3Client,
     request_data: &models::RequestData,
@@ -231,33 +235,20 @@ async fn download_and_cache_s3_object<'a>(
 ) -> Result<Bytes, ActiveStorageError> {
     let key = format!("{},{:?}", client, request_data);
 
-    match chunk_cache.get(&key).await {
-        Ok(value) => {
-            if let Some(bytes) = value {
-                return Ok(bytes);
-            }
-        }
-        Err(e) => {
-            return Err(e);
-        }
+    let cache_value = chunk_cache.get(&key).await?;
+    if let Some(bytes) = cache_value {
+        return Ok(bytes);
     }
 
-    let data = download_s3_object(client, request_data, resource_manager).await;
+    let data = download_s3_object(client, request_data, resource_manager).await?;
 
-    if let Ok(data_bytes) = &data {
-        // Store the data against this key if the chunk cache is enabled.
-        match chunk_cache.set(&key, data_bytes.clone()).await {
-            Ok(_) => {}
-            Err(e) => {
-                return Err(e);
-            }
-        }
-    }
+    // Write data to cache
+    chunk_cache.set(&key, data.clone()).await?;
 
     // Increment the prometheus metric for cache misses
     LOCAL_CACHE_MISSES.with_label_values(&["disk"]).inc();
 
-    data
+    Ok(data)
 }
 
 /// Handler for Active Storage operations
@@ -290,22 +281,22 @@ async fn operation_handler<T: operation::Operation>(
         .instrument(tracing::Span::current())
         .await;
 
-    let data = if state.args.use_chunk_cache {
-        download_and_cache_s3_object(
-            &s3_client,
-            &request_data,
-            &state.resource_manager,
-            state.chunk_cache.as_ref().unwrap(),
-        )
-        .instrument(tracing::Span::current())
-        .await?
-    } else {
-        download_s3_object(&s3_client, &request_data, &state.resource_manager)
-            .instrument(tracing::Span::current())
-            .await?
+    let data = match (&state.args.use_chunk_cache, &state.chunk_cache) {
+        (false, _) => {
+            download_s3_object(&s3_client, &request_data, &state.resource_manager)
+                .instrument(tracing::Span::current())
+                .await?
+        }
+        (true, Some(cache)) => {
+            download_and_cache_s3_object(&s3_client, &request_data, &state.resource_manager, cache)
+                .await?
+        }
+        (true, None) => panic!(
+            "Chunk cache enabled but no chunk cache provided.\nThis is a bug. Please report it to the application developers."
+        ),
     };
 
-    // All remaining work i s synchronous. If the use_rayon argument was specified, delegate to the
+    // All remaining work is synchronous. If the use_rayon argument was specified, delegate to the
     // Rayon thread pool. Otherwise, execute as normal using Tokio.
     if state.args.use_rayon {
         tokio_rayon::spawn(move || operation::<T>(request_data, data)).await
