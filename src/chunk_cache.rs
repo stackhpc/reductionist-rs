@@ -5,8 +5,8 @@ use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
+    fs as std_fs,
     path::PathBuf,
-    process::exit,
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -226,27 +226,17 @@ impl SimpleDiskCache {
         if !dir.as_path().exists() {
             panic!("Cache parent dir {} must exist", dir.to_str().unwrap())
         } else if path.exists() {
-            let stdin = std::io::stdin();
-            println!(
-                "Cache folder {} already exists. Do you want to wipe it? (y/n)",
-                path.to_str().unwrap()
-            );
-            for line in stdin.lines() {
-                match line {
-                    Ok(response) => match response.to_lowercase().as_str() {
-                        "y" | "yes" => {
-                            std::fs::remove_dir_all(&path).expect("failed to delete cache dir");
-                            println!("Cache dir cleared");
-                            break;
-                        }
-                        "n" | "no" => exit(0),
-                        _ => println!("Please entry 'y' for yes or 'n' for no"),
-                    },
-                    Err(e) => panic!("{}", e),
-                };
+            let file = path.join(SimpleDiskCache::STATE_FILE);
+            if file.exists() {
+                let state = std_fs::read_to_string(file).expect("Failed to read cache state file");
+                let _: State = serde_json::from_str(state.as_str())
+                    .expect("Failed to deserialise cache state");
+            } else {
+                panic!("Cache directory {} already exists", dir.to_str().unwrap())
             }
+        } else {
+            std::fs::create_dir(&path).expect("Failed to create cache dir");
         }
-        std::fs::create_dir(&path).expect("failed to create cache dir");
         SimpleDiskCache {
             name,
             dir,
