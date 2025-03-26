@@ -174,10 +174,20 @@ impl S3Client {
             .ok_or(ActiveStorageError::S3ContentLengthMissing)?
             .try_into()?;
 
+        // Update memory requested from resource manager to account for actual
+        // size of data if we were previously unable to guess the size from request
+        // data's size + offset parameters.
         // FIXME: how to account for compressed data?
-        if mem_permits.is_none() || mem_permits.as_ref().unwrap().num_permits() == 0 {
-            *mem_permits = resource_manager.memory(content_length).await?;
-        };
+        match mem_permits {
+            None => {
+                *mem_permits = resource_manager.memory(content_length).await?;
+            }
+            Some(permits) => {
+                if permits.num_permits() == 0 {
+                    *mem_permits = resource_manager.memory(content_length).await?;
+                }
+            }
+        }
 
         // The data returned by the S3 client does not have any alignment guarantees. In order to
         // reinterpret the data as an array of numbers with a higher alignment than 1, we need to

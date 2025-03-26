@@ -23,6 +23,7 @@ use axum::{
     Router, TypedHeader,
 };
 use bytes::Bytes;
+use tokio::sync::SemaphorePermit;
 
 use std::sync::Arc;
 use tower::Layer;
@@ -193,13 +194,11 @@ async fn download_s3_object<'a>(
     client: &s3_client::S3Client,
     request_data: &models::RequestData,
     resource_manager: &'a ResourceManager,
+    mut mem_permits: Option<SemaphorePermit<'a>>,
 ) -> Result<Bytes, ActiveStorageError> {
-    // If we're given a size in the request data then use this to
-    // get an initial guess at the required memory resources.
-    let memory = request_data.size.unwrap_or(0);
-    let mut mem_permits = resource_manager.memory(memory).await?;
-
+    // Convert request data to byte range for S3 request
     let range = s3_client::get_range(request_data.offset, request_data.size);
+    // Acquire connection permit to be freed via drop when this function returns
     let _conn_permits = resource_manager.s3_connection().await?;
 
     client
@@ -231,16 +230,37 @@ async fn download_and_cache_s3_object<'a>(
     client: &s3_client::S3Client,
     request_data: &models::RequestData,
     resource_manager: &'a ResourceManager,
+    mut mem_permits: Option<SemaphorePermit<'a>>,
     chunk_cache: &ChunkCache,
 ) -> Result<Bytes, ActiveStorageError> {
     let key = format!("{},{:?}", client, request_data);
 
-    let cache_value = chunk_cache.get(&key).await?;
-    if let Some(bytes) = cache_value {
-        return Ok(bytes);
+    if let Some(metadata) = chunk_cache.get_metadata(&key).await {
+        // Update memory requested from resource manager to account for actual
+        // size of data if we were previously unable to guess the size from request
+        // data's size + offset parameters.
+        // FIXME: how to account for compressed data?
+        let mem_permits = &mut mem_permits;
+        match mem_permits {
+            None => {
+                *mem_permits = resource_manager.memory(metadata.size_bytes).await?;
+            }
+            Some(permits) => {
+                if permits.num_permits() == 0 {
+                    *mem_permits = resource_manager.memory(metadata.size_bytes).await?;
+                }
+            }
+        }
+        // We only want to get chunks for which the metadata check succeeded too,
+        // otherwise chunks which are missing metadata could bypass the resource
+        // manager and exhaust system resources
+        let cache_value = chunk_cache.get(&key).await?;
+        if let Some(bytes) = cache_value {
+            return Ok(bytes);
+        }
     }
 
-    let data = download_s3_object(client, request_data, resource_manager).await?;
+    let data = download_s3_object(client, request_data, resource_manager, mem_permits).await?;
 
     // Write data to cache
     chunk_cache.set(&key, data.clone()).await?;
@@ -270,6 +290,15 @@ async fn operation_handler<T: operation::Operation>(
     auth: Option<TypedHeader<Authorization<Basic>>>,
     ValidatedJson(request_data): ValidatedJson<models::RequestData>,
 ) -> Result<models::Response, ActiveStorageError> {
+    // NOTE(sd109): We acquire memory permits semaphore here so that
+    // they are owned by this top-level function and not freed until
+    // the permits are dropped when the this function returns.
+
+    // If we're given a size in the request data then use this to
+    // get an initial guess at the required memory resources.
+    let memory = request_data.size.unwrap_or(0);
+    let mut _mem_permits = state.resource_manager.memory(memory).await?;
+
     let credentials = if let Some(TypedHeader(auth)) = auth {
         s3_client::S3Credentials::access_key(auth.username(), auth.password())
     } else {
@@ -283,12 +312,12 @@ async fn operation_handler<T: operation::Operation>(
 
     let data = match (&state.args.use_chunk_cache, &state.chunk_cache) {
         (false, _) => {
-            download_s3_object(&s3_client, &request_data, &state.resource_manager)
+            download_s3_object(&s3_client, &request_data, &state.resource_manager, _mem_permits)
                 .instrument(tracing::Span::current())
                 .await?
         }
         (true, Some(cache)) => {
-            download_and_cache_s3_object(&s3_client, &request_data, &state.resource_manager, cache)
+            download_and_cache_s3_object(&s3_client, &request_data, &state.resource_manager, _mem_permits, cache)
                 .await?
         }
         (true, None) => panic!(

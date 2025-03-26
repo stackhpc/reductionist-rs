@@ -112,6 +112,16 @@ impl ChunkCache {
         }
     }
 
+    /// Retrieves chunk metadata from the cache for an unique key.
+    ///
+    /// # Arguments
+    ///
+    /// * `key`: Unique key identifying the chunk
+    pub async fn get_metadata(&self, key: &str) -> Option<Metadata> {
+        let state = self.cache.load_state().await;
+        state.metadata.get(key).cloned()
+    }
+
     /// Retrieves chunk `Bytes` from the cache for an unique key.
     ///
     /// # Arguments
@@ -128,12 +138,12 @@ impl ChunkCache {
 }
 
 /// Metadata stored against each cache chunk.
-#[derive(Debug, Serialize, Deserialize)]
-struct Metadata {
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Metadata {
     /// Seconds after unix epoch for cache item expiry.
-    expires: u64,
+    pub expires: u64,
     /// Cache value size.
-    size_bytes: usize,
+    pub size_bytes: usize,
 }
 
 impl Metadata {
