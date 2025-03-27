@@ -3,6 +3,7 @@
 use aws_sdk_s3::error::ProvideErrorMetadata;
 use aws_sdk_s3::error::SdkError;
 use aws_sdk_s3::operation::get_object::GetObjectError;
+use aws_sdk_s3::operation::head_object::HeadObjectError;
 use aws_smithy_types::byte_stream::error::Error as ByteStreamError;
 use axum::{
     extract::rejection::JsonRejection,
@@ -73,6 +74,14 @@ pub enum ActiveStorageError {
     /// Error while retrieving an object from S3
     #[error("error retrieving object from S3 storage")]
     S3GetObject(#[from] SdkError<GetObjectError>),
+
+    /// Error while retrieving object head from S3
+    #[error("error retrieving object metadata from S3 storage")]
+    S3HeadObject(#[from] SdkError<HeadObjectError>),
+
+    /// HTTP 403 from object store
+    #[error("error receiving object metadata from S3 storage")]
+    Forbidden,
 
     /// Error acquiring a semaphore
     #[error("error acquiring resources")]
@@ -225,7 +234,11 @@ impl From<ActiveStorageError> for ErrorResponse {
             | ActiveStorageError::ShapeInvalid(_) => Self::bad_request(&error),
 
             // Not found
-            ActiveStorageError::UnsupportedOperation { operation: _ } => Self::not_found(&error),
+            ActiveStorageError::UnsupportedOperation { operation: _ }
+            // If we receive a forbidden from object store, return a
+            // not found to client to avoid leaking information about
+            // bucket contents.
+            | ActiveStorageError::Forbidden => Self::not_found(&error),
 
             // Internal server error
             ActiveStorageError::FromBytes { type_name: _ }
@@ -274,6 +287,31 @@ impl From<ActiveStorageError> for ErrorResponse {
                     }
 
                     // The enum is marked as non-exhaustive
+                    _ => Self::internal_server_error(&error),
+                }
+            }
+
+            ActiveStorageError::S3HeadObject(sdk_error) => {
+                // Tailor the response based on the specific SdkError variant.
+                match &sdk_error {
+                    // These are generic SdkError variants.
+                    // Internal server error
+                    SdkError::ConstructionFailure(_)
+                    | SdkError::DispatchFailure(_)
+                    | SdkError::ResponseError(_)
+                    | SdkError::TimeoutError(_) => Self::internal_server_error(&error),
+
+                    // This is a more specific ServiceError variant,
+                    // with HeadObjectError as the inner error.
+                    SdkError::ServiceError(head_obj_error) => {
+                        let head_obj_error = head_obj_error.err();
+                        match head_obj_error {
+                            HeadObjectError::NotFound(_) => Self::bad_request(&error),
+                            // Enum is marked as non-exhaustive
+                            _ => Self::internal_server_error(&error),
+                        }
+                    }
+                    // Enum is marked as non-exhaustive
                     _ => Self::internal_server_error(&error),
                 }
             }

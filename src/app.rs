@@ -224,7 +224,7 @@ async fn download_s3_object<'a>(
 /// * `chunk_cache`: ChunkCache object
 #[tracing::instrument(
     level = "DEBUG",
-    skip(client, request_data, resource_manager, chunk_cache)
+    skip(client, request_data, resource_manager, mem_permits, chunk_cache)
 )]
 async fn download_and_cache_s3_object<'a>(
     client: &s3_client::S3Client,
@@ -233,9 +233,32 @@ async fn download_and_cache_s3_object<'a>(
     mut mem_permits: Option<SemaphorePermit<'a>>,
     chunk_cache: &ChunkCache,
 ) -> Result<Bytes, ActiveStorageError> {
-    let key = format!("{},{:?}", client, request_data);
+    // We chose a cache key such that any changes to request data
+    // which may feasibly indicate a change to the upstream object
+    // lead to a new cache key.
+    let key = format!(
+        "{}-{}-{}-{}-{:?}-{:?}",
+        request_data.source.as_str(),
+        request_data.bucket,
+        request_data.object,
+        request_data.dtype,
+        request_data.byte_order,
+        request_data.compression,
+    );
 
     if let Some(metadata) = chunk_cache.get_metadata(&key).await {
+        // To avoid having to include the S3 client ID as part of the cache key
+        // (which means we'd have a separate cache for each authorised user and
+        // waste storage space) we instead make a lightweight check against the
+        // object store to ensure the user is authorised, even if the object data
+        // is already in the local cache.
+        let authorised = client
+            .is_authorised(&request_data.bucket, &request_data.object)
+            .await?;
+        if !authorised {
+            return Err(ActiveStorageError::Forbidden);
+        }
+
         // Update memory requested from resource manager to account for actual
         // size of data if we were previously unable to guess the size from request
         // data's size + offset parameters.
@@ -254,7 +277,10 @@ async fn download_and_cache_s3_object<'a>(
         // We only want to get chunks for which the metadata check succeeded too,
         // otherwise chunks which are missing metadata could bypass the resource
         // manager and exhaust system resources
-        let cache_value = chunk_cache.get(&key).await?;
+        let cache_value = chunk_cache
+            .get(&key)
+            .instrument(tracing::Span::current())
+            .await?;
         if let Some(bytes) = cache_value {
             return Ok(bytes);
         }

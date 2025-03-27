@@ -7,8 +7,10 @@ use crate::error::ActiveStorageError;
 use crate::resource_manager::ResourceManager;
 
 use aws_credential_types::Credentials;
-use aws_sdk_s3::config::BehaviorVersion;
+use aws_sdk_s3::operation::head_object::HeadObjectError;
 use aws_sdk_s3::Client;
+use aws_sdk_s3::{config::BehaviorVersion, error::SdkError};
+use aws_smithy_runtime_api::http::Response;
 use aws_types::region::Region;
 use axum::body::Bytes;
 use hashbrown::HashMap;
@@ -142,6 +144,44 @@ impl S3Client {
         }
     }
 
+    /// Checks whether the client is authorised to download an
+    /// object from object storage.
+    ///
+    /// # Arguments
+    ///
+    /// * `bucket`: Name of the bucket
+    /// * `key`: Name of the object in the bucket
+    pub async fn is_authorised(
+        &self,
+        bucket: &str,
+        key: &str,
+    ) -> Result<bool, SdkError<HeadObjectError, Response>> {
+        let response = self
+            .client
+            .head_object()
+            .bucket(bucket)
+            .key(key)
+            .send()
+            .instrument(tracing::Span::current())
+            .await;
+
+        // Strategy here is to return true if client is authorised to download object,
+        // false if explicitly not authorised (HTTP 403) and pass any other errors or
+        // responses back to the caller.
+        match response {
+            Ok(_) => Ok(true),
+            Err(err) => match &err {
+                aws_smithy_runtime_api::client::result::SdkError::ServiceError(inner) => {
+                    match inner.raw().status().as_u16() {
+                        403 => Ok(false), // HTTP 403 == Forbidden
+                        _ => Err(err),
+                    }
+                }
+                _ => Err(err),
+            },
+        }
+    }
+
     /// Downloads an object from object storage and returns the data as Bytes
     ///
     /// # Arguments
@@ -152,7 +192,7 @@ impl S3Client {
     /// * `resource_manager`: ResourceManager object
     /// * `mem_permits`: Optional SemaphorePermit for any memory resources reserved
     pub async fn download_object<'a>(
-        self: &S3Client,
+        &self,
         bucket: &str,
         key: &str,
         range: Option<String>,
