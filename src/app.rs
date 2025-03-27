@@ -232,6 +232,7 @@ async fn download_and_cache_s3_object<'a>(
     resource_manager: &'a ResourceManager,
     mut mem_permits: Option<SemaphorePermit<'a>>,
     chunk_cache: &ChunkCache,
+    allow_cache_auth_bypass: bool,
 ) -> Result<Bytes, ActiveStorageError> {
     // We chose a cache key such that any changes to request data
     // which may feasibly indicate a change to the upstream object
@@ -247,16 +248,18 @@ async fn download_and_cache_s3_object<'a>(
     );
 
     if let Some(metadata) = chunk_cache.get_metadata(&key).await {
-        // To avoid having to include the S3 client ID as part of the cache key
-        // (which means we'd have a separate cache for each authorised user and
-        // waste storage space) we instead make a lightweight check against the
-        // object store to ensure the user is authorised, even if the object data
-        // is already in the local cache.
-        let authorised = client
-            .is_authorised(&request_data.bucket, &request_data.object)
-            .await?;
-        if !authorised {
-            return Err(ActiveStorageError::Forbidden);
+        if !allow_cache_auth_bypass {
+            // To avoid having to include the S3 client ID as part of the cache key
+            // (which means we'd have a separate cache for each authorised user and
+            // waste storage space) we instead make a lightweight check against the
+            // object store to ensure the user is authorised, even if the object data
+            // is already in the local cache.
+            let authorised = client
+                .is_authorised(&request_data.bucket, &request_data.object)
+                .await?;
+            if !authorised {
+                return Err(ActiveStorageError::Forbidden);
+            }
         }
 
         // Update memory requested from resource manager to account for actual
@@ -343,8 +346,14 @@ async fn operation_handler<T: operation::Operation>(
                 .await?
         }
         (true, Some(cache)) => {
-            download_and_cache_s3_object(&s3_client, &request_data, &state.resource_manager, _mem_permits, cache)
-                .await?
+            download_and_cache_s3_object(
+                &s3_client,
+                &request_data,
+                &state.resource_manager,
+                _mem_permits,
+                cache,
+                state.args.chunk_cache_bypass_auth
+            ).await?
         }
         (true, None) => panic!(
             "Chunk cache enabled but no chunk cache provided.\nThis is a bug. Please report it to the application developers."
