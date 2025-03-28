@@ -1,12 +1,16 @@
 //! A simplified S3 client that supports downloading objects.
 //! It attempts to hide the complexities of working with the AWS SDK for S3.
 
+use std::fmt::Display;
+
 use crate::error::ActiveStorageError;
 use crate::resource_manager::ResourceManager;
 
 use aws_credential_types::Credentials;
-use aws_sdk_s3::config::BehaviorVersion;
+use aws_sdk_s3::operation::head_object::HeadObjectError;
 use aws_sdk_s3::Client;
+use aws_sdk_s3::{config::BehaviorVersion, error::SdkError};
+use aws_smithy_runtime_api::http::Response;
 use aws_types::region::Region;
 use axum::body::Bytes;
 use hashbrown::HashMap;
@@ -92,6 +96,20 @@ impl S3ClientMap {
 pub struct S3Client {
     /// Underlying AWS SDK S3 client object.
     client: Client,
+    /// A unique identifier for the client
+    // TODO: Make this a hash of url + access key + secret key
+    // using https://github.com/RustCrypto/hashes?tab=readme-ov-file
+    // This will be more urgently required once an ageing mechanism
+    // is implemented for [crate::S3ClientMap].
+    id: String,
+}
+
+// Required so that client can be used as part of the lookup
+// key for a local chunk cache.
+impl Display for S3Client {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.id)
+    }
 }
 
 impl S3Client {
@@ -120,7 +138,48 @@ impl S3Client {
             .force_path_style(true)
             .build();
         let client = Client::from_conf(s3_config);
-        Self { client }
+        Self {
+            client,
+            id: uuid::Uuid::new_v4().to_string(),
+        }
+    }
+
+    /// Checks whether the client is authorised to download an
+    /// object from object storage.
+    ///
+    /// # Arguments
+    ///
+    /// * `bucket`: Name of the bucket
+    /// * `key`: Name of the object in the bucket
+    pub async fn is_authorised(
+        &self,
+        bucket: &str,
+        key: &str,
+    ) -> Result<bool, SdkError<HeadObjectError, Response>> {
+        let response = self
+            .client
+            .head_object()
+            .bucket(bucket)
+            .key(key)
+            .send()
+            .instrument(tracing::Span::current())
+            .await;
+
+        // Strategy here is to return true if client is authorised to download object,
+        // false if explicitly not authorised (HTTP 403) and pass any other errors or
+        // responses back to the caller.
+        match response {
+            Ok(_) => Ok(true),
+            Err(err) => match &err {
+                aws_smithy_runtime_api::client::result::SdkError::ServiceError(inner) => {
+                    match inner.raw().status().as_u16() {
+                        403 => Ok(false), // HTTP 403 == Forbidden
+                        _ => Err(err),
+                    }
+                }
+                _ => Err(err),
+            },
+        }
     }
 
     /// Downloads an object from object storage and returns the data as Bytes
@@ -133,7 +192,7 @@ impl S3Client {
     /// * `resource_manager`: ResourceManager object
     /// * `mem_permits`: Optional SemaphorePermit for any memory resources reserved
     pub async fn download_object<'a>(
-        self: &S3Client,
+        &self,
         bucket: &str,
         key: &str,
         range: Option<String>,
@@ -155,10 +214,21 @@ impl S3Client {
             .ok_or(ActiveStorageError::S3ContentLengthMissing)?
             .try_into()?;
 
+        // Update memory requested from resource manager to account for actual
+        // size of data if we were previously unable to guess the size from request
+        // data's size + offset parameters.
         // FIXME: how to account for compressed data?
-        if mem_permits.is_none() {
-            *mem_permits = resource_manager.memory(content_length).await?;
-        };
+        match mem_permits {
+            None => {
+                *mem_permits = resource_manager.memory(content_length).await?;
+            }
+            Some(permits) => {
+                if permits.num_permits() == 0 {
+                    *mem_permits = resource_manager.memory(content_length).await?;
+                }
+            }
+        }
+
         // The data returned by the S3 client does not have any alignment guarantees. In order to
         // reinterpret the data as an array of numbers with a higher alignment than 1, we need to
         // return the data in Bytes object in which the underlying data has a higher alignment.

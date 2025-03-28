@@ -47,6 +47,48 @@ pub struct CommandLineArgs {
     /// when use_rayon is false.
     #[arg(long, env = "REDUCTIONIST_THREAD_LIMIT")]
     pub thread_limit: Option<usize>,
+
+    /// Whether to enable caching of downloaded chunks.
+    /// Default is disabled.
+    #[arg(long, default_value_t = false, env = "REDUCTIONIST_USE_CHUNK_CACHE")]
+    pub use_chunk_cache: bool,
+    /// Path to the chunk cache store.
+    /// This is required when the chunk cache is enabled.
+    #[arg(long, env = "REDUCTIONIST_CHUNK_CACHE_PATH")]
+    pub chunk_cache_path: Option<String>,
+    /// Lifespan of cached chunks in seconds.
+    /// Default is 1 day.
+    #[arg(long, default_value_t = 86400, env = "REDUCTIONIST_CHUNK_CACHE_AGE")]
+    pub chunk_cache_age: u64,
+    /// Minimum interval in seconds between checking for expired chunks based on ttl.
+    /// Default is 1 hour.
+    #[arg(
+        long,
+        default_value_t = 3600,
+        env = "REDUCTIONIST_CHUNK_CACHE_PRUNE_INTERVAL"
+    )]
+    pub chunk_cache_prune_interval: u64,
+    /// Whether to apply an upper size limit to the cache.
+    /// Example values: "300GB", "1TB".
+    /// Default when unset is unlimited.
+    #[arg(long, env = "REDUCTIONIST_CHUNK_CACHE_SIZE_LIMIT")]
+    pub chunk_cache_size_limit: Option<String>,
+    /// Optional buffer size for queuing commits to the cache.
+    /// Defaults to the number of CPUs detected.
+    #[arg(long, env = "REDUCTIONIST_CHUNK_CACHE_QUEUE_SIZE")]
+    pub chunk_cache_buffer_size: Option<usize>,
+    /// Whether to bypass the upstream S3 auth checks to improve performance
+    /// when operating on cached chunks. Auth bypass should only be enabled
+    /// if the server is running on a private network with sufficient access
+    /// controls since it allows anyone with access to the server to operate
+    /// on any cached chunk, even if they do not have permission to fetch the
+    /// original object from the upstream S3 storage server.
+    #[arg(
+        long,
+        default_value_t = false,
+        env = "REDUCTIONIST_CHUNK_CACHE_BYPASS_AUTH"
+    )]
+    pub chunk_cache_bypass_auth: bool,
 }
 
 /// Returns parsed command line arguments.

@@ -23,6 +23,10 @@ test:
 run:
 	@docker run -it --detach --rm --net=host --name reductionist reductionist
 
+.PHONY: run-with-cache
+run-with-cache:
+	@docker run -it --detach --rm --net=host --name reductionist reductionist reductionist --use-chunk-cache --chunk-cache-path ./
+
 .PHONY: stop
 stop:
 	@docker stop reductionist

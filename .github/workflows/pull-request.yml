@@ -99,6 +99,13 @@ jobs:
             sleep 1;
           done
 
+      - name: Create artifacts directory
+        run: mkdir artifacts
+
+      #####
+      # Test without local disk cache
+      #####
+
       - name: Run active storage container
         run: make run
 
@@ -108,15 +115,44 @@ jobs:
             sleep 1;
           done
 
-      - name: Create artifacts directory
-        run: mkdir artifacts
-
       - name: Run compliance test suite
         run: pytest -s > artifacts/pytest.log
 
       - name: Get active storage logs
         run: docker logs reductionist > artifacts/reductionist.log
         if: always()
+
+      - name: Stop active storage container
+        run: make stop
+        if: always()
+
+      #####
+      # Test with local disk cache
+      #####
+
+      - name: Run active storage container with local disk cache
+        run: make run-with-cache
+
+      - name: Wait for active storage server to start
+        run: |
+          until curl -if http://localhost:8080/.well-known/reductionist-schema; do
+            sleep 1;
+          done
+
+      - name: Run compliance test suite
+        run: pytest -s > artifacts/pytest-with-cache.log
+
+      - name: Get active storage logs
+        run: docker logs reductionist > artifacts/reductionist-with-cache.log
+        if: always()
+
+      - name: Stop active storage container
+        run: make stop
+        if: always()
+
+      #####
+      # Clean up steps
+      #####
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -129,9 +165,6 @@ jobs:
         run: scripts/minio-stop
         if: always()
 
-      - name: Stop active storage container
-        run: make stop
-        if: always()
   deployment-test:
     runs-on: ubuntu-latest
     steps:
@@ -183,6 +216,7 @@ jobs:
           sudo ip a
           sudo ip r
         if: failure()
+
   dependency-review:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
