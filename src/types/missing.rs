@@ -14,6 +14,7 @@ use validator::ValidationError;
 
 use crate::error::ActiveStorageError;
 use crate::models::DType;
+use crate::operation::Element;
 use crate::types::dvalue::TryFromDValue;
 use crate::types::DValue;
 
@@ -30,11 +31,11 @@ use crate::types::DValue;
 pub enum Missing<T> {
     /// A single missing value
     MissingValue(T),
-    /// Multple missing values
+    /// Multiple missing values
     MissingValues(Vec<T>),
     /// Valid minimum
     ValidMin(T),
-    /// Valid maxiumum
+    /// Valid maximum
     ValidMax(T),
     /// Valid range
     ValidRange(T, T),
@@ -105,6 +106,19 @@ impl<T: TryFromDValue> TryFrom<&Missing<DValue>> for Missing<T> {
             ),
         };
         Ok(result)
+    }
+}
+
+impl<T: Element> Missing<T> {
+    /// Filter function to check whether the provided value is a 'missing' value
+    pub fn is_missing(&self, x: &T) -> bool {
+        match self {
+            Missing::MissingValue(value) => x == value,
+            Missing::MissingValues(values) => values.contains(x),
+            Missing::ValidMin(min) => x < min,
+            Missing::ValidMax(max) => x > max,
+            Missing::ValidRange(min, max) => x < min || x > max,
+        }
     }
 }
 
@@ -231,5 +245,47 @@ mod tests {
             DValue::from_f64(42.0).unwrap(),
         ))
         .unwrap();
+    }
+
+    #[test]
+    fn test_is_missing_value() {
+        let missing = Missing::MissingValue(1);
+        assert!(!missing.is_missing(&0));
+        assert!(missing.is_missing(&1));
+        assert!(!missing.is_missing(&2));
+    }
+
+    #[test]
+    fn test_is_missing_values() {
+        let missing = Missing::MissingValues(vec![1, 2]);
+        assert!(!missing.is_missing(&0));
+        assert!(missing.is_missing(&1));
+        assert!(missing.is_missing(&2));
+        assert!(!missing.is_missing(&3));
+    }
+
+    #[test]
+    fn test_is_missing_valid_min() {
+        let missing = Missing::ValidMin(1);
+        assert!(missing.is_missing(&0));
+        assert!(!missing.is_missing(&1));
+        assert!(!missing.is_missing(&2));
+    }
+
+    #[test]
+    fn test_is_missing_valid_max() {
+        let missing = Missing::ValidMax(1);
+        assert!(!missing.is_missing(&0));
+        assert!(!missing.is_missing(&1));
+        assert!(missing.is_missing(&2));
+    }
+
+    #[test]
+    fn test_is_missing_valid_range() {
+        let missing = Missing::ValidRange(1, 2);
+        assert!(missing.is_missing(&0));
+        assert!(!missing.is_missing(&1));
+        assert!(!missing.is_missing(&2));
+        assert!(missing.is_missing(&3));
     }
 }

@@ -6,12 +6,12 @@ import pathlib
 import s3fs
 import zlib
 
-NUM_ITEMS = 10
+NUM_ITEMS = 12
 OBJECT_PREFIX = "data"
 COMPRESSION_ALGS = [None, "gzip", "zlib"]
 FILTER_ALGS = [None, "shuffle"]
 
-#Use enum which also subclasses string type so that 
+# Use enum which also subclasses string type so that
 # auto-generated OpenAPI schema can determine allowed dtypes
 class AllowedDatatypes(str, Enum):
     """ Data types supported by active storage proxy """
@@ -31,7 +31,7 @@ S3_URL = 'http://localhost:9000'
 s3_fs = s3fs.S3FileSystem(key='minioadmin', secret='minioadmin', client_kwargs={'endpoint_url': S3_URL})
 bucket = pathlib.Path('sample-data')
 
-#Make sure s3 bucket exists
+# Make sure s3 bucket exists
 try:
     s3_fs.mkdir(bucket)
 except FileExistsError:

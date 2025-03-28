@@ -7,10 +7,10 @@ Reductionist is built on top of a number of popular open source components.
 
 A few properties make it relatively easy to build a conceptual mental model of how Reductionist works.
 
-* All operations share the same request processing pipeline.
-* The request processing pipeline for each request is a fairly linear sequence of steps.
-* There is no persistent state.
-* The only external service that is interacted with is an S3-compatible object store.
+- All operations share the same request processing pipeline.
+- The request processing pipeline for each request is a fairly linear sequence of steps.
+- There is no persistent state.
+- The only external service that is interacted with is an S3-compatible object store.
 
 The more challenging aspects of the system are the lower level details of asynchronous programming, memory management, the Rust type system and working with multi-dimensional arrays.
 
@@ -28,7 +28,6 @@ A diagram of this step for the sum operation is shown in Figure 2.
   ![Sum operation flow diagram](img/reductionist-operation.svg "Figure 2: Sum operation flow diagram")
   <figcaption>Figure 2: Sum operation flow diagram</figcaption>
 </figure>
-
 
 ## Axum web server
 
@@ -110,13 +109,11 @@ Each operation is implemented by a struct that implements the `NumOperation` tra
 For example, the sum operation is implemented by the `Sum` struct in `src/operations.rs`.
 The `Sum` struct's `execute_t` method does the following:
 
-* Zero copy conversion of the byte array to a multi-dimensional [ndarray::ArrayView](https://docs.rs/ndarray/latest/ndarray/type.ArrayView.html) object of the data type, shape and byte order specified in the request data
-* If a selection was specified in the request data, create a sliced `ndarray::ArrayView` onto the original array view
-* If missing data was specified in the request data:
-  * Create an iterator over the array view that filters out missing data, performs the sum operation and counts non-missing elements
-* Otherwise:
-  * Use the array view's native `sum` and `len` methods to take the sum and element count
-* Convert the sum to a byte array and return with the element count
+- Zero copy conversion of the byte array to a multi-dimensional [ndarray::ArrayView](https://docs.rs/ndarray/latest/ndarray/type.ArrayView.html) object of the data type, shape and byte order specified in the request data
+- If a selection was specified in the request data, create a sliced `ndarray::ArrayView` onto the original array view
+- Checks whether the reduction should be performed over all or only a subset of the sliced data's axes
+- Performs a fold over each of the requested axes to calculate the required reduction while ignoring any specified missing data
+- Convert the sum to a byte array and return with the element count
 
 The procedure for other operations varies slightly but generally follows the same pattern.
 
@@ -136,9 +133,9 @@ Reductionist supports optional restriction of resource usage.
 This is implemented in `src/resource_manager.rs` using [Tokio Semaphores](https://docs.rs/tokio/latest/tokio/sync/struct.Semaphore.html).
 This allows Reductionist to limit the quantity of various resources used at any time:
 
-* S3 connections
-* memory used for numeric data (this is more of a rough guide than a perfect limit)
-* threads used for CPU-bound work
+- S3 connections
+- memory used for numeric data (this is more of a rough guide than a perfect limit)
+- threads used for CPU-bound work
 
 ## CPU-bound work
 
@@ -158,9 +155,9 @@ The second approach may leave the server more responsive if more CPU-heavy opera
 Prometheus metrics are implemented in `src/metrics.rs` and are exposed by the Reductionist API under the `/metrics` path.
 These include:
 
-* incoming requests (counter)
-* outgoing response (counter)
-* response time (histogram)
+- incoming requests (counter)
+- outgoing response (counter)
+- response time (histogram)
 
 ## Tracing and profiling
 
