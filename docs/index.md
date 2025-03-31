@@ -19,6 +19,7 @@ Reductionist provides the following features:
 
 * HTTP(S) API with JSON request data
 * Access to data stored in S3-compatible storage
+* On disk caching of downloaded data to speed up repeat data requests
 * Basic numerical operations on multi-dimensional arrays (count, min, max, select, sum)
 * Perform calculations on a selection/slice of an array
 * Perform calculations allowing for missing data

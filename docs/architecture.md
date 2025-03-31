@@ -56,6 +56,15 @@ This is implemented using the `S3ClientMap` in `src/s3_client.rs` and benchmarke
 
 Downloaded storage chunk data is returned to the request handler as a [Bytes](https://docs.rs/bytes/latest/bytes/struct.Bytes.html) object, which is a wrapper around a `u8` (byte) array.
 
+## S3 object caching
+
+A cache can be optionally enabled to store downloaded S3 objects to disk, this allows the Reductionist to repeat operations on already downloaded data objects utilising faster disk I/O over network I/O.
+Authenticaiton is passed through to the S3 object store and access to cached data by users other than the original requestor is allowed if S3 authentication permits. Authentication can be optionally disabled for further cache speedup in trusted environments.
+
+A [Tokio MPSC channel](https://docs.rs/tokio/latest/tokio/sync/mpsc/index.html) bridges write access between the requests of the asynchronous [Axum](https://docs.rs/axum) web framework and synchronous writes to the disk cache; this allows requests to the Reductionist to continue unblocked along their operation pipeline whilst being queued for cache storage.
+
+The disk cache can be managed overall by size and by time to live (TTL) on individual data objects with automatic pruning removing expired objects. Cache state is maintained on disk allowing the cache to be reused across restarts of the Reductionist.
+
 ## Filters and compression
 
 When a variable in a netCDF, HDF5 or Zarr dataset is created, it may be compressed to reduce storage requirements.
