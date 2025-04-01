@@ -193,12 +193,63 @@ Note, this is the default.
 Create a `certs` directory under the home directory of the non-privileged deployment user, this will be done automatically and the following files will be added if Step is deployed.
 If using third party certificates the following files must be added manually using the file names shown:
 
-| Filename    | Description |
+| Filename | Description |
 | -------- | ------- |
 | certs/key.pem  | Private key file |
 | certs/cert.pem | Certificate file including any intermediates |
 
 Certificates can be added post Reductionist deployment but the Reductionist's container will need to be restarted afterwards.
+
+## Reductionist Configuration
+
+In addition to the `certs` configuration above the file `deployment/group_vars/all` covers the following configuration.
+
+| Ansible Parameter | Description |
+| - | - |
+| reductionist_build_image | Whether to locally build the Reductionist container |
+| reductionist_src_url | Source URL for the Reductionist repository |
+| reductionist_src_version | Repository branch to use for local builds |
+| reductionist_repo_location | Where to clone the Reductionist repository |
+| reductionist_clone_repo | By default the repository cloning overwrites local changes, this disables |
+| reductionist_name | Name for Reductionist container |
+| reductionist_image | Container URL if downloading and not building |
+| reductionist_tag | Container tag |
+| reductionist_networks | List of container networks |
+| reductionist_env | Configures the Reductionist environment, see table of environment variables below |
+| reductionist_remote_certs_path | Path to certificates on the host |
+| reductionist_container_certs_path | Path to certificates within the container |
+| reductionist_remote_cache_path | Path to cache on host filesystem |
+| reductionist_container_cache_path | Path to cache within the container |
+| reductionist_volumes | Volumes to map from host to container |
+| reductionist_host | Used when deploying HAProxy to test connectivity to backend Reductionist(s) |
+| reductionist_cert_not_after | Certificate validity |
+
+The ``reductionist_env`` parameter allows configuration of the environment variables passed to the Reductionist at runtime:
+
+| Environment Variable | Description |
+| - | - |
+| REDUCTIONIST_HOST | The IP address on which to listen on, default "0.0.0.0" |
+| REDUCTIONIST_PORT | Port to listen on |
+| REDUCTIONIST_HTTPS | Whether to enable https connections |
+| REDUCTIONIST_CERT_FILE | Path to the certificate file used for https |
+| REDUCTIONIST_KEY_FILE | Path to the key file used for https |
+| REDUCTIONIST_SHUTDOWN_TIMEOUT | Maximum time in seconds to wait for operations to complete after receiving the 'ctrl+c' signal |
+| REDUCTIONIST_ENABLE_JAEGER | Whether to enable sending traces to Jaeger |
+| REDUCTIONIST_USE_RAYON | Whether to use Rayon for execution of CPU-bound tasks |
+| REDUCTIONIST_MEMORY_LIMIT | Memory limit in bytes |
+| REDUCTIONIST_S3_CONNECTION_LIMIT | S3 connection limit |
+| REDUCTIONIST_THREAD_LIMIT | Thread limit for CPU-bound tasks |
+| REDUCTIONIST_USE_CHUNK_CACHE | Whether to enable caching of downloaded data objects to disk |
+| REDUCTIONIST_CHUNK_CACHE_PATH | Absolute filesystem path used for the cache. Defaults to container cache path, see Ansible Parameters above |
+| REDUCTIONIST_CHUNK_CACHE_AGE | Time in seconds a chunk is kept in the cache |
+| REDUCTIONIST_CHUNK_CACHE_PRUNE_INTERVAL | Time in seconds between periodic pruning of the cache |
+| REDUCTIONIST_CHUNK_CACHE_SIZE_LIMIT | Maximum cache size, i.e. "100GB" |
+| REDUCTIONIST_CHUNK_CACHE_QUEUE_SIZE | Tokio MPSC buffer size used to queue downloaded objects between the asynchronous web engine and the synchronous cache |
+| REDUCTIONIST_CHUNK_CACHE_BYPASS_AUTH | Allow bypassing of S3 authentication when accessing cached data |
+
+
+Note, after changing any of the above parameters the Reductionist must be deployed, or redeployed, using the ansible playbook for the change to take effect.
+The idempotent nature of ansible necessitates that if redeploying then a running Reductionist container must be removed first.
 
 ## Usage
 
