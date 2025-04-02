@@ -29,16 +29,16 @@ reductionist_env:
   REDUCTIONIST_CHUNK_CACHE_PATH: "{{ reductionist_container_cache_path }}"
   REDUCTIONIST_CHUNK_CACHE_AGE: "86400"
   REDUCTIONIST_CHUNK_CACHE_PRUNE_INTERVAL: "3600"
-  REDUCTIONIST_CHUNK_CACHE_SIZE_LIMIT: "10GB"
-  REDUCTIONIST_CHUNK_CACHE_QUEUE_SIZE: "32"
+  REDUCTIONIST_CHUNK_CACHE_SIZE_LIMIT: "7600GB"
+  REDUCTIONIST_CHUNK_CACHE_QUEUE_SIZE: "192"
   REDUCTIONIST_CHUNK_CACHE_KEY: "%url-%offset-%size-%auth"
   REDUCTIONIST_CHUNK_CACHE_BYPASS_AUTH: "true"
 # Path to certificates directory on remote host.
-reductionist_remote_certs_path: "{{ ansible_facts.env.HOME }}/certs"
+reductionist_remote_certs_path: "/mnt/localdisk/{{ ansible_user_id }}/certs"
 # Path to certificates directory in container.
 reductionist_container_certs_path: "/root/.config/reductionist/certs"
 # Path to cache directory on remote host.
-reductionist_remote_cache_path: "/tmp"
+reductionist_remote_cache_path: "/mnt/cache/{{ ansible_user_id }}/cache"
 # Path to cache directory in container.
 reductionist_container_cache_path: "/cache"
 # List of container volume mounts.
