@@ -22,11 +22,11 @@ struct ChunkCacheEntry {
 
 impl ChunkCacheEntry {
     /// Return a ChunkCacheEntry object
-    fn new(key: &str, value: Bytes) -> Self {
+    fn new(key: &str, value: &Bytes) -> Self {
         let key = key.to_owned();
         // Make sure we own the `Bytes` so we don't see unexpected, but not incorrect,
         // behaviour caused by the zero copy of `Bytes`. i.e. let us choose when to copy.
-        let value = Bytes::copy_from_slice(&value);
+        let value = Bytes::copy_from_slice(value);
         Self { key, value }
     }
 }
@@ -103,8 +103,8 @@ impl ChunkCache {
     ///
     /// * `key`: Unique key identifying the chunk
     /// * `value`: Chunk `Bytes` to be cached
-    pub async fn set(&self, key: &str, value: Bytes) -> Result<(), ActiveStorageError> {
-        match self.sender.send(ChunkCacheEntry::new(key, value)).await {
+    pub async fn set(&self, key: &str, value: &Bytes) -> Result<(), ActiveStorageError> {
+        match self.sender.send(ChunkCacheEntry::new(key, &value)).await {
             Ok(_) => Ok(()),
             Err(e) => Err(ActiveStorageError::ChunkCacheError {
                 error: format!("{}", e),

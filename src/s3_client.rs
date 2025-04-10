@@ -273,6 +273,26 @@ pub fn get_range(offset: Option<usize>, size: Option<usize>) -> Option<String> {
     }
 }
 
+/// Apply an optional byte range to a `Bytes` object
+/// to yield the same bytes as would be returned by a
+/// download request with HTTP Range header.
+///
+/// # Arguments
+///
+/// * `offset`: Optional offset of data in bytes
+/// * `size`: Optional size of data in bytes
+pub fn apply_range(bytes: Bytes, offset: Option<usize>, size: Option<usize>) -> Bytes {
+    match (offset, size) {
+        (offset, Some(size)) => {
+            let offset = offset.unwrap_or(0);
+            let end = offset + size;
+            bytes.slice(offset..end)
+        }
+        (Some(offset), None) => bytes.slice(offset..),
+        _ => bytes,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
