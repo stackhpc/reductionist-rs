@@ -182,32 +182,40 @@ async fn schema() -> &'static str {
 
 /// Download an object from S3
 ///
+/// Requests a byte range if `offset` or `size` is specified in the request.
+///
 /// # Arguments
 ///
 /// * `client`: S3 client object
-/// * `bucket`: Name of the bucket
-/// * `key`: Name of the object in the bucket
-/// * `range`: Optional byte range
+/// * `request_data`: RequestData object for the request
 /// * `resource_manager`: ResourceManager object
 /// * `mem_permits`: Memory permits for the request
-#[tracing::instrument(level = "DEBUG", skip(client, bucket, key, range, resource_manager))]
+#[tracing::instrument(level = "DEBUG", skip(client, request_data, resource_manager))]
 async fn download_s3_object<'a>(
     client: &s3_client::S3Client,
-    bucket: &str,
-    key: &str,
-    range: Option<String>,
+    request_data: &models::RequestData,
     resource_manager: &'a ResourceManager,
     mut mem_permits: Option<SemaphorePermit<'a>>,
 ) -> Result<Bytes, ActiveStorageError> {
+    // Convert request data to byte range for S3 request
+    let range = s3_client::get_range(request_data.offset, request_data.size);
     // Acquire connection permit to be freed via drop when this function returns
     let _conn_permits = resource_manager.s3_connection().await?;
 
     client
-        .download_object(bucket, key, range, resource_manager, &mut mem_permits)
+        .download_object(
+            &request_data.bucket,
+            &request_data.object,
+            range,
+            resource_manager,
+            &mut mem_permits,
+        )
         .await
 }
 
 /// Download and cache an object from S3
+///
+/// Requests a byte range if `offset` or `size` is specified in the request.
 ///
 /// # Arguments
 ///
@@ -232,12 +240,14 @@ async fn download_and_cache_s3_object<'a>(
     // which may feasibly indicate a change to the upstream object
     // lead to a new cache key.
     let key = format!(
-        "{}-{}-{}-{}-{:?}-{:?}",
+        "{}-{}-{}-{}-{:?}-{:?}-{:?}-{:?}",
         request_data.source.as_str(),
         request_data.bucket,
         request_data.object,
         request_data.dtype,
         request_data.byte_order,
+        request_data.offset,
+        request_data.size,
         request_data.compression,
     );
 
@@ -279,23 +289,11 @@ async fn download_and_cache_s3_object<'a>(
             .instrument(tracing::Span::current())
             .await?;
         if let Some(bytes) = cache_value {
-            return Ok(s3_client::apply_range(
-                bytes,
-                request_data.offset,
-                request_data.size,
-            ));
+            return Ok(bytes);
         }
     }
 
-    let data = download_s3_object(
-        client,
-        &request_data.bucket,
-        &request_data.object,
-        None,
-        resource_manager,
-        mem_permits,
-    )
-    .await?;
+    let data = download_s3_object(client, request_data, resource_manager, mem_permits).await?;
 
     // Write data to cache
     chunk_cache.set(&key, &data).await?;
@@ -303,11 +301,7 @@ async fn download_and_cache_s3_object<'a>(
     // Increment the prometheus metric for cache misses
     LOCAL_CACHE_MISSES.with_label_values(&["disk"]).inc();
 
-    Ok(s3_client::apply_range(
-        data,
-        request_data.offset,
-        request_data.size,
-    ))
+    Ok(data)
 }
 
 /// Handler for Active Storage operations
@@ -351,9 +345,7 @@ async fn operation_handler<T: operation::Operation>(
 
     let data = match (&state.args.use_chunk_cache, &state.chunk_cache) {
         (false, _) => {
-            // Convert request data offset and size to byte range for S3 request
-            let range = s3_client::get_range(request_data.offset, request_data.size);
-            download_s3_object(&s3_client, &request_data.bucket, &request_data.object, range, &state.resource_manager, _mem_permits)
+            download_s3_object(&s3_client, &request_data, &state.resource_manager, _mem_permits)
                 .instrument(tracing::Span::current())
                 .await?
         }
@@ -405,7 +397,10 @@ fn operation<T: operation::Operation>(
         assert_eq!(ptr, data.as_ptr());
     }
     // Convert to a mutable vector to allow in-place byte order conversion.
+    let ptr = data.as_ptr();
     let vec: Vec<u8> = data.into();
+    // Assert that we're using zero-copy.
+    assert_eq!(ptr, vec.as_ptr());
     debug_span!("operation").in_scope(|| T::execute(&request_data, vec))
 }
 

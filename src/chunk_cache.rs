@@ -104,7 +104,7 @@ impl ChunkCache {
     /// * `key`: Unique key identifying the chunk
     /// * `value`: Chunk `Bytes` to be cached
     pub async fn set(&self, key: &str, value: &Bytes) -> Result<(), ActiveStorageError> {
-        match self.sender.send(ChunkCacheEntry::new(key, &value)).await {
+        match self.sender.send(ChunkCacheEntry::new(key, value)).await {
             Ok(_) => Ok(()),
             Err(e) => Err(ActiveStorageError::ChunkCacheError {
                 error: format!("{}", e),
