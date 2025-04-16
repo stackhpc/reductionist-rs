@@ -247,7 +247,6 @@ async fn download_and_cache_s3_object<'a>(
         request_data.offset,
         request_data.size,
     );
-    let key = format!("{:?}", md5::compute(key));
 
     if let Some(metadata) = chunk_cache.get_metadata(&key).await {
         if !allow_cache_auth_bypass {

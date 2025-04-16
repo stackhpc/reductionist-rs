@@ -118,8 +118,7 @@ impl ChunkCache {
     ///
     /// * `key`: Unique key identifying the chunk
     pub async fn get_metadata(&self, key: &str) -> Option<Metadata> {
-        let state = self.cache.load_state().await;
-        state.metadata.get(key).cloned()
+        self.cache.get_metadata(key).await
     }
 
     /// Retrieves chunk `Bytes` from the cache for an unique key.
@@ -320,6 +319,26 @@ impl SimpleDiskCache {
         }
     }
 
+    /// Retrieves chunk metadata from the cache for an unique key.
+    /// The metadata simply needs to exist on disk to be returned.
+    /// This function does not modify the state of the cache and is thread safe.
+    ///
+    /// # Arguments
+    ///
+    /// * `key`: Unique key identifying the chunk
+    async fn get_metadata(&self, key: &str) -> Option<Metadata> {
+        match fs::read_to_string(
+            self.dir
+                .join(&self.name)
+                .join(self.filename_for_key(key).await + ".meta"),
+        )
+        .await
+        {
+            Ok(content) => Some(serde_json::from_str(content.as_str()).unwrap()),
+            _ => None,
+        }
+    }
+
     /// Stores chunk `Bytes` in the cache against an unique key.
     /// The cache is checked and if necessary pruned before storing the chunk.
     /// Where a maximum size limit has been set the check will take into account the size
@@ -334,18 +353,24 @@ impl SimpleDiskCache {
         let size = value.len();
         // Run the prune before storing to ensure we have sufficient space
         self.prune(/* headroom */ size).await?;
-        // Write the cache value and then update the metadata
-        let path = self
-            .dir
-            .join(&self.name)
-            .join(self.filename_for_key(key).await);
-        if let Err(e) = fs::write(path, value).await {
+        // Write the cache value to a file
+        let path = self.dir.join(&self.name);
+        if let Err(e) = fs::write(path.join(self.filename_for_key(key).await), value).await {
             return Err(format!("{:?}", e));
         }
+        // Write the metadata to a separate file
+        let metadata = Metadata::new(size, self.ttl_seconds);
+        if let Err(e) = fs::write(
+            path.join(self.filename_for_key(key).await + ".meta"),
+            serde_json::to_string(&metadata).unwrap(),
+        )
+        .await
+        {
+            return Err(format!("{:?}", e));
+        }
+        // Update the global state
         let mut state = self.load_state().await;
-        state
-            .metadata
-            .insert(key.to_owned(), Metadata::new(size, self.ttl_seconds));
+        state.metadata.insert(key.to_owned(), metadata);
         state.current_size_bytes += size;
         self.save_state(state).await;
         Ok(())
@@ -359,11 +384,16 @@ impl SimpleDiskCache {
     async fn remove(&self, key: &str) {
         let mut state = self.load_state().await;
         if let Some(data) = state.metadata.remove(key) {
-            let path = self
-                .dir
-                .join(&self.name)
-                .join(self.filename_for_key(key).await);
-            fs::remove_file(path).await.unwrap();
+            let path = self.dir.join(&self.name);
+            // Remove the chunk file
+            fs::remove_file(path.join(self.filename_for_key(key).await))
+                .await
+                .unwrap();
+            // Remove the metadata file
+            fs::remove_file(path.join(self.filename_for_key(key).await + ".meta"))
+                .await
+                .unwrap();
+            // Update the global state
             state.current_size_bytes -= data.size_bytes;
             self.save_state(state).await;
         }
@@ -491,6 +521,14 @@ mod tests {
         assert_eq!(metadata.len(), 1);
         assert_eq!(metadata.get(key_1).unwrap().size_bytes, value_1.len());
         assert_eq!(cache_item_1.unwrap(), Some(value_1));
+        assert_eq!(
+            cache.get_metadata(key_1).await.unwrap().expires,
+            metadata.get(key_1).unwrap().expires
+        );
+        assert_eq!(
+            cache.get_metadata(key_1).await.unwrap().size_bytes,
+            metadata.get(key_1).unwrap().size_bytes
+        );
 
         // Act
         let key_2 = "item-2";
@@ -503,6 +541,14 @@ mod tests {
         assert_eq!(metadata.len(), 2);
         assert_eq!(metadata.get(key_2).unwrap().size_bytes, value_2.len());
         assert_eq!(cache_item_2.unwrap(), Some(value_2));
+        assert_eq!(
+            cache.get_metadata(key_2).await.unwrap().expires,
+            metadata.get(key_2).unwrap().expires
+        );
+        assert_eq!(
+            cache.get_metadata(key_2).await.unwrap().size_bytes,
+            metadata.get(key_2).unwrap().size_bytes
+        );
 
         // Act
         cache.remove(key_1).await;
@@ -514,6 +560,7 @@ mod tests {
         assert!(!metadata.contains_key(key_1));
         assert!(metadata.contains_key(key_2));
         assert_eq!(cache_item_1.unwrap(), None);
+        assert!(cache.get_metadata(key_1).await.is_none());
     }
 
     #[tokio::test]
