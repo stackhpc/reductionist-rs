@@ -236,20 +236,18 @@ async fn download_and_cache_s3_object<'a>(
     chunk_cache: &ChunkCache,
     allow_cache_auth_bypass: bool,
 ) -> Result<Bytes, ActiveStorageError> {
-    // We chose a cache key such that any changes to request data
+    // We choose a cache key such that any changes to request data
     // which may feasibly indicate a change to the upstream object
     // lead to a new cache key.
     let key = format!(
-        "{}-{}-{}-{}-{:?}-{:?}-{:?}-{:?}",
+        "{}-{}-{}-{:?}-{:?}",
         request_data.source.as_str(),
         request_data.bucket,
         request_data.object,
-        request_data.dtype,
-        request_data.byte_order,
         request_data.offset,
         request_data.size,
-        request_data.compression,
     );
+    let key = format!("{:?}", md5::compute(key));
 
     if let Some(metadata) = chunk_cache.get_metadata(&key).await {
         if !allow_cache_auth_bypass {
