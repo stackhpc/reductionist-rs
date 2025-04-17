@@ -224,6 +224,8 @@ async fn download_s3_object<'a>(
 /// * `resource_manager`: ResourceManager object
 /// * `mem_permits`: Memory permits for the request
 /// * `chunk_cache`: ChunkCache object
+/// * `chunk_cache_key`: Key template used for naming cache file entries
+/// * `allow_cache_auth_bypass`: Whether to allow bypassing S3 auth checks
 #[tracing::instrument(
     level = "DEBUG",
     skip(client, request_data, resource_manager, mem_permits, chunk_cache)
@@ -234,19 +236,26 @@ async fn download_and_cache_s3_object<'a>(
     resource_manager: &'a ResourceManager,
     mut mem_permits: Option<SemaphorePermit<'a>>,
     chunk_cache: &ChunkCache,
+    chunk_cache_key: &str,
     allow_cache_auth_bypass: bool,
 ) -> Result<Bytes, ActiveStorageError> {
-    // We choose a cache key such that any changes to request data
-    // which may feasibly indicate a change to the upstream object
-    // lead to a new cache key.
-    let key = format!(
-        "{}-{}-{}-{:?}-{:?}",
-        request_data.source.as_str(),
-        request_data.bucket,
-        request_data.object,
-        request_data.offset,
-        request_data.size,
-    );
+    // The default chunk key is "%source-%bucket-%object-%offset-%size"
+    // which is using the same parameters provided to an S3 object download.
+    // It assumes the data of the underlying object store remains unchanged.
+    let key = chunk_cache_key.to_string();
+    let key = key
+        .replace("%source", request_data.source.as_str())
+        .replace("%bucket", &request_data.bucket)
+        .replace("%object", &request_data.object)
+        .replace("%offset", &format!("{:?}", request_data.offset))
+        .replace("%size", &format!("{:?}", request_data.size))
+        .replace("%dtype", &format!("{}", request_data.dtype))
+        .replace("%byte_order", &format!("{:?}", request_data.byte_order))
+        .replace("%compression", &format!("{:?}", request_data.compression))
+        .replace("%auth", &format!("{}", client));
+    if key.find('%').is_some() {
+        panic!("Invalid cache key: {}", key);
+    }
 
     if let Some(metadata) = chunk_cache.get_metadata(&key).await {
         if !allow_cache_auth_bypass {
@@ -353,6 +362,7 @@ async fn operation_handler<T: operation::Operation>(
                 &state.resource_manager,
                 _mem_permits,
                 cache,
+                state.args.chunk_cache_key.as_str(),
                 state.args.chunk_cache_bypass_auth
             ).await?
         }

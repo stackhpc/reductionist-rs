@@ -77,6 +77,13 @@ pub struct CommandLineArgs {
     /// Defaults to the number of CPUs detected.
     #[arg(long, env = "REDUCTIONIST_CHUNK_CACHE_QUEUE_SIZE")]
     pub chunk_cache_buffer_size: Option<usize>,
+    /// Override the default key used for chunk storage.
+    #[arg(
+        long,
+        default_value = "%source-%bucket-%object-%offset-%size",
+        env = "REDUCTIONIST_CHUNK_CACHE_KEY"
+    )]
+    pub chunk_cache_key: String,
     /// Whether to bypass the upstream S3 auth checks to improve performance
     /// when operating on cached chunks. Auth bypass should only be enabled
     /// if the server is running on a private network with sufficient access

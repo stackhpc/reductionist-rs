@@ -97,7 +97,7 @@ impl ChunkCache {
         Self { cache, sender }
     }
 
-    /// Stores chunk `Bytes` in the cache against an unique key.
+    /// Stores chunk `Bytes` in the cache against a unique key.
     ///
     /// # Arguments
     ///
@@ -112,7 +112,7 @@ impl ChunkCache {
         }
     }
 
-    /// Retrieves chunk metadata from the cache for an unique key.
+    /// Retrieves chunk metadata from the cache for a unique key.
     ///
     /// # Arguments
     ///
@@ -121,7 +121,7 @@ impl ChunkCache {
         self.cache.get_metadata(key).await
     }
 
-    /// Retrieves chunk `Bytes` from the cache for an unique key.
+    /// Retrieves chunk `Bytes` from the cache for a unique key.
     ///
     /// # Arguments
     ///
@@ -194,7 +194,7 @@ impl State {
     }
 }
 
-/// The SimpleDiskCache takes chunks of `Bytes` data, identified by an unique key,
+/// The SimpleDiskCache takes chunks of `Bytes` data, identified by a unique key,
 /// storing each chunk as a separate file on disk. Keys are stored in a hashmap
 /// serialised to a JSON state file on disk.
 /// Each chunk stored has a 'time to live' (TTL) stored as a number seconds from
@@ -293,7 +293,7 @@ impl SimpleDiskCache {
         format!("{:?}", md5::compute(key))
     }
 
-    /// Retrieves chunk `Bytes` from the cache for an unique key.
+    /// Retrieves chunk `Bytes` from the cache for a unique key.
     /// The chunk simply needs to exist on disk to be returned.
     /// For performance, metadata, including TTL, isn't checked and it's possible
     /// to retrieve an expired chunk within the time window between the chunk expiring
@@ -319,7 +319,7 @@ impl SimpleDiskCache {
         }
     }
 
-    /// Retrieves chunk metadata from the cache for an unique key.
+    /// Retrieves chunk metadata from the cache for a unique key.
     /// The metadata simply needs to exist on disk to be returned.
     /// This function does not modify the state of the cache and is thread safe.
     ///
@@ -339,7 +339,7 @@ impl SimpleDiskCache {
         }
     }
 
-    /// Stores chunk `Bytes` in the cache against an unique key.
+    /// Stores chunk `Bytes` in the cache against a unique key.
     /// The cache is checked and if necessary pruned before storing the chunk.
     /// Where a maximum size limit has been set the check will take into account the size
     /// of the chunk being stored and ensure sufficient storage space is available.
