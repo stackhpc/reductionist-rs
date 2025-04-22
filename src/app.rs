@@ -257,7 +257,7 @@ async fn download_and_cache_s3_object<'a>(
         panic!("Invalid cache key: {}", key);
     }
 
-    if let Some(metadata) = chunk_cache.get_metadata(&key).await {
+    if let Some(metadata) = chunk_cache.get_metadata(&key).await? {
         if !allow_cache_auth_bypass {
             // To avoid having to include the S3 client ID as part of the cache key
             // (which means we'd have a separate cache for each authorised user and
