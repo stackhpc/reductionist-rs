@@ -239,7 +239,7 @@ async fn download_and_cache_s3_object<'a>(
     chunk_cache_key: &str,
     allow_cache_auth_bypass: bool,
 ) -> Result<Bytes, ActiveStorageError> {
-    // The default chunk key is "%source-%bucket-%object-%offset-%size"
+    // The default chunk key is "%source-%bucket-%object-%offset-%size-%auth"
     // which is using the same parameters provided to an S3 object download.
     // It assumes the data of the underlying object store remains unchanged.
     let key = chunk_cache_key.to_string();

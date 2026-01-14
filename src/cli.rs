@@ -80,19 +80,15 @@ pub struct CommandLineArgs {
     /// Override the default key used for chunk storage.
     #[arg(
         long,
-        default_value = "%source-%bucket-%object-%offset-%size",
+        default_value = "%source-%bucket-%object-%offset-%size-%auth",
         env = "REDUCTIONIST_CHUNK_CACHE_KEY"
     )]
     pub chunk_cache_key: String,
     /// Whether to bypass the upstream S3 auth checks to improve performance
-    /// when operating on cached chunks. Auth bypass should only be enabled
-    /// if the server is running on a private network with sufficient access
-    /// controls since it allows anyone with access to the server to operate
-    /// on any cached chunk, even if they do not have permission to fetch the
-    /// original object from the upstream S3 storage server.
+    /// when operating on cached chunks.
     #[arg(
         long,
-        default_value_t = false,
+        default_value_t = true,
         env = "REDUCTIONIST_CHUNK_CACHE_BYPASS_AUTH"
     )]
     pub chunk_cache_bypass_auth: bool,
