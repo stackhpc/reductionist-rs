@@ -239,22 +239,33 @@ impl SimpleDiskCache {
         let name = name.to_string();
         let dir = PathBuf::from(dir);
         let path = dir.join(&name);
+        // The parent of the cache directory must exist.
         if !dir.as_path().exists() {
             panic!("Cache parent dir {} must exist", dir.to_str().unwrap())
         } else if path.exists() {
+            // If the cache directory itself already exists we expect to find a valid state file within it.
             let file = path.join(SimpleDiskCache::STATE_FILE);
             if file.exists() {
-                let state = std_fs::read_to_string(file)
-                    .map_err(|e| log::error!("Failed to read cache state file: {}", e))
-                    .unwrap();
-                let _: State = serde_json::from_str(state.as_str())
-                    .map_err(|e| log::error!("Failed to deserialise cache state: {}", e))
-                    .unwrap();
+                match std_fs::read_to_string(file) {
+                    Ok(state) => {
+                        if let Err(e) = serde_json::from_str::<State>(state.as_str()) {
+                            panic!("Failed to deserialise cache state: {}", e);
+                        }
+                    }
+                    Err(e) => panic!("Failed to read cache state file: {}", e),
+                };
             } else {
-                panic!("Cache directory {} already exists", dir.to_str().unwrap())
+                panic!(
+                    "Cache directory {} already exists without cache state file",
+                    dir.to_str().unwrap()
+                )
             }
-        } else {
-            std::fs::create_dir(&path).unwrap();
+        } else if let Err(e) = std::fs::create_dir(&path) {
+            panic!(
+                "Failed to create cache directory {}: {}",
+                path.to_str().unwrap(),
+                e
+            );
         }
         SimpleDiskCache {
             name,
