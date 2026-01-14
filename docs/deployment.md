@@ -245,11 +245,72 @@ The ``reductionist_env`` parameter allows configuration of the environment varia
 | REDUCTIONIST_CHUNK_CACHE_PRUNE_INTERVAL | Time in seconds between periodic pruning of the cache |
 | REDUCTIONIST_CHUNK_CACHE_SIZE_LIMIT | Maximum cache size, i.e. "100GB" |
 | REDUCTIONIST_CHUNK_CACHE_QUEUE_SIZE | Tokio MPSC buffer size used to queue downloaded objects between the asynchronous web engine and the synchronous cache |
+| REDUCTIONIST_CHUNK_CACHE_KEY | Overrides the key format used to uniquely identify a cached chunk, see section below |
 | REDUCTIONIST_CHUNK_CACHE_BYPASS_AUTH | Allow bypassing of S3 authentication when accessing cached data |
 
 
 Note, after changing any of the above parameters the Reductionist must be deployed, or redeployed, using the ansible playbook for the change to take effect.
 The idempotent nature of ansible necessitates that if redeploying then a running Reductionist container must be removed first.
+
+### Chunk Cache Key
+
+This defines the name of the key which should uniquely identify a downloaded chunk.
+The default value is "%source-%bucket-%object-%offset-%size-%auth". All the parameters used here would be used in the API call to download an S3 object and so should uniquely identify an object.
+The assumption is made that the object on the S3 data store doesn't change, i.e. replaced using different compression.
+
+* Use insufficient parameters to uniquely identify a chunk and a request may be served with a cached chunk containing the wrong data
+* Use too many parameters, unnecessary ones, and we're missing out on cache hits
+
+#### Chunk Cache Key Tokens Available
+
+| Token | Description |
+| - | - |
+| `%source` | Source URL for S3 data store |
+| `%bucket` | S3 bucket |
+| `%object` | Object key |
+| `%offset` | Offset of data byte range |
+| `%size` | Size of data byte range |
+| `%dtype` | Data type |
+| `%byte_order` | Byte order of data | 
+| `%compression` | Type of compression used on data |
+| `%auth` | Client credentials |
+
+Where request parameters are optional, so may not be present in all requests, their tokens will always be usable with null values constructing the cache key.
+
+#### Authenticating Cached Chunks
+
+The original request to download data from S3 will be authenticated.
+Data cached from this request is likely subject to authentication also, to ensure a different Reductionist client can't read private data via the cache, there are three approaches that can be taken with authentication.
+
+##### No Authentication
+
+Validating that a client is authorised to access a cached chunk will always add an overhead, however small, and it should be noted that the Reductionist doesn't maintain an internal state of authenticated clients vs chunks.
+Performance will always be best when authentication is disabled which is achieved with the following configuration:
+
+| Environment Variable | Description | |
+| - | - | - |
+| REDUCTIONIST_CHUNK_CACHE_KEY | "%source-%bucket-%object-%offset-%size"` | Namely the key should not contain `%auth` |
+| REDUCTIONIST_CHUNK_CACHE_BYPASS_AUTH | true | Disable S3 authentication check prior to retrieving cached chunk |
+
+##### Client can only retrieve chunks that they cached
+
+If authentication is required then the fastest option is to store cached chunks per client, with this approch two clients requesting the same chunk will each cache their own chunks independently.
+
+| Environment Variable | Description | |
+| - | - | - |
+| REDUCTIONIST_CHUNK_CACHE_KEY | "%source-%bucket-%object-%offset-%size-%auth"` | Namely the key should contain `%auth` |
+| REDUCTIONIST_CHUNK_CACHE_BYPASS_AUTH | true | Disable S3 authentication check prior to retrieving cached chunk |
+
+The key name, once constructed from parameters, is [MD5](https://en.wikipedia.org/wiki/MD5) encoded so credentials aren't exposed via the chunk cache filesystem.
+
+##### Clients can retrieve any cached chunks to which S3 grants access
+
+If cached chunks are to be shared between clients then the Reductionist can perform a S3 authentication check prior to retrieving the cached chunk. There is an API call to the S3 object store associated with this so server and network latency will factor in, this approach should be benchmarked against the other authentication method documented above to see which best fits.
+
+| Environment Variable | Description | |
+| - | - | - |
+| REDUCTIONIST_CHUNK_CACHE_KEY | "%source-%bucket-%object-%offset-%size"` | Namely the key should not contain `%auth` |
+| REDUCTIONIST_CHUNK_CACHE_BYPASS_AUTH | true | Enable S3 authentication check prior to retrieving cached chunk |
 
 ## Usage
 

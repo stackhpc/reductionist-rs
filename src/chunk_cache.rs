@@ -22,11 +22,11 @@ struct ChunkCacheEntry {
 
 impl ChunkCacheEntry {
     /// Return a ChunkCacheEntry object
-    fn new(key: &str, value: Bytes) -> Self {
+    fn new(key: &str, value: &Bytes) -> Self {
         let key = key.to_owned();
         // Make sure we own the `Bytes` so we don't see unexpected, but not incorrect,
         // behaviour caused by the zero copy of `Bytes`. i.e. let us choose when to copy.
-        let value = Bytes::copy_from_slice(&value);
+        let value = Bytes::copy_from_slice(value);
         Self { key, value }
     }
 }
@@ -97,13 +97,13 @@ impl ChunkCache {
         Self { cache, sender }
     }
 
-    /// Stores chunk `Bytes` in the cache against an unique key.
+    /// Stores chunk `Bytes` in the cache against a unique key.
     ///
     /// # Arguments
     ///
     /// * `key`: Unique key identifying the chunk
     /// * `value`: Chunk `Bytes` to be cached
-    pub async fn set(&self, key: &str, value: Bytes) -> Result<(), ActiveStorageError> {
+    pub async fn set(&self, key: &str, value: &Bytes) -> Result<(), ActiveStorageError> {
         match self.sender.send(ChunkCacheEntry::new(key, value)).await {
             Ok(_) => Ok(()),
             Err(e) => Err(ActiveStorageError::ChunkCacheError {
@@ -112,17 +112,21 @@ impl ChunkCache {
         }
     }
 
-    /// Retrieves chunk metadata from the cache for an unique key.
+    /// Retrieves chunk metadata from the cache for a unique key.
     ///
     /// # Arguments
     ///
     /// * `key`: Unique key identifying the chunk
-    pub async fn get_metadata(&self, key: &str) -> Option<Metadata> {
-        let state = self.cache.load_state().await;
-        state.metadata.get(key).cloned()
+    pub async fn get_metadata(&self, key: &str) -> Result<Option<Metadata>, ActiveStorageError> {
+        match self.cache.get_metadata(key).await {
+            Ok(value) => Ok(value),
+            Err(e) => Err(ActiveStorageError::ChunkCacheError {
+                error: format!("{:?}", e),
+            }),
+        }
     }
 
-    /// Retrieves chunk `Bytes` from the cache for an unique key.
+    /// Retrieves chunk `Bytes` from the cache for a unique key.
     ///
     /// # Arguments
     ///
@@ -152,7 +156,8 @@ impl Metadata {
         let expires = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             // Only panics if 'now' is before epoch
-            .expect("System time to be set correctly")
+            .map_err(|e| log::error!("System time error: {}", e))
+            .unwrap()
             .as_secs()
             + ttl;
         Metadata {
@@ -184,7 +189,8 @@ impl State {
         let next_prune = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             // Only panics if 'now' is before epoch
-            .expect("System time to be set correctly")
+            .map_err(|e| log::error!("System time error: {}", e))
+            .unwrap()
             .as_secs()
             + prune_interval_secs;
         State {
@@ -195,7 +201,7 @@ impl State {
     }
 }
 
-/// The SimpleDiskCache takes chunks of `Bytes` data, identified by an unique key,
+/// The SimpleDiskCache takes chunks of `Bytes` data, identified by a unique key,
 /// storing each chunk as a separate file on disk. Keys are stored in a hashmap
 /// serialised to a JSON state file on disk.
 /// Each chunk stored has a 'time to live' (TTL) stored as a number seconds from
@@ -233,19 +239,33 @@ impl SimpleDiskCache {
         let name = name.to_string();
         let dir = PathBuf::from(dir);
         let path = dir.join(&name);
+        // The parent of the cache directory must exist.
         if !dir.as_path().exists() {
             panic!("Cache parent dir {} must exist", dir.to_str().unwrap())
         } else if path.exists() {
+            // If the cache directory itself already exists we expect to find a valid state file within it.
             let file = path.join(SimpleDiskCache::STATE_FILE);
             if file.exists() {
-                let state = std_fs::read_to_string(file).expect("Failed to read cache state file");
-                let _: State = serde_json::from_str(state.as_str())
-                    .expect("Failed to deserialise cache state");
+                match std_fs::read_to_string(file) {
+                    Ok(state) => {
+                        if let Err(e) = serde_json::from_str::<State>(state.as_str()) {
+                            panic!("Failed to deserialise cache state: {}", e);
+                        }
+                    }
+                    Err(e) => panic!("Failed to read cache state file: {}", e),
+                };
             } else {
-                panic!("Cache directory {} already exists", dir.to_str().unwrap())
+                panic!(
+                    "Cache directory {} already exists without cache state file",
+                    dir.to_str().unwrap()
+                )
             }
-        } else {
-            std::fs::create_dir(&path).expect("Failed to create cache dir");
+        } else if let Err(e) = std::fs::create_dir(&path) {
+            panic!(
+                "Failed to create cache directory {}: {}",
+                path.to_str().unwrap(),
+                e
+            );
         }
         SimpleDiskCache {
             name,
@@ -262,7 +282,16 @@ impl SimpleDiskCache {
     async fn load_state(&self) -> State {
         let file = self.dir.join(&self.name).join(SimpleDiskCache::STATE_FILE);
         if file.exists() {
-            serde_json::from_str(fs::read_to_string(file).await.unwrap().as_str()).unwrap()
+            serde_json::from_str(
+                fs::read_to_string(file)
+                    .await
+                    .map_err(|e| log::error!("Failed to read cache state file: {}", e))
+                    .unwrap()
+                    .as_str(),
+            )
+            //            .expect("Failed to deserialise cache state")
+            .map_err(|e| log::error!("Failed to deserialise cache state: {}", e))
+            .unwrap()
         } else {
             State::new(self.prune_interval_seconds)
         }
@@ -277,6 +306,7 @@ impl SimpleDiskCache {
         let file = self.dir.join(&self.name).join(SimpleDiskCache::STATE_FILE);
         fs::write(file, serde_json::to_string(&data).unwrap())
             .await
+            .map_err(|e| log::error!("Failed to write cache state file: {}", e))
             .unwrap();
     }
 
@@ -294,7 +324,7 @@ impl SimpleDiskCache {
         format!("{:?}", md5::compute(key))
     }
 
-    /// Retrieves chunk `Bytes` from the cache for an unique key.
+    /// Retrieves chunk `Bytes` from the cache for a unique key.
     /// The chunk simply needs to exist on disk to be returned.
     /// For performance, metadata, including TTL, isn't checked and it's possible
     /// to retrieve an expired chunk within the time window between the chunk expiring
@@ -320,7 +350,30 @@ impl SimpleDiskCache {
         }
     }
 
-    /// Stores chunk `Bytes` in the cache against an unique key.
+    /// Retrieves chunk metadata from the cache for a unique key.
+    /// The metadata simply needs to exist on disk to be returned.
+    /// This function does not modify the state of the cache and is thread safe.
+    ///
+    /// # Arguments
+    ///
+    /// * `key`: Unique key identifying the chunk
+    async fn get_metadata(&self, key: &str) -> Result<Option<Metadata>, String> {
+        match fs::read_to_string(
+            self.dir
+                .join(&self.name)
+                .join(self.filename_for_key(key).await + ".meta"),
+        )
+        .await
+        {
+            Ok(content) => Ok(Some(serde_json::from_str(content.as_str()).unwrap())),
+            Err(err) => match err.kind() {
+                std::io::ErrorKind::NotFound => Ok(None),
+                _ => Err(format!("{}", err)),
+            },
+        }
+    }
+
+    /// Stores chunk `Bytes` in the cache against a unique key.
     /// The cache is checked and if necessary pruned before storing the chunk.
     /// Where a maximum size limit has been set the check will take into account the size
     /// of the chunk being stored and ensure sufficient storage space is available.
@@ -334,18 +387,24 @@ impl SimpleDiskCache {
         let size = value.len();
         // Run the prune before storing to ensure we have sufficient space
         self.prune(/* headroom */ size).await?;
-        // Write the cache value and then update the metadata
-        let path = self
-            .dir
-            .join(&self.name)
-            .join(self.filename_for_key(key).await);
-        if let Err(e) = fs::write(path, value).await {
+        // Write the cache value to a file
+        let path = self.dir.join(&self.name);
+        if let Err(e) = fs::write(path.join(self.filename_for_key(key).await), value).await {
             return Err(format!("{:?}", e));
         }
+        // Write the metadata to a separate file
+        let metadata = Metadata::new(size, self.ttl_seconds);
+        if let Err(e) = fs::write(
+            path.join(self.filename_for_key(key).await + ".meta"),
+            serde_json::to_string(&metadata).unwrap(),
+        )
+        .await
+        {
+            return Err(format!("{:?}", e));
+        }
+        // Update the global state
         let mut state = self.load_state().await;
-        state
-            .metadata
-            .insert(key.to_owned(), Metadata::new(size, self.ttl_seconds));
+        state.metadata.insert(key.to_owned(), metadata);
         state.current_size_bytes += size;
         self.save_state(state).await;
         Ok(())
@@ -359,11 +418,18 @@ impl SimpleDiskCache {
     async fn remove(&self, key: &str) {
         let mut state = self.load_state().await;
         if let Some(data) = state.metadata.remove(key) {
-            let path = self
-                .dir
-                .join(&self.name)
-                .join(self.filename_for_key(key).await);
-            fs::remove_file(path).await.unwrap();
+            let path = self.dir.join(&self.name);
+            // Remove the chunk file
+            fs::remove_file(path.join(self.filename_for_key(key).await))
+                .await
+                .map_err(|e| log::error!("Failed to remove chunk data: {}", e))
+                .unwrap();
+            // Remove the metadata file
+            fs::remove_file(path.join(self.filename_for_key(key).await + ".meta"))
+                .await
+                .map_err(|e| log::error!("Failed to remove chunk metadata: {}", e))
+                .unwrap();
+            // Update the global state
             state.current_size_bytes -= data.size_bytes;
             self.save_state(state).await;
         }
@@ -374,7 +440,8 @@ impl SimpleDiskCache {
         let state = self.load_state().await;
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .expect("System time to be set correctly")
+            .map_err(|e| log::error!("System time error: {}", e))
+            .unwrap()
             .as_secs();
         for (key, data) in state.metadata.iter() {
             if data.expires <= timestamp {
@@ -438,7 +505,8 @@ impl SimpleDiskCache {
         // We also prune at time intervals.
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .expect("System time to be set correctly")
+            .map_err(|e| log::error!("System time error: {}", e))
+            .unwrap()
             .as_secs();
         prune_expired |= state.next_prune <= timestamp;
         // Prune if either of the above thresholds were crossed.
@@ -491,6 +559,14 @@ mod tests {
         assert_eq!(metadata.len(), 1);
         assert_eq!(metadata.get(key_1).unwrap().size_bytes, value_1.len());
         assert_eq!(cache_item_1.unwrap(), Some(value_1));
+        assert_eq!(
+            cache.get_metadata(key_1).await.unwrap().unwrap().expires,
+            metadata.get(key_1).unwrap().expires
+        );
+        assert_eq!(
+            cache.get_metadata(key_1).await.unwrap().unwrap().size_bytes,
+            metadata.get(key_1).unwrap().size_bytes
+        );
 
         // Act
         let key_2 = "item-2";
@@ -503,6 +579,14 @@ mod tests {
         assert_eq!(metadata.len(), 2);
         assert_eq!(metadata.get(key_2).unwrap().size_bytes, value_2.len());
         assert_eq!(cache_item_2.unwrap(), Some(value_2));
+        assert_eq!(
+            cache.get_metadata(key_2).await.unwrap().unwrap().expires,
+            metadata.get(key_2).unwrap().expires
+        );
+        assert_eq!(
+            cache.get_metadata(key_2).await.unwrap().unwrap().size_bytes,
+            metadata.get(key_2).unwrap().size_bytes
+        );
 
         // Act
         cache.remove(key_1).await;
@@ -514,6 +598,7 @@ mod tests {
         assert!(!metadata.contains_key(key_1));
         assert!(metadata.contains_key(key_2));
         assert_eq!(cache_item_1.unwrap(), None);
+        assert!(cache.get_metadata(key_1).await.unwrap().is_none());
     }
 
     #[tokio::test]

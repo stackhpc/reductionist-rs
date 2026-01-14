@@ -48,7 +48,7 @@ jobs:
         run: make lint
 
       - name: Install ansible-lint
-        run: pip install ansible-lint==6.17.*
+        run: pip install ansible-lint
 
       - name: Install Ansible Galaxy requirements
         run: ansible-galaxy collection install -r deployment/requirements.yml

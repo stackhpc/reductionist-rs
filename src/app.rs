@@ -189,6 +189,7 @@ async fn schema() -> &'static str {
 /// * `client`: S3 client object
 /// * `request_data`: RequestData object for the request
 /// * `resource_manager`: ResourceManager object
+/// * `mem_permits`: Memory permits for the request
 #[tracing::instrument(level = "DEBUG", skip(client, request_data, resource_manager))]
 async fn download_s3_object<'a>(
     client: &s3_client::S3Client,
@@ -221,7 +222,10 @@ async fn download_s3_object<'a>(
 /// * `client`: S3 client object
 /// * `request_data`: RequestData object for the request
 /// * `resource_manager`: ResourceManager object
+/// * `mem_permits`: Memory permits for the request
 /// * `chunk_cache`: ChunkCache object
+/// * `chunk_cache_key`: Key template used for naming cache file entries
+/// * `allow_cache_auth_bypass`: Whether to allow bypassing S3 auth checks
 #[tracing::instrument(
     level = "DEBUG",
     skip(client, request_data, resource_manager, mem_permits, chunk_cache)
@@ -232,22 +236,28 @@ async fn download_and_cache_s3_object<'a>(
     resource_manager: &'a ResourceManager,
     mut mem_permits: Option<SemaphorePermit<'a>>,
     chunk_cache: &ChunkCache,
+    chunk_cache_key: &str,
     allow_cache_auth_bypass: bool,
 ) -> Result<Bytes, ActiveStorageError> {
-    // We chose a cache key such that any changes to request data
-    // which may feasibly indicate a change to the upstream object
-    // lead to a new cache key.
-    let key = format!(
-        "{}-{}-{}-{}-{:?}-{:?}",
-        request_data.source.as_str(),
-        request_data.bucket,
-        request_data.object,
-        request_data.dtype,
-        request_data.byte_order,
-        request_data.compression,
-    );
+    // The default chunk key is "%source-%bucket-%object-%offset-%size-%auth"
+    // which is using the same parameters provided to an S3 object download.
+    // It assumes the data of the underlying object store remains unchanged.
+    let key = chunk_cache_key.to_string();
+    let key = key
+        .replace("%source", request_data.source.as_str())
+        .replace("%bucket", &request_data.bucket)
+        .replace("%object", &request_data.object)
+        .replace("%offset", &format!("{:?}", request_data.offset))
+        .replace("%size", &format!("{:?}", request_data.size))
+        .replace("%dtype", &format!("{}", request_data.dtype))
+        .replace("%byte_order", &format!("{:?}", request_data.byte_order))
+        .replace("%compression", &format!("{:?}", request_data.compression))
+        .replace("%auth", &format!("{}", client));
+    if key.find('%').is_some() {
+        panic!("Invalid cache key: {}", key);
+    }
 
-    if let Some(metadata) = chunk_cache.get_metadata(&key).await {
+    if let Some(metadata) = chunk_cache.get_metadata(&key).await? {
         if !allow_cache_auth_bypass {
             // To avoid having to include the S3 client ID as part of the cache key
             // (which means we'd have a separate cache for each authorised user and
@@ -292,7 +302,7 @@ async fn download_and_cache_s3_object<'a>(
     let data = download_s3_object(client, request_data, resource_manager, mem_permits).await?;
 
     // Write data to cache
-    chunk_cache.set(&key, data.clone()).await?;
+    chunk_cache.set(&key, &data).await?;
 
     // Increment the prometheus metric for cache misses
     LOCAL_CACHE_MISSES.with_label_values(&["disk"]).inc();
@@ -352,6 +362,7 @@ async fn operation_handler<T: operation::Operation>(
                 &state.resource_manager,
                 _mem_permits,
                 cache,
+                state.args.chunk_cache_key.as_str(),
                 state.args.chunk_cache_bypass_auth
             ).await?
         }
