@@ -15,12 +15,14 @@ reductionist_name: "reductionist"
 # Container image name.
 reductionist_image: "ghcr.io/stackhpc/reductionist-rs"
 # Container tag.
-reductionist_tag: "0.11.0"
+reductionist_tag: "latest"
 # List of container networks.
 reductionist_networks:
   - host
 # Container environment.
 reductionist_env:
+  OTEL_EXPORTER_JAEGER_AGENT_HOST: "{{ hostvars[(groups['jaeger'] | default([]) + [inventory_hostname])[0]].ansible_facts.default_ipv4.address }}"
+  REDUCTIONIST_ENABLE_JAEGER: "{{ (groups['jaeger'] | default([]) | length > 0) | string | lower }}"
   REDUCTIONIST_HTTPS: "true"
   REDUCTIONIST_PORT: "8081"
   REDUCTIONIST_USE_CHUNK_CACHE: "true"
@@ -29,7 +31,8 @@ reductionist_env:
   REDUCTIONIST_CHUNK_CACHE_PRUNE_INTERVAL: "3600"
   REDUCTIONIST_CHUNK_CACHE_SIZE_LIMIT: "7600GB"
   REDUCTIONIST_CHUNK_CACHE_QUEUE_SIZE: "192"
-  REDUCTIONIST_CHUNK_CACHE_BYPASS_AUTH: "false"
+  REDUCTIONIST_CHUNK_CACHE_KEY: "%source-%bucket-%object-%offset-%size-%auth"
+  REDUCTIONIST_CHUNK_CACHE_BYPASS_AUTH: "true"
 # Path to certificates directory on remote host.
 reductionist_remote_certs_path: "/mnt/localdisk/{{ ansible_user_id }}/certs"
 # Path to certificates directory in container.
