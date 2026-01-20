@@ -33,17 +33,13 @@ use tower_http::trace::TraceLayer;
 use tracing::debug_span;
 use tracing::Instrument;
 
-/// `x-activestorage-dtype` header definition
-static HEADER_DTYPE: header::HeaderName = header::HeaderName::from_static("x-activestorage-dtype");
-/// `x-activestorage-shape` header definition
-static HEADER_SHAPE: header::HeaderName = header::HeaderName::from_static("x-activestorage-shape");
-/// `x-activestorage-count` header definition
-static HEADER_COUNT: header::HeaderName = header::HeaderName::from_static("x-activestorage-count");
-/// `x-activestorage-byte-order` header definition
-static HEADER_BYTE_ORDER: header::HeaderName =
-    header::HeaderName::from_static("x-activestorage-byte-order");
-const HEADER_BYTE_ORDER_VALUE: &str = match NATIVE_BYTE_ORDER {
-    ByteOrder::Big => "big",
+const RESPONSE_DTYPE: &str            = "dtype";
+const RESPONSE_SHAPE: &str            = "shape";
+const RESPONSE_COUNT: &str            = "count";
+const RESPONSE_BYTES: &str            = "bytes";
+const RESPONSE_BYTE_ORDER: &str       = "byte-order";
+const RESPONSE_BYTE_ORDER_VALUE: &str = match NATIVE_BYTE_ORDER {
+    ByteOrder::Big    => "big",
     ByteOrder::Little => "little",
 };
 
@@ -99,18 +95,20 @@ type SharedAppState = Arc<AppState>;
 impl IntoResponse for models::Response {
     /// Convert a [crate::models::Response] into a [axum::response::Response].
     fn into_response(self) -> Response {
+        let mut map = serde_json::Map::new();
+        map.insert(RESPONSE_DTYPE.to_string(), serde_json::Value::String(self.dtype.to_string().to_lowercase()));
+        map.insert(RESPONSE_SHAPE.to_string(), serde_json::to_value(&self.shape).unwrap());
+        map.insert(RESPONSE_COUNT.to_string(), serde_json::to_value(&self.count).unwrap());
+        map.insert(RESPONSE_BYTES.to_string(), serde_json::to_value(&self.body).unwrap());
+        map.insert(RESPONSE_BYTE_ORDER.to_string(), serde_json::Value::String(RESPONSE_BYTE_ORDER_VALUE.to_string()));
         (
             [
                 (
                     &header::CONTENT_TYPE,
                     mime::APPLICATION_OCTET_STREAM.to_string(),
                 ),
-                (&HEADER_DTYPE, self.dtype.to_string().to_lowercase()),
-                (&HEADER_SHAPE, serde_json::to_string(&self.shape).unwrap()),
-                (&HEADER_COUNT, serde_json::to_string(&self.count).unwrap()),
-                (&HEADER_BYTE_ORDER, HEADER_BYTE_ORDER_VALUE.to_string()),
             ],
-            self.body,
+            serde_json::Value::Object(map).to_string(),
         )
             .into_response()
     }
