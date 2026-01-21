@@ -103,7 +103,11 @@ impl IntoResponse for models::Response {
         map.insert(RESPONSE_BYTE_ORDER.to_string(), serde_json::Value::String(RESPONSE_BYTE_ORDER_VALUE.to_string()));
 
         //println!("Response: {:?}", map);
-        println!("Response: models::Response {}", map[RESPONSE_BYTES].to_string());
+        println!("Response: models::Response: dtype {}", map[RESPONSE_DTYPE].to_string());
+        println!("Response: models::Response: shape {}", map[RESPONSE_SHAPE].as_array().iter().len());
+        println!("Response: models::Response: count {}", map[RESPONSE_COUNT].as_array().iter().len());
+        println!("Response: models::Response: bytes {}", map[RESPONSE_BYTES].as_array().iter().len());
+        println!("Response: models::Response: byte-order {}", map[RESPONSE_BYTE_ORDER].to_string());
 
         (
             [
