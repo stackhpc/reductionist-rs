@@ -1,6 +1,7 @@
 //! Data types and associated functions and methods
 
 use axum::body::Bytes;
+use num_traits::Zero;
 use serde::{Deserialize, Serialize};
 use strum_macros::Display;
 use url::Url;
@@ -227,6 +228,9 @@ pub fn validate_raw_size(
 
 /// Validate request data
 fn validate_request_data(request_data: &RequestData) -> Result<(), ValidationError> {
+
+    println!("Validating RequestData: {:?}", request_data);
+
     // Validation of multiple fields in RequestData.
     if let Some(size) = &request_data.size {
         // If the data is compressed then the size refers to the size of the compressed data, so we
@@ -255,6 +259,14 @@ fn validate_request_data(request_data: &RequestData) -> Result<(), ValidationErr
             }
         }
         (Some(shape), ReductionAxes::Multi(axes)) => {
+
+            // Check we've not been given too few axes
+            if axes.len().is_zero() {
+                return Err(ValidationError::new(
+                    "Number of reduction axes must be non-zero - to reduce over all axes omit the axis field completely",
+                ));
+            }
+
             // Check we've not been given too many axes
             if axes.len() > shape.len() {
                 return Err(ValidationError::new(
