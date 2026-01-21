@@ -107,6 +107,9 @@ pub enum ActiveStorageError {
 impl IntoResponse for ActiveStorageError {
     /// Convert from an `ActiveStorageError` into an [axum::response::Response].
     fn into_response(self) -> Response {
+
+        println!("Response: ActiveStorageError: {}", self.to_string());
+
         ErrorResponse::from(self).into_response()
     }
 }
@@ -336,6 +339,9 @@ impl IntoResponse for ErrorResponse {
     ///
     /// Renders the response as JSON.
     fn into_response(self) -> Response {
+
+        println!("Response: ErrorResponse: {}", self.error.message);
+
         let json_body = serde_json::to_string_pretty(&self);
         match json_body {
             Err(err) => (

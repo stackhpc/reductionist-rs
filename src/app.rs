@@ -103,6 +103,7 @@ impl IntoResponse for models::Response {
         map.insert(RESPONSE_BYTE_ORDER.to_string(), serde_json::Value::String(RESPONSE_BYTE_ORDER_VALUE.to_string()));
 
         //println!("Response: {:?}", map);
+        println!("Response: models::Response");
 
         (
             [
