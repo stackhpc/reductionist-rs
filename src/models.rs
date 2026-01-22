@@ -1,7 +1,6 @@
 //! Data types and associated functions and methods
 
 use axum::body::Bytes;
-use num_traits::Zero;
 use serde::{Deserialize, Serialize};
 use strum_macros::Display;
 use url::Url;
@@ -44,7 +43,7 @@ impl DType {
 /// Array ordering
 ///
 /// Defines an ordering for multi-dimensional arrays.
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 pub enum Order {
     /// Row-major (C) ordering
     C,
@@ -109,7 +108,7 @@ pub enum Filter {
 }
 
 /// Axes over which to perform the reduction
-#[derive(Debug, PartialEq, Default, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Default, Deserialize)]
 #[serde(rename_all = "lowercase", untagged)]
 pub enum ReductionAxes {
     #[default]
@@ -119,7 +118,7 @@ pub enum ReductionAxes {
 }
 
 /// Request data for operations
-#[derive(Debug, Deserialize, PartialEq, Validate)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Validate)]
 #[serde(deny_unknown_fields)]
 #[validate(schema(function = "validate_request_data"))]
 pub struct RequestData {
@@ -259,18 +258,18 @@ fn validate_request_data(request_data: &RequestData) -> Result<(), ValidationErr
             }
         }
         (Some(shape), ReductionAxes::Multi(axes)) => {
-            // Check we've not been given zero axes
-            if axes.len().is_zero() {
-                return Err(ValidationError::new(
-                    "Number of reduction axes must be non-zero - to reduce over all axes omit the axis field completely",
-                ));
-            }
-            // Check we've not been given a single axis
-            if axes.len() == 1 {
-                return Err(ValidationError::new(
-                    "Number of reduction axes must be two or more - to reduce over a single axis use an integer value without a list",
-                ));
-            }
+            // // Check we've not been given zero axes
+            // if axes.len().is_zero() {
+            //     return Err(ValidationError::new(
+            //         "Number of reduction axes must be non-zero - to reduce over all axes omit the axis field completely",
+            //     ));
+            // }
+            // // Check we've not been given a single axis
+            // if axes.len() == 1 {
+            //     return Err(ValidationError::new(
+            //         "Number of reduction axes must be two or more - to reduce over a single axis use an integer value without a list",
+            //     ));
+            // }
             // Check we've not been given too many axes
             if axes.len() > shape.len() {
                 return Err(ValidationError::new(

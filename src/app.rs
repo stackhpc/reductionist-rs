@@ -6,6 +6,7 @@ use crate::error::ActiveStorageError;
 use crate::filter_pipeline;
 use crate::metrics::{metrics_handler, track_metrics, LOCAL_CACHE_MISSES};
 use crate::models;
+use crate::models::ReductionAxes;
 use crate::operation;
 use crate::operations;
 use crate::resource_manager::ResourceManager;
@@ -375,6 +376,31 @@ async fn operation_handler<T: operation::Operation>(
             "Chunk cache enabled but no chunk cache provided.\nThis is a bug. Please report it to the application developers."
         ),
     };
+
+    let mut request_data = request_data.clone();
+    request_data.axis = match request_data.axis {
+        ReductionAxes::One(axis) => ReductionAxes::One(axis),
+        ReductionAxes::Multi(axes) => {
+            // Check we've not been given zero axes, i.e. axis=[]
+            if axes.len() == 0 {
+                // This translates into reducing over all axes
+                println!("Reducing over all axes because none were specified");
+                ReductionAxes::All
+            }
+            // Check we've not been given a single axis, i.e. axis=0
+            else if axes.len() == 1 {
+                // This translates into reducing over a single axis
+                println!("Reducing over a single axis because only one was specified");
+                ReductionAxes::One(axes[0])
+            }
+            else {
+                ReductionAxes::Multi(axes)
+            }
+        },
+        ReductionAxes::All => ReductionAxes::All,
+    };
+
+
 
     // All remaining work is synchronous. If the use_rayon argument was specified, delegate to the
     // Rayon thread pool. Otherwise, execute as normal using Tokio.
