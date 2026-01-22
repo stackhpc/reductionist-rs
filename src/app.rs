@@ -97,11 +97,11 @@ impl IntoResponse for models::Response {
     /// Convert a [crate::models::Response] into a [axum::response::Response].
     fn into_response(self) -> Response {
         let mut map = serde_json::Map::new();
-        map.insert(RESPONSE_DTYPE.to_string(), serde_json::Value::String(self.dtype.to_string().to_lowercase()));
-        map.insert(RESPONSE_SHAPE.to_string(), serde_json::to_value(&self.shape).unwrap());
-        map.insert(RESPONSE_COUNT.to_string(), serde_json::to_value(&self.count).unwrap());
         map.insert(RESPONSE_BYTES.to_string(), serde_json::to_value(&self.body).unwrap());
         map.insert(RESPONSE_BYTE_ORDER.to_string(), serde_json::Value::String(RESPONSE_BYTE_ORDER_VALUE.to_string()));
+        map.insert(RESPONSE_COUNT.to_string(), serde_json::to_value(&self.count).unwrap());
+        map.insert(RESPONSE_DTYPE.to_string(), serde_json::Value::String(self.dtype.to_string().to_lowercase()));
+        map.insert(RESPONSE_SHAPE.to_string(), serde_json::to_value(&self.shape).unwrap());
 
         //println!("Response: {:?}", map);
         println!("Response: models::Response: dtype {}", self.dtype.to_string().to_lowercase());
@@ -377,28 +377,28 @@ async fn operation_handler<T: operation::Operation>(
         ),
     };
 
-    let mut request_data = request_data.clone();
-    request_data.axis = match request_data.axis {
-        ReductionAxes::One(axis) => ReductionAxes::One(axis),
-        ReductionAxes::Multi(axes) => {
-            // Check we've not been given zero axes, i.e. axis=[]
-            if axes.len() == 0 {
-                // This translates into reducing over all axes
-                println!("Reducing over all axes because none were specified");
-                ReductionAxes::All
-            }
-            // Check we've not been given a single axis, i.e. axis=0
-            else if axes.len() == 1 {
-                // This translates into reducing over a single axis
-                println!("Reducing over a single axis because only one was specified");
-                ReductionAxes::One(axes[0])
-            }
-            else {
-                ReductionAxes::Multi(axes)
-            }
-        },
-        ReductionAxes::All => ReductionAxes::All,
-    };
+//    let mut request_data = request_data.clone();
+//    request_data.axis = match request_data.axis {
+//        ReductionAxes::One(axis) => ReductionAxes::One(axis),
+//        ReductionAxes::Multi(axes) => {
+//            // Check we've not been given zero axes, i.e. axis=[]
+//            if axes.len() == 0 {
+//                // This translates into reducing over all axes
+//                println!("Reducing over all axes because none were specified");
+//                ReductionAxes::All
+//            }
+//            // Check we've not been given a single axis, i.e. axis=0
+//            else if axes.len() == 1 {
+//                // This translates into reducing over a single axis
+//                println!("Reducing over a single axis because only one was specified");
+//                ReductionAxes::One(axes[0])
+//            }
+//            else {
+//                ReductionAxes::Multi(axes)
+//            }
+//        },
+//        ReductionAxes::All => ReductionAxes::All,
+//    };
 
 
 
