@@ -47,8 +47,11 @@
 //! * [PyActiveStorage](https://github.com/valeriupredoi/PyActiveStorage) is a Python library which performs reductions on numerical data in data sources such as netCDF4. It has support for delegating computation to Reductionist when the data is stored in an S3-compatible object store.
 
 pub mod app;
+pub mod app_state;
 pub mod array;
 pub mod chunk_cache;
+pub mod chunk_downloader_s3;
+pub mod chunk_store;
 pub mod cli;
 pub mod compression;
 pub mod error;

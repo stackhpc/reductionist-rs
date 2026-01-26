@@ -1,8 +1,6 @@
 //! A simplified S3 client that supports downloading objects.
 //! It attempts to hide the complexities of working with the AWS SDK for S3.
 
-use std::fmt::Display;
-
 use crate::error::ActiveStorageError;
 use crate::resource_manager::ResourceManager;
 
@@ -18,7 +16,7 @@ use tokio::sync::{RwLock, SemaphorePermit};
 use tracing::Instrument;
 use url::Url;
 
-#[derive(Clone, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum S3Credentials {
     AccessKey {
         access_key: String,
@@ -44,6 +42,7 @@ impl S3Credentials {
 ///
 /// The map's key is a 2-tuple of the S3 URL and credentials.
 /// The value is the corresponding client object.
+#[derive(Debug)]
 pub struct S3ClientMap {
     /// A [hashbrown::HashMap] for storing the S3 clients. A read-write lock synchronises access to
     /// the map, optimised for reads.
@@ -92,24 +91,10 @@ impl S3ClientMap {
 }
 
 /// S3 client object.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct S3Client {
     /// Underlying AWS SDK S3 client object.
     client: Client,
-    /// A unique identifier for the client
-    // TODO: Make this a hash of url + access key + secret key
-    // using https://github.com/RustCrypto/hashes?tab=readme-ov-file
-    // This will be more urgently required once an ageing mechanism
-    // is implemented for [crate::S3ClientMap].
-    id: String,
-}
-
-// Required so that client can be used as part of the lookup
-// key for a local chunk cache.
-impl Display for S3Client {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.id)
-    }
 }
 
 impl S3Client {
@@ -138,10 +123,7 @@ impl S3Client {
             .force_path_style(true)
             .build();
         let client = Client::from_conf(s3_config);
-        Self {
-            client,
-            id: uuid::Uuid::new_v4().to_string(),
-        }
+        Self { client }
     }
 
     /// Checks whether the client is authorised to download an
