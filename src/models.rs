@@ -122,9 +122,9 @@ pub enum ReductionAxes {
 #[serde(deny_unknown_fields)]
 #[validate(schema(function = "validate_request_data"))]
 pub struct RequestData {
-    /// Storage type, e.g., "s3", "http"
-    #[validate(length(min = 1, message = "storage type must not be empty"))]
-    pub storage_type: String,
+    /// Interface type, e.g., "s3", "http"
+    #[validate(length(min = 1, message = "interface type must not be empty"))]
+    pub interface_type: String,
     /// URL of the object
     // TODO: Investigate using lifetimes to enable zero-copy: https://serde.rs/lifetimes.html
     pub url: Url,
@@ -340,7 +340,7 @@ mod tests {
                     name: "RequestData",
                     len: 2,
                 },
-                Token::Str("storage_type"),
+                Token::Str("interface_type"),
                 Token::Str("s3"),
                 Token::Str("url"),
                 Token::Str("http://example.com/bucket/test--operation-min-dtype-uint64--shape-[10, 5, 2]-etc.bin"),
@@ -364,7 +364,7 @@ mod tests {
                     name: "RequestData",
                     len: 2,
                 },
-                Token::Str("storage_type"),
+                Token::Str("interface_type"),
                 Token::Str("s3"),
                 Token::Str("url"),
                 Token::Str("http://example.com/bucket/test--operation-min-dtype-uint64--shape-[10, 5, 2]-etc.bin"),
@@ -447,7 +447,7 @@ mod tests {
     }
 
     #[test]
-    fn test_missing_storage_type() {
+    fn test_missing_interface_type() {
         assert_de_tokens_error::<RequestData>(
             &[
                 Token::Struct {
@@ -456,15 +456,15 @@ mod tests {
                 },
                 Token::StructEnd,
             ],
-            "missing field `storage_type`",
+            "missing field `interface_type`",
         )
     }
 
     #[test]
-    #[should_panic(expected = "storage type must not be empty")]
-    fn test_invalid_storage_type() {
+    #[should_panic(expected = "interface type must not be empty")]
+    fn test_invalid_interface_type() {
         let mut request_data = test_utils::get_test_request_data();
-        request_data.storage_type = "".to_string();
+        request_data.interface_type = "".to_string();
         request_data.validate().unwrap()
     }
 
@@ -476,7 +476,7 @@ mod tests {
                     name: "RequestData",
                     len: 2,
                 },
-                Token::Str("storage_type"),
+                Token::Str("interface_type"),
                 Token::Str("s3"),
                 Token::StructEnd,
             ],
@@ -508,7 +508,7 @@ mod tests {
                     name: "RequestData",
                     len: 2,
                 },
-                Token::Str("storage_type"),
+                Token::Str("interface_type"),
                 Token::Str("s3"),
                 Token::Str("url"),
                 Token::Str("http://example.com/bucket/test--operation-min-dtype-uint64--shape-[10, 5, 2]-etc.bin"),
@@ -803,7 +803,7 @@ mod tests {
             Token::Str("foo"),
             Token::StructEnd
             ],
-            "unknown field `foo`, expected one of `storage_type`, `url`, `dtype`, `byte_order`, `offset`, `size`, `shape`, `axis`, `order`, `selection`, `compression`, `filters`, `missing`"
+            "unknown field `foo`, expected one of `interface_type`, `url`, `dtype`, `byte_order`, `offset`, `size`, `shape`, `axis`, `order`, `selection`, `compression`, `filters`, `missing`"
         )
     }
 
@@ -812,7 +812,7 @@ mod tests {
     #[test]
     fn test_json_required_fields() {
         let json = r#"{
-                        "storage_type": "s3",
+                        "interface_type": "s3",
                         "url": "http://example.com/bucket/test--operation-min-dtype-uint64--shape-[10, 5, 2]-etc.bin",
                         "dtype": "int32"
                       }"#;
@@ -823,7 +823,7 @@ mod tests {
     #[test]
     fn test_json_optional_fields() {
         let json = r#"{
-                        "storage_type": "s3",
+                        "interface_type": "s3",
                         "url": "http://example.com/bucket/test--operation-min-dtype-uint64--shape-[10, 5, 2]-etc.bin",
                         "dtype": "int32",
                         "byte_order": "little",
@@ -844,7 +844,7 @@ mod tests {
     #[test]
     fn test_json_optional_fields2() {
         let json = r#"{
-                        "storage_type": "s3",
+                        "interface_type": "s3",
                         "url": "http://example.com/bucket/test--operation-min-dtype-uint64--shape-[10, 5, 2]-etc.bin",
                         "dtype": "float64",
                         "byte_order": "big",
@@ -883,7 +883,7 @@ mod tests {
     fn test_json_optional_fields3() {
         let json = format!(
             r#"{{
-                                "storage_type": "s3",
+                                "interface_type": "s3",
                                 "url": "http://example.com/bucket/test--operation-min-dtype-uint64--shape-[10, 5, 2]-etc.bin",
                                 "dtype": "int32",
                                 "missing": {{"missing_values": [{}, -1, 0, 1, {}]}}

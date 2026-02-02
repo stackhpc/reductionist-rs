@@ -245,11 +245,11 @@ impl<'a> ChunkStore {
         request_data: &models::RequestData,
     ) -> Result<bool, ActiveStorageError> {
         // Dispatch to appropriate downloader based on storage type
-        match request_data.storage_type.as_str() {
+        match request_data.interface_type.as_str() {
             "http" | "https" => self.downloader_http.is_authorised(auth, request_data).await,
             "s3" => self.downloader_s3.is_authorised(auth, request_data).await,
-            _ => Err(ActiveStorageError::UnsupportedStorageType {
-                storage_type: request_data.storage_type.clone(),
+            _ => Err(ActiveStorageError::UnsupportedInterfaceType {
+                interface_type: request_data.interface_type.clone(),
             }),
         }
     }
@@ -272,7 +272,7 @@ impl<'a> ChunkStore {
         mem_permits: Option<SemaphorePermit<'a>>,
     ) -> Result<Bytes, ActiveStorageError> {
         // Dispatch to appropriate downloader based on storage type
-        match request_data.storage_type.as_str() {
+        match request_data.interface_type.as_str() {
             "http" | "https" => {
                 self.downloader_http
                     .download(auth, request_data, resource_manager, mem_permits)
@@ -283,8 +283,8 @@ impl<'a> ChunkStore {
                     .download(auth, request_data, resource_manager, mem_permits)
                     .await
             }
-            _ => Err(ActiveStorageError::UnsupportedStorageType {
-                storage_type: request_data.storage_type.clone(),
+            _ => Err(ActiveStorageError::UnsupportedInterfaceType {
+                interface_type: request_data.interface_type.clone(),
             }),
         }
     }

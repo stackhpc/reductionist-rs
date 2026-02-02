@@ -120,9 +120,9 @@ pub enum ActiveStorageError {
     #[error("HTTP response missing Content-Length header")]
     HTTPContentLengthMissing,
 
-    /// Unsupported storage type requested
-    #[error("unsupported storage type {storage_type}")]
-    UnsupportedStorageType { storage_type: String },
+    /// Unsupported interface type requested
+    #[error("unsupported interface type {interface_type}")]
+    UnsupportedInterfaceType { interface_type: String },
 }
 
 impl IntoResponse for ActiveStorageError {
@@ -353,7 +353,7 @@ impl From<ActiveStorageError> for ErrorResponse {
                 Self::bad_request(&error)
             }
 
-            ActiveStorageError::UnsupportedStorageType { storage_type: _ } => {
+            ActiveStorageError::UnsupportedInterfaceType { interface_type: _ } => {
                 Self::bad_request(&error)
             }
         };

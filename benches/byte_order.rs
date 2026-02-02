@@ -6,7 +6,7 @@ use url::Url;
 
 fn get_test_request_data() -> RequestData {
     RequestData {
-        storage_type: "s3".to_string(),
+        interface_type: "s3".to_string(),
         url: Url::parse("http://example.com/bucket/object").unwrap(),
         dtype: DType::Int32,
         byte_order: None,
