@@ -52,25 +52,25 @@ impl<'a> chunk_store::ChunkDownloader<'a> for ChunkDownloaderS3 {
         auth: &Option<TypedHeader<Authorization<Basic>>>,
         request_data: &models::RequestData,
     ) -> Result<bool, ActiveStorageError> {
+        // Prepare S3 credentials
         let credentials = if let Some(TypedHeader(auth)) = auth {
             s3_client::S3Credentials::access_key(auth.username(), auth.password())
         } else {
             s3_client::S3Credentials::None
         };
-
+        // Parse S3 URL components
+        let (source, bucket, object) = s3_client::parse_s3_url(&request_data.url)?;
+        // Get authenticated S3 client
         let s3_client = self
             .s3_client_map
-            .get(&request_data.source, credentials)
+            .get(&source, credentials)
             .instrument(tracing::Span::current())
             .await;
-
-        match s3_client
-            .is_authorised(&request_data.bucket, &request_data.object)
+        // Check object authorization
+        s3_client
+            .is_authorised(&bucket, &object)
             .await
-        {
-            Ok(auth) => Ok(auth),
-            Err(e) => Err(ActiveStorageError::from(e)),
-        }
+            .map_err(ActiveStorageError::from)
     }
 
     /// Download requested chunk.
@@ -91,31 +91,27 @@ impl<'a> chunk_store::ChunkDownloader<'a> for ChunkDownloaderS3 {
         resource_manager: &ResourceManager,
         mut mem_permits: Option<SemaphorePermit<'a>>,
     ) -> Result<Bytes, ActiveStorageError> {
-        // Convert request data to byte range for S3 request
-        let range = s3_client::get_range(request_data.offset, request_data.size);
         // Acquire connection permit to be freed via drop when this function returns
         let _conn_permits = resource_manager.s3_connection().await?;
-
+        // Prepare S3 credentials
         let credentials = if let Some(TypedHeader(auth)) = auth {
             s3_client::S3Credentials::access_key(auth.username(), auth.password())
         } else {
             s3_client::S3Credentials::None
         };
-
+        // Convert request data to byte range for S3 request
+        let range = s3_client::get_range(request_data.offset, request_data.size);
+        // Parse S3 URL components
+        let (source, bucket, object) = s3_client::parse_s3_url(&request_data.url)?;
+        // Get authenticated S3 client
         let s3_client = self
             .s3_client_map
-            .get(&request_data.source, credentials)
+            .get(&source, credentials)
             .instrument(tracing::Span::current())
             .await;
-
+        // Download object from S3
         s3_client
-            .download_object(
-                &request_data.bucket,
-                &request_data.object,
-                range,
-                resource_manager,
-                &mut mem_permits,
-            )
+            .download_object(&bucket, &object, range, resource_manager, &mut mem_permits)
             .await
     }
 }

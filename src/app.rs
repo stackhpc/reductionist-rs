@@ -78,7 +78,7 @@ pub fn init(args: &CommandLineArgs) {
 ///
 /// * a [tower_http::trace::TraceLayer] for tracing requests and responses
 fn router(args: &CommandLineArgs) -> Router {
-    fn v1(state: SharedAppState) -> Router {
+    fn v2(state: SharedAppState) -> Router {
         Router::new()
             .route("/count", post(operation_handler::<operations::Count>))
             .route("/max", post(operation_handler::<operations::Max>))
@@ -94,7 +94,7 @@ fn router(args: &CommandLineArgs) -> Router {
     Router::new()
         .route("/.well-known/reductionist-schema", get(schema))
         .route("/metrics", get(metrics_handler))
-        .nest("/v1", v1(state))
+        .nest("/v2", v2(state))
         .route_layer(middleware::from_fn(track_metrics))
 }
 

@@ -1,4 +1,5 @@
 use crate::chunk_cache::ChunkCache;
+use crate::chunk_downloader_http;
 use crate::chunk_downloader_s3;
 use crate::cli::CommandLineArgs;
 use crate::error::ActiveStorageError;
@@ -61,8 +62,10 @@ pub trait ChunkDownloader<'a> {
 /// Chunk store.
 #[derive(Debug)]
 pub struct ChunkStore {
+    /// Downloader for HTTP.
+    downloader_http: chunk_downloader_http::ChunkDownloaderHTTP,
     /// Downloader for S3.
-    s3_downloader: chunk_downloader_s3::ChunkDownloaderS3,
+    downloader_s3: chunk_downloader_s3::ChunkDownloaderS3,
 
     /// Object chunk cache
     chunk_cache_enabled: bool,
@@ -95,7 +98,8 @@ impl<'a> ChunkStore {
         };
 
         Self {
-            s3_downloader: chunk_downloader_s3::ChunkDownloaderS3::new(),
+            downloader_http: chunk_downloader_http::ChunkDownloaderHTTP::new(),
+            downloader_s3: chunk_downloader_s3::ChunkDownloaderS3::new(),
 
             chunk_cache_enabled: args.use_chunk_cache,
             chunk_cache,
@@ -149,14 +153,12 @@ impl<'a> ChunkStore {
         resource_manager: &ResourceManager,
         mut mem_permits: Option<SemaphorePermit<'a>>,
     ) -> Result<bytes::Bytes, ActiveStorageError> {
-        // The default chunk key is "%source-%bucket-%object-%offset-%size-%auth"
+        // The default chunk key is "%url-%offset-%size-%auth"
         // which is using the same parameters provided to an S3 object download.
         // It assumes the data of the underlying cache store remains unchanged.
         let key: String = self.chunk_cache_key.clone();
         let key = key
-            .replace("%source", request_data.source.as_str())
-            .replace("%bucket", &request_data.bucket)
-            .replace("%object", &request_data.object)
+            .replace("%url", request_data.url.as_str())
             .replace("%offset", &format!("{:?}", request_data.offset))
             .replace("%size", &format!("{:?}", request_data.size))
             .replace("%dtype", &format!("{}", request_data.dtype))
@@ -242,7 +244,14 @@ impl<'a> ChunkStore {
         auth: &Option<TypedHeader<Authorization<Basic>>>,
         request_data: &models::RequestData,
     ) -> Result<bool, ActiveStorageError> {
-        self.s3_downloader.is_authorised(auth, request_data).await
+        // Dispatch to appropriate downloader based on storage type
+        match request_data.storage_type.as_str() {
+            "http" | "https" => self.downloader_http.is_authorised(auth, request_data).await,
+            "s3" => self.downloader_s3.is_authorised(auth, request_data).await,
+            _ => Err(ActiveStorageError::UnsupportedStorageType {
+                storage_type: request_data.storage_type.clone(),
+            }),
+        }
     }
 
     /// Download requested data.
@@ -262,8 +271,21 @@ impl<'a> ChunkStore {
         resource_manager: &ResourceManager,
         mem_permits: Option<SemaphorePermit<'a>>,
     ) -> Result<Bytes, ActiveStorageError> {
-        self.s3_downloader
-            .download(auth, request_data, resource_manager, mem_permits)
-            .await
+        // Dispatch to appropriate downloader based on storage type
+        match request_data.storage_type.as_str() {
+            "http" | "https" => {
+                self.downloader_http
+                    .download(auth, request_data, resource_manager, mem_permits)
+                    .await
+            }
+            "s3" => {
+                self.downloader_s3
+                    .download(auth, request_data, resource_manager, mem_permits)
+                    .await
+            }
+            _ => Err(ActiveStorageError::UnsupportedStorageType {
+                storage_type: request_data.storage_type.clone(),
+            }),
+        }
     }
 }

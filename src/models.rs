@@ -122,15 +122,12 @@ pub enum ReductionAxes {
 #[serde(deny_unknown_fields)]
 #[validate(schema(function = "validate_request_data"))]
 pub struct RequestData {
-    /// URL of the S3-compatible object store
+    /// Storage type, e.g., "s3", "http"
+    #[validate(length(min = 1, message = "storage type must not be empty"))]
+    pub storage_type: String,
+    /// URL of the object
     // TODO: Investigate using lifetimes to enable zero-copy: https://serde.rs/lifetimes.html
-    pub source: Url,
-    /// S3 bucket containing the object
-    #[validate(length(min = 1, message = "bucket must not be empty"))]
-    pub bucket: String,
-    /// S3 object containing the data
-    #[validate(length(min = 1, message = "object must not be empty"))]
-    pub object: String,
+    pub url: Url,
     /// Data type
     pub dtype: DType,
     /// Byte order of data
@@ -343,12 +340,10 @@ mod tests {
                     name: "RequestData",
                     len: 2,
                 },
-                Token::Str("source"),
-                Token::Str("http://example.com"),
-                Token::Str("bucket"),
-                Token::Str("bar"),
-                Token::Str("object"),
-                Token::Str("baz"),
+                Token::Str("storage_type"),
+                Token::Str("s3"),
+                Token::Str("url"),
+                Token::Str("http://example.com/bucket/test--operation-min-dtype-uint64--shape-[10, 5, 2]-etc.bin"),
                 Token::Str("dtype"),
                 Token::Enum { name: "DType" },
                 Token::Str("int32"),
@@ -369,12 +364,10 @@ mod tests {
                     name: "RequestData",
                     len: 2,
                 },
-                Token::Str("source"),
-                Token::Str("http://example.com"),
-                Token::Str("bucket"),
-                Token::Str("bar"),
-                Token::Str("object"),
-                Token::Str("baz"),
+                Token::Str("storage_type"),
+                Token::Str("s3"),
+                Token::Str("url"),
+                Token::Str("http://example.com/bucket/test--operation-min-dtype-uint64--shape-[10, 5, 2]-etc.bin"),
                 Token::Str("dtype"),
                 Token::Enum { name: "DType" },
                 Token::Str("int32"),
@@ -454,7 +447,7 @@ mod tests {
     }
 
     #[test]
-    fn test_missing_source() {
+    fn test_missing_storage_type() {
         assert_de_tokens_error::<RequestData>(
             &[
                 Token::Struct {
@@ -463,74 +456,48 @@ mod tests {
                 },
                 Token::StructEnd,
             ],
-            "missing field `source`",
+            "missing field `storage_type`",
         )
     }
 
     #[test]
-    fn test_invalid_source() {
+    #[should_panic(expected = "storage type must not be empty")]
+    fn test_invalid_storage_type() {
+        let mut request_data = test_utils::get_test_request_data();
+        request_data.storage_type = "".to_string();
+        request_data.validate().unwrap()
+    }
+
+    #[test]
+    fn test_missing_url() {
         assert_de_tokens_error::<RequestData>(
             &[
                 Token::Struct {
                     name: "RequestData",
                     len: 2,
                 },
-                Token::Str("source"),
+                Token::Str("storage_type"),
+                Token::Str("s3"),
+                Token::StructEnd,
+            ],
+            "missing field `url`",
+        )
+    }
+
+    #[test]
+    fn test_invalid_url() {
+        assert_de_tokens_error::<RequestData>(
+            &[
+                Token::Struct {
+                    name: "RequestData",
+                    len: 2,
+                },
+                Token::Str("url"),
                 Token::Str("foo"),
                 Token::StructEnd,
             ],
             "invalid value: string \"foo\", expected relative URL without a base",
         )
-    }
-
-    #[test]
-    fn test_missing_bucket() {
-        assert_de_tokens_error::<RequestData>(
-            &[
-                Token::Struct {
-                    name: "RequestData",
-                    len: 2,
-                },
-                Token::Str("source"),
-                Token::Str("http://example.com"),
-                Token::StructEnd,
-            ],
-            "missing field `bucket`",
-        )
-    }
-
-    #[test]
-    #[should_panic(expected = "bucket must not be empty")]
-    fn test_invalid_bucket() {
-        let mut request_data = test_utils::get_test_request_data();
-        request_data.bucket = "".to_string();
-        request_data.validate().unwrap()
-    }
-
-    #[test]
-    fn test_missing_object() {
-        assert_de_tokens_error::<RequestData>(
-            &[
-                Token::Struct {
-                    name: "RequestData",
-                    len: 2,
-                },
-                Token::Str("source"),
-                Token::Str("http://example.com"),
-                Token::Str("bucket"),
-                Token::Str("bar"),
-                Token::StructEnd,
-            ],
-            "missing field `object`",
-        )
-    }
-
-    #[test]
-    #[should_panic(expected = "object must not be empty")]
-    fn test_invalid_object() {
-        let mut request_data = test_utils::get_test_request_data();
-        request_data.object = "".to_string();
-        request_data.validate().unwrap()
     }
 
     #[test]
@@ -541,12 +508,10 @@ mod tests {
                     name: "RequestData",
                     len: 2,
                 },
-                Token::Str("source"),
-                Token::Str("http://example.com"),
-                Token::Str("bucket"),
-                Token::Str("bar"),
-                Token::Str("object"),
-                Token::Str("baz"),
+                Token::Str("storage_type"),
+                Token::Str("s3"),
+                Token::Str("url"),
+                Token::Str("http://example.com/bucket/test--operation-min-dtype-uint64--shape-[10, 5, 2]-etc.bin"),
                 Token::StructEnd,
             ],
             "missing field `dtype`",
@@ -838,7 +803,7 @@ mod tests {
             Token::Str("foo"),
             Token::StructEnd
             ],
-            "unknown field `foo`, expected one of `source`, `bucket`, `object`, `dtype`, `byte_order`, `offset`, `size`, `shape`, `axis`, `order`, `selection`, `compression`, `filters`, `missing`"
+            "unknown field `foo`, expected one of `storage_type`, `url`, `dtype`, `byte_order`, `offset`, `size`, `shape`, `axis`, `order`, `selection`, `compression`, `filters`, `missing`"
         )
     }
 
@@ -846,7 +811,11 @@ mod tests {
 
     #[test]
     fn test_json_required_fields() {
-        let json = r#"{"source": "http://example.com", "bucket": "bar", "object": "baz", "dtype": "int32"}"#;
+        let json = r#"{
+                        "storage_type": "s3",
+                        "url": "http://example.com/bucket/test--operation-min-dtype-uint64--shape-[10, 5, 2]-etc.bin",
+                        "dtype": "int32"
+                      }"#;
         let request_data = serde_json::from_str::<RequestData>(json).unwrap();
         assert_eq!(request_data, test_utils::get_test_request_data());
     }
@@ -854,9 +823,8 @@ mod tests {
     #[test]
     fn test_json_optional_fields() {
         let json = r#"{
-                        "source": "http://example.com",
-                        "bucket": "bar",
-                        "object": "baz",
+                        "storage_type": "s3",
+                        "url": "http://example.com/bucket/test--operation-min-dtype-uint64--shape-[10, 5, 2]-etc.bin",
                         "dtype": "int32",
                         "byte_order": "little",
                         "offset": 4,
@@ -876,9 +844,8 @@ mod tests {
     #[test]
     fn test_json_optional_fields2() {
         let json = r#"{
-                        "source": "http://example.com",
-                        "bucket": "bar",
-                        "object": "baz",
+                        "storage_type": "s3",
+                        "url": "http://example.com/bucket/test--operation-min-dtype-uint64--shape-[10, 5, 2]-etc.bin",
                         "dtype": "float64",
                         "byte_order": "big",
                         "offset": 4,
@@ -916,9 +883,8 @@ mod tests {
     fn test_json_optional_fields3() {
         let json = format!(
             r#"{{
-                                "source": "http://example.com",
-                                "bucket": "bar",
-                                "object": "baz",
+                                "storage_type": "s3",
+                                "url": "http://example.com/bucket/test--operation-min-dtype-uint64--shape-[10, 5, 2]-etc.bin",
                                 "dtype": "int32",
                                 "missing": {{"missing_values": [{}, -1, 0, 1, {}]}}
                               }}"#,

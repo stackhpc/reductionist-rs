@@ -15,6 +15,7 @@ use hashbrown::HashMap;
 use tokio::sync::{RwLock, SemaphorePermit};
 use tracing::Instrument;
 use url::Url;
+use urlencoding;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum S3Credentials {
@@ -233,6 +234,56 @@ impl S3Client {
     }
 }
 
+/// Parse URL of form "http(s)://host:port/bucket/object"
+/// into source URL, bucket and object.
+///
+/// # Arguments
+///
+/// * `url`: S3 URL
+pub fn parse_s3_url(url: &Url) -> Result<(Url, String, String), ActiveStorageError> {
+    // Split path into segments
+    let mut segments = url
+        .path_segments()
+        .ok_or_else(|| ActiveStorageError::S3RequestError {
+            error: "S3 URL must have path segments".to_string(),
+        })?;
+    // Expect first segment to be bucket name
+    let bucket = segments
+        .next()
+        .ok_or_else(|| ActiveStorageError::S3RequestError {
+            error: "S3 URL must have bucket".to_string(),
+        })?
+        .to_string();
+    let bucket = urlencoding::decode(&bucket)
+        .map_err(|e| ActiveStorageError::S3RequestError {
+            error: format!("Failed to decode bucket name: {}", e),
+        })?
+        .to_string();
+    // Expect second segment to be object name
+    let object = segments
+        .next()
+        .ok_or_else(|| ActiveStorageError::S3RequestError {
+            error: "S3 URL must have object".to_string(),
+        })?
+        .to_string();
+    let object = urlencoding::decode(&object)
+        .map_err(|e| ActiveStorageError::S3RequestError {
+            error: format!("Failed to decode object name: {}", e),
+        })?
+        .to_string();
+    // Check we have no more segments
+    if segments.next().is_some() {
+        return Err(ActiveStorageError::S3RequestError {
+            error: "S3 URL expected: 'http(s)://host:port/bucket/object'".to_string(),
+        });
+    }
+    // Create source URL by removing bucket/object path
+    let mut source_url = url.clone();
+    source_url.set_path("/");
+
+    Ok((source_url, bucket, object))
+}
+
 /// Return an optional byte range string based on the offset and size.
 ///
 /// The returned string is compatible with the HTTP Range header.
@@ -292,6 +343,48 @@ mod tests {
     async fn new_no_auth() {
         let url = Url::parse("http://example.com").unwrap();
         S3Client::new(&url, S3Credentials::None).await;
+    }
+
+    #[test]
+    fn parse_s3_url_valid() {
+        let url = Url::parse("http://example.com:8080/bucket/test--operation-min-dtype-uint64--shape-[10, 5, 2]-etc.bin").unwrap();
+        let (source_url, bucket, object) = parse_s3_url(&url).unwrap();
+        assert_eq!(source_url.as_str(), "http://example.com:8080/");
+        assert_eq!(bucket, "bucket");
+        assert_eq!(
+            object,
+            "test--operation-min-dtype-uint64--shape-[10, 5, 2]-etc.bin"
+        );
+    }
+
+    #[test]
+    fn parse_s3_url_invalid_source_url() {
+        let url = Url::parse("example.com:8080/bucket/object.bin").unwrap();
+        assert!(
+            parse_s3_url(&url).is_err(),
+            "S3 URL must have path segments"
+        );
+    }
+
+    #[test]
+    fn parse_s3_url_invalid_bucket() {
+        let url = Url::parse("http://example.com:8080/").unwrap();
+        assert!(parse_s3_url(&url).is_err(), "S3 URL must have bucket");
+    }
+
+    #[test]
+    fn parse_s3_url_invalid_object() {
+        let url = Url::parse("example.com:8080/bucket/").unwrap();
+        assert!(parse_s3_url(&url).is_err(), "S3 URL must have object");
+    }
+
+    #[test]
+    fn parse_s3_url_invalid_bucket_object_format() {
+        let url = Url::parse("example.com:8080/bucket/sub/object.bin").unwrap();
+        assert!(
+            parse_s3_url(&url).is_err(),
+            "S3 URL expected: 'http(s)://host:port/bucket/object'"
+        );
     }
 
     #[test]

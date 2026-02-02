@@ -50,6 +50,7 @@ pub mod app;
 pub mod app_state;
 pub mod array;
 pub mod chunk_cache;
+pub mod chunk_downloader_http;
 pub mod chunk_downloader_s3;
 pub mod chunk_store;
 pub mod cli;
