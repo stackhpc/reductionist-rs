@@ -256,9 +256,9 @@ fn validate_request_data(request_data: &RequestData) -> Result<(), ValidationErr
         }
         (Some(shape), ReductionAxes::Multi(axes)) => {
             // Check we've not been given too many axes
-            if axes.len() >= shape.len() {
+            if axes.len() > shape.len() {
                 return Err(ValidationError::new(
-                    "Number of reduction axes must be less than length of shape - to reduce over all axes omit the axis field completely",
+                    "Number of reduction axes must be less than or equal to length of shape - to reduce over all axes omit the axis field completely",
                 ));
             }
             // Check axes are ordered correctly
