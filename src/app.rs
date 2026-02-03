@@ -17,6 +17,7 @@ use axum::{
     extract::{Path, State},
     headers::authorization::{Authorization, Basic},
     http::header,
+    http::StatusCode,
     response::{IntoResponse, Response},
     routing::{get, post},
     Router, TypedHeader,
@@ -85,6 +86,7 @@ impl IntoResponse for models::Response {
     /// Convert a [crate::models::Response] into a [axum::response::Response].
     fn into_response(self) -> Response {
         (
+            StatusCode::OK,
             [(&header::CONTENT_TYPE, "application/cbor")],
             serde_cbor::to_vec(&CBORResponse::new(&self))
                 .map_err(|e| log::error!("Failed to serialize CBOR: {}", e))
