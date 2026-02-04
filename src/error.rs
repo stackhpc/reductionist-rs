@@ -12,6 +12,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use ndarray::ShapeError;
+use reqwest::Error as ReqwestError;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use thiserror::Error;
@@ -63,6 +64,10 @@ pub enum ActiveStorageError {
     #[error("request data is not valid")]
     RequestDataValidation(#[from] validator::ValidationErrors),
 
+    /// Error processing S3 request
+    #[error("S3 request error")]
+    S3RequestError { error: String },
+
     /// Error reading object data from S3
     #[error("error receiving object from S3 storage")]
     S3ByteStream(#[from] ByteStreamError),
@@ -102,6 +107,22 @@ pub enum ActiveStorageError {
     /// Error using chunk cache
     #[error("chunk cache error {error}")]
     ChunkCacheError { error: String },
+
+    /// Error processing Reqwest request
+    #[error("HTTP request error")]
+    ReqwestProcessingError(#[from] ReqwestError),
+
+    /// Error processing HTTP request
+    #[error("HTTP request error")]
+    HTTPRequestError { error: String },
+
+    /// Missing Content-Length header in HTTP response.
+    #[error("HTTP response missing Content-Length header")]
+    HTTPContentLengthMissing,
+
+    /// Unsupported interface type requested
+    #[error("unsupported interface type {interface_type}")]
+    UnsupportedInterfaceType { interface_type: String },
 }
 
 impl IntoResponse for ActiveStorageError {
@@ -231,7 +252,8 @@ impl From<ActiveStorageError> for ErrorResponse {
             | ActiveStorageError::RequestDataValidationSingle(_)
             | ActiveStorageError::RequestDataValidation(_)
             | ActiveStorageError::S3ContentLengthMissing
-            | ActiveStorageError::ShapeInvalid(_) => Self::bad_request(&error),
+            | ActiveStorageError::ShapeInvalid(_)
+            | ActiveStorageError::HTTPContentLengthMissing => Self::bad_request(&error),
 
             // Not found
             ActiveStorageError::UnsupportedOperation { operation: _ }
@@ -314,6 +336,25 @@ impl From<ActiveStorageError> for ErrorResponse {
                     // Enum is marked as non-exhaustive
                     _ => Self::internal_server_error(&error),
                 }
+            }
+
+            ActiveStorageError::ReqwestProcessingError(reqwest_error) => {
+                // Tailor the response based on the specific reqwest::Error variant.
+                if reqwest_error.is_request() {
+                    Self::bad_request(&error)
+                } else {
+                    Self::internal_server_error(&error)
+                }
+            }
+
+            ActiveStorageError::HTTPRequestError { error: _ }
+            |ActiveStorageError::S3RequestError { error: _ }
+             => {
+                Self::bad_request(&error)
+            }
+
+            ActiveStorageError::UnsupportedInterfaceType { interface_type: _ } => {
+                Self::bad_request(&error)
             }
         };
 

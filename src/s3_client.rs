@@ -1,8 +1,6 @@
 //! A simplified S3 client that supports downloading objects.
 //! It attempts to hide the complexities of working with the AWS SDK for S3.
 
-use std::fmt::Display;
-
 use crate::error::ActiveStorageError;
 use crate::resource_manager::ResourceManager;
 
@@ -17,8 +15,9 @@ use hashbrown::HashMap;
 use tokio::sync::{RwLock, SemaphorePermit};
 use tracing::Instrument;
 use url::Url;
+use urlencoding;
 
-#[derive(Clone, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum S3Credentials {
     AccessKey {
         access_key: String,
@@ -44,6 +43,7 @@ impl S3Credentials {
 ///
 /// The map's key is a 2-tuple of the S3 URL and credentials.
 /// The value is the corresponding client object.
+#[derive(Debug)]
 pub struct S3ClientMap {
     /// A [hashbrown::HashMap] for storing the S3 clients. A read-write lock synchronises access to
     /// the map, optimised for reads.
@@ -92,24 +92,10 @@ impl S3ClientMap {
 }
 
 /// S3 client object.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct S3Client {
     /// Underlying AWS SDK S3 client object.
     client: Client,
-    /// A unique identifier for the client
-    // TODO: Make this a hash of url + access key + secret key
-    // using https://github.com/RustCrypto/hashes?tab=readme-ov-file
-    // This will be more urgently required once an ageing mechanism
-    // is implemented for [crate::S3ClientMap].
-    id: String,
-}
-
-// Required so that client can be used as part of the lookup
-// key for a local chunk cache.
-impl Display for S3Client {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.id)
-    }
 }
 
 impl S3Client {
@@ -138,10 +124,7 @@ impl S3Client {
             .force_path_style(true)
             .build();
         let client = Client::from_conf(s3_config);
-        Self {
-            client,
-            id: uuid::Uuid::new_v4().to_string(),
-        }
+        Self { client }
     }
 
     /// Checks whether the client is authorised to download an
@@ -251,6 +234,56 @@ impl S3Client {
     }
 }
 
+/// Parse URL of form "http(s)://host:port/bucket/object"
+/// into source URL, bucket and object.
+///
+/// # Arguments
+///
+/// * `url`: S3 URL
+pub fn parse_s3_url(url: &Url) -> Result<(Url, String, String), ActiveStorageError> {
+    // Split path into segments
+    let mut segments = url
+        .path_segments()
+        .ok_or_else(|| ActiveStorageError::S3RequestError {
+            error: "S3 URL must have path segments".to_string(),
+        })?;
+    // Expect first segment to be bucket name
+    let bucket = segments
+        .next()
+        .ok_or_else(|| ActiveStorageError::S3RequestError {
+            error: "S3 URL must have bucket".to_string(),
+        })?
+        .to_string();
+    let bucket = urlencoding::decode(&bucket)
+        .map_err(|e| ActiveStorageError::S3RequestError {
+            error: format!("Failed to decode bucket name: {}", e),
+        })?
+        .to_string();
+    // Expect second segment to be object name
+    let object = segments
+        .next()
+        .ok_or_else(|| ActiveStorageError::S3RequestError {
+            error: "S3 URL must have object".to_string(),
+        })?
+        .to_string();
+    let object = urlencoding::decode(&object)
+        .map_err(|e| ActiveStorageError::S3RequestError {
+            error: format!("Failed to decode object name: {}", e),
+        })?
+        .to_string();
+    // Check we have no more segments
+    if segments.next().is_some() {
+        return Err(ActiveStorageError::S3RequestError {
+            error: "S3 URL expected: 'http(s)://host:port/bucket/object'".to_string(),
+        });
+    }
+    // Create source URL by removing bucket/object path
+    let mut source_url = url.clone();
+    source_url.set_path("/");
+
+    Ok((source_url, bucket, object))
+}
+
 /// Return an optional byte range string based on the offset and size.
 ///
 /// The returned string is compatible with the HTTP Range header.
@@ -310,6 +343,48 @@ mod tests {
     async fn new_no_auth() {
         let url = Url::parse("http://example.com").unwrap();
         S3Client::new(&url, S3Credentials::None).await;
+    }
+
+    #[test]
+    fn parse_s3_url_valid() {
+        let url = Url::parse("http://example.com:8080/bucket/test--operation-min-dtype-uint64--shape-[10, 5, 2]-etc.bin").unwrap();
+        let (source_url, bucket, object) = parse_s3_url(&url).unwrap();
+        assert_eq!(source_url.as_str(), "http://example.com:8080/");
+        assert_eq!(bucket, "bucket");
+        assert_eq!(
+            object,
+            "test--operation-min-dtype-uint64--shape-[10, 5, 2]-etc.bin"
+        );
+    }
+
+    #[test]
+    fn parse_s3_url_invalid_source_url() {
+        let url = Url::parse("example.com:8080/bucket/object.bin").unwrap();
+        assert!(
+            parse_s3_url(&url).is_err(),
+            "S3 URL must have path segments"
+        );
+    }
+
+    #[test]
+    fn parse_s3_url_invalid_bucket() {
+        let url = Url::parse("http://example.com:8080/").unwrap();
+        assert!(parse_s3_url(&url).is_err(), "S3 URL must have bucket");
+    }
+
+    #[test]
+    fn parse_s3_url_invalid_object() {
+        let url = Url::parse("example.com:8080/bucket/").unwrap();
+        assert!(parse_s3_url(&url).is_err(), "S3 URL must have object");
+    }
+
+    #[test]
+    fn parse_s3_url_invalid_bucket_object_format() {
+        let url = Url::parse("example.com:8080/bucket/sub/object.bin").unwrap();
+        assert!(
+            parse_s3_url(&url).is_err(),
+            "S3 URL expected: 'http(s)://host:port/bucket/object'"
+        );
     }
 
     #[test]

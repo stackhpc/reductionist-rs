@@ -20,3 +20,8 @@
 # Others
 scripts/venv
 .vscode
+
+# Test generated files
+testdata/
+scripts/testdata/
+
