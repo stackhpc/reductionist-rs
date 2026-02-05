@@ -116,7 +116,8 @@ impl<'a> ChunkStore {
     /// * `auth`: Optional authorization header
     /// * `request_data`: RequestData object for the request
     /// * `resource_manager`: ResourceManager object
-    #[tracing::instrument(level = "DEBUG", skip(auth, request_data, resource_manager))]
+    /// * `mem_permits`: Memory permits for the request
+    #[tracing::instrument(level = "DEBUG", skip(auth, request_data, resource_manager, mem_permits))]
     pub async fn get(
         &self,
         auth: &Option<TypedHeader<Authorization<Basic>>>,
@@ -146,6 +147,7 @@ impl<'a> ChunkStore {
     /// * `request_data`: RequestData object for the request
     /// * `resource_manager`: ResourceManager object
     /// * `mem_permits`: Memory permits for the request
+    #[tracing::instrument(level = "DEBUG", skip(auth, request_data, resource_manager, mem_permits))]
     async fn cached_download(
         &self,
         auth: &Option<TypedHeader<Authorization<Basic>>>,
@@ -239,6 +241,7 @@ impl<'a> ChunkStore {
     ///
     /// * `auth`: Optional authorization header
     /// * `request_data`: RequestData object for the request
+    #[tracing::instrument(level = "DEBUG", skip(auth, request_data))]
     async fn is_authorised(
         &self,
         auth: &Option<TypedHeader<Authorization<Basic>>>,
@@ -264,6 +267,7 @@ impl<'a> ChunkStore {
     /// * `request_data`: RequestData object for the request
     /// * `resource_manager`: ResourceManager object
     /// * `mem_permits`: Memory permits for the request
+    #[tracing::instrument(level = "DEBUG", skip(auth, request_data, resource_manager, mem_permits))]
     async fn download(
         &self,
         auth: &Option<TypedHeader<Authorization<Basic>>>,
