@@ -34,7 +34,7 @@ reductionist_env:
   REDUCTIONIST_CHUNK_CACHE_PRUNE_INTERVAL: "3600"
   REDUCTIONIST_CHUNK_CACHE_SIZE_LIMIT: "7000GB"
   REDUCTIONIST_CHUNK_CACHE_QUEUE_SIZE: "192"
-  REDUCTIONIST_CHUNK_CACHE_KEY: "%source-%bucket-%object-%offset-%size-%auth"
+  REDUCTIONIST_CHUNK_CACHE_KEY: "%url-%offset-%size-%auth"
   REDUCTIONIST_CHUNK_CACHE_BYPASS_AUTH: "true"
 # Path to certificates directory on remote host.
 reductionist_remote_certs_path: "/mnt/localdisk/{{ ansible_user_id }}/certs"
