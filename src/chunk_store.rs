@@ -161,21 +161,8 @@ impl<'a> ChunkStore {
         resource_manager: &ResourceManager,
         mut mem_permits: Option<SemaphorePermit<'a>>,
     ) -> Result<bytes::Bytes, ActiveStorageError> {
-        // The default chunk key is "%url-%offset-%size-%auth"
-        // which is using the same parameters provided to an S3 object download.
-        // It assumes the data of the underlying cache store remains unchanged.
-        let key: String = self.chunk_cache_key.clone();
-        let key = key
-            .replace("%url", request_data.url.as_str())
-            .replace("%offset", &format!("{:?}", request_data.offset))
-            .replace("%size", &format!("{:?}", request_data.size))
-            .replace("%dtype", &format!("{}", request_data.dtype))
-            .replace("%byte_order", &format!("{:?}", request_data.byte_order))
-            .replace("%compression", &format!("{:?}", request_data.compression))
-            .replace("%auth", &format!("{:?}", auth));
-        if key.find('%').is_some() {
-            panic!("Invalid cache key: {}", key);
-        }
+        // The default chunk key is built from the template "%url-%offset-%size-%auth"
+        let key = self.generate_cache_key(self.chunk_cache_key.clone(), request_data, auth);
 
         if let Some(metadata) = self
             .chunk_cache
@@ -300,5 +287,57 @@ impl<'a> ChunkStore {
                 interface_type: request_data.interface_type.clone(),
             }),
         }
+    }
+
+    /// Replace token with given value in chunk cache key.
+    /// This is used to generate a cache key for the given request data and auth.
+    ///
+    /// # Arguments
+    ///
+    /// * `key`: Cache key template with tokens to replace
+    /// * `request_data`: RequestData object for the request
+    /// * `auth`: Optional authorization header
+    fn generate_cache_key(
+        &self,
+        key: String,
+        request_data: &models::RequestData,
+        auth: &Option<TypedHeader<Authorization<Basic>>>,
+    ) -> String {
+        // The default chunk key is built from the template "%url-%offset-%size-%auth"
+        let key = self.replace_cache_key_token(key, "%url", request_data.url.as_str());
+        let key =
+            self.replace_cache_key_token(key, "%offset", &format!("{:?}", request_data.offset));
+        let key = self.replace_cache_key_token(key, "%size", &format!("{:?}", request_data.size));
+        let key = self.replace_cache_key_token(key, "%dtype", &format!("{}", request_data.dtype));
+        let key = self.replace_cache_key_token(
+            key,
+            "%byte_order",
+            &format!("{:?}", request_data.byte_order),
+        );
+        let key = self.replace_cache_key_token(
+            key,
+            "%compression",
+            &format!("{:?}", request_data.compression),
+        );
+        let key = self.replace_cache_key_token(key, "%auth", &format!("{:?}", auth));
+        // No tokens should remain if the supplied key template is valid.
+        if key.find('%').is_some() {
+            panic!("Invalid cache key: {}", key);
+        }
+        key
+    }
+
+    /// Replace token with given value in chunk cache key.
+    /// This is a helper function for `generate_cache_key`.
+    /// We ensure the replacement value doesn't contain any '%' characters
+    /// so we can detect remaining tokens in the cache key template after replacement.
+    ///
+    /// # Arguments
+    ///
+    /// * `key`: Cache key template with tokens to replace
+    /// * `token`: Token to replace (e.g. "%url")
+    /// * `value`: Value to replace token with  (e.g. the URL string)
+    fn replace_cache_key_token(&self, key: String, token: &str, value: &str) -> String {
+        key.replace(token, &value.replace('%', "_"))
     }
 }
