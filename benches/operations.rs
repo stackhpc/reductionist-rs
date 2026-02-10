@@ -51,7 +51,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         ];
         for (op_name, execute) in operations {
             for missing in missing_types.clone() {
-                let name = format!("{}({}, {:?})", op_name, size, missing);
+                let name = format!("{op_name}({size}, {missing:?})");
                 c.bench_function(&name, |b| {
                     b.iter(|| {
                         let mut request_data = get_test_request_data();

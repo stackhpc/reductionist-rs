@@ -319,10 +319,10 @@ impl<'a> ChunkStore {
             "%compression",
             &format!("{:?}", request_data.compression),
         );
-        let key = self.replace_cache_key_token(key, "%auth", &format!("{:?}", auth));
+        let key = self.replace_cache_key_token(key, "%auth", &format!("{auth:?}"));
         // No tokens should remain if the supplied key template is valid.
         if key.find('%').is_some() {
-            panic!("Invalid cache key: {}", key);
+            panic!("Invalid cache key: {key}");
         }
         key
     }

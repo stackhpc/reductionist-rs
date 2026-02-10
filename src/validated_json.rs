@@ -108,7 +108,7 @@ mod tests {
 
         let body = body_string(response).await;
         let re = Regex::new(r"Failed to parse the request body as JSON").unwrap();
-        assert!(re.is_match(&body[..]), "body: {}", body)
+        assert!(re.is_match(&body[..]), "body: {body}")
     }
 
     #[tokio::test]
@@ -120,7 +120,7 @@ mod tests {
 
         let body = body_string(response).await;
         let re = Regex::new(r".*foo: invalid type: integer `123`.*").unwrap();
-        assert!(re.is_match(&body[..]), "body: {}", body)
+        assert!(re.is_match(&body[..]), "body: {body}")
     }
 
     #[tokio::test]
@@ -132,9 +132,9 @@ mod tests {
 
         let body = body_string(response).await;
         let re = Regex::new(r".*request data is not valid.*").unwrap();
-        assert!(re.is_match(&body[..]), "body: {}", body);
+        assert!(re.is_match(&body[..]), "body: {body}");
         let re = Regex::new(r".*foo: Validation error: length.*").unwrap();
-        assert!(re.is_match(&body[..]), "body: {}", body);
+        assert!(re.is_match(&body[..]), "body: {body}");
     }
 
     #[tokio::test]
@@ -146,8 +146,8 @@ mod tests {
 
         let body = body_string(response).await;
         let re = Regex::new(r".*request data is not valid.*").unwrap();
-        assert!(re.is_match(&body[..]), "body: {}", body);
+        assert!(re.is_match(&body[..]), "body: {body}");
         let re = Regex::new(r".*foo: Validation error: length.*").unwrap();
-        assert!(re.is_match(&body[..]), "body: {}", body);
+        assert!(re.is_match(&body[..]), "body: {body}");
     }
 }

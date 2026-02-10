@@ -257,7 +257,7 @@ pub fn parse_s3_url(url: &Url) -> Result<(Url, String, String), ActiveStorageErr
         .to_string();
     let bucket = urlencoding::decode(&bucket)
         .map_err(|e| ActiveStorageError::S3RequestError {
-            error: format!("Failed to decode bucket name: {}", e),
+            error: format!("Failed to decode bucket name: {e}"),
         })?
         .to_string();
     // Expect second segment onwards to be object name
@@ -269,7 +269,7 @@ pub fn parse_s3_url(url: &Url) -> Result<(Url, String, String), ActiveStorageErr
     let object = segments.collect::<Vec<_>>().join("/");
     let object = urlencoding::decode(&object)
         .map_err(|e| ActiveStorageError::S3RequestError {
-            error: format!("Failed to decode object name: {}", e),
+            error: format!("Failed to decode object name: {e}"),
         })?
         .to_string();
 
@@ -295,9 +295,9 @@ pub fn get_range(offset: Option<usize>, size: Option<usize>) -> Option<String> {
             let offset = offset.unwrap_or(0);
             // Range-end is inclusive.
             let end = offset + size - 1;
-            Some(format!("bytes={}-{}", offset, end))
+            Some(format!("bytes={offset}-{end}"))
         }
-        (Some(offset), None) => Some(format!("bytes={}-", offset)),
+        (Some(offset), None) => Some(format!("bytes={offset}-")),
         _ => None,
     }
 }

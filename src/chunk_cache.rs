@@ -108,7 +108,7 @@ impl ChunkCache {
         match self.sender.send(ChunkCacheEntry::new(key, value)).await {
             Ok(_) => Ok(()),
             Err(e) => Err(ActiveStorageError::ChunkCacheError {
-                error: format!("{}", e),
+                error: format!("{e}"),
             }),
         }
     }
@@ -122,7 +122,7 @@ impl ChunkCache {
         match self.cache.get_metadata(key).await {
             Ok(value) => Ok(value),
             Err(e) => Err(ActiveStorageError::ChunkCacheError {
-                error: format!("{:?}", e),
+                error: format!("{e:?}"),
             }),
         }
     }
@@ -136,7 +136,7 @@ impl ChunkCache {
         match self.cache.get(key).await {
             Ok(value) => Ok(value),
             Err(e) => Err(ActiveStorageError::ChunkCacheError {
-                error: format!("{:?}", e),
+                error: format!("{e:?}"),
             }),
         }
     }
@@ -157,7 +157,7 @@ impl Metadata {
         let expires = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             // Only panics if 'now' is before epoch
-            .map_err(|e| log::error!("System time error: {}", e))
+            .map_err(|e| log::error!("System time error: {e}"))
             .unwrap()
             .as_secs()
             + ttl;
@@ -190,7 +190,7 @@ impl State {
         let next_prune = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             // Only panics if 'now' is before epoch
-            .map_err(|e| log::error!("System time error: {}", e))
+            .map_err(|e| log::error!("System time error: {e}"))
             .unwrap()
             .as_secs()
             + prune_interval_secs;
@@ -250,10 +250,10 @@ impl SimpleDiskCache {
                 match std_fs::read_to_string(file) {
                     Ok(state) => {
                         if let Err(e) = serde_json::from_str::<State>(state.as_str()) {
-                            panic!("Failed to deserialise cache state: {}", e);
+                            panic!("Failed to deserialise cache state: {e}");
                         }
                     }
-                    Err(e) => panic!("Failed to read cache state file: {}", e),
+                    Err(e) => panic!("Failed to read cache state file: {e}"),
                 };
             } else {
                 panic!(
@@ -286,12 +286,12 @@ impl SimpleDiskCache {
             serde_json::from_str(
                 fs::read_to_string(file)
                     .await
-                    .map_err(|e| log::error!("Failed to read cache state file: {}", e))
+                    .map_err(|e| log::error!("Failed to read cache state file: {e}"))
                     .unwrap()
                     .as_str(),
             )
             //            .expect("Failed to deserialise cache state")
-            .map_err(|e| log::error!("Failed to deserialise cache state: {}", e))
+            .map_err(|e| log::error!("Failed to deserialise cache state: {e}"))
             .unwrap()
         } else {
             State::new(self.prune_interval_seconds)
@@ -307,7 +307,7 @@ impl SimpleDiskCache {
         let file = self.dir.join(&self.name).join(SimpleDiskCache::STATE_FILE);
         fs::write(file, serde_json::to_string(&data).unwrap())
             .await
-            .map_err(|e| log::error!("Failed to write cache state file: {}", e))
+            .map_err(|e| log::error!("Failed to write cache state file: {e}"))
             .unwrap();
     }
 
@@ -346,7 +346,7 @@ impl SimpleDiskCache {
             Ok(val) => Ok(Some(Bytes::from(val))),
             Err(err) => match err.kind() {
                 std::io::ErrorKind::NotFound => Ok(None),
-                _ => Err(format!("{}", err)),
+                _ => Err(format!("{err}")),
             },
         }
     }
@@ -369,7 +369,7 @@ impl SimpleDiskCache {
             Ok(content) => Ok(Some(serde_json::from_str(content.as_str()).unwrap())),
             Err(err) => match err.kind() {
                 std::io::ErrorKind::NotFound => Ok(None),
-                _ => Err(format!("{}", err)),
+                _ => Err(format!("{err}")),
             },
         }
     }
@@ -391,7 +391,7 @@ impl SimpleDiskCache {
         // Write the cache value to a file
         let path = self.dir.join(&self.name);
         if let Err(e) = fs::write(path.join(self.filename_for_key(key).await), value).await {
-            return Err(format!("{:?}", e));
+            return Err(format!("{e:?}"));
         }
         // Write the metadata to a separate file
         let metadata = Metadata::new(size, self.ttl_seconds);
@@ -401,7 +401,7 @@ impl SimpleDiskCache {
         )
         .await
         {
-            return Err(format!("{:?}", e));
+            return Err(format!("{e:?}"));
         }
         // Update the global state
         let mut state = self.load_state().await;
@@ -423,12 +423,12 @@ impl SimpleDiskCache {
             // Remove the chunk file
             fs::remove_file(path.join(self.filename_for_key(key).await))
                 .await
-                .map_err(|e| log::error!("Failed to remove chunk data: {}", e))
+                .map_err(|e| log::error!("Failed to remove chunk data: {e}"))
                 .unwrap();
             // Remove the metadata file
             fs::remove_file(path.join(self.filename_for_key(key).await + ".meta"))
                 .await
-                .map_err(|e| log::error!("Failed to remove chunk metadata: {}", e))
+                .map_err(|e| log::error!("Failed to remove chunk metadata: {e}"))
                 .unwrap();
             // Update the global state
             state.current_size_bytes -= data.size_bytes;
@@ -441,7 +441,7 @@ impl SimpleDiskCache {
         let state = self.load_state().await;
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map_err(|e| log::error!("System time error: {}", e))
+            .map_err(|e| log::error!("System time error: {e}"))
             .unwrap()
             .as_secs();
         for (key, data) in state.metadata.iter() {
@@ -506,7 +506,7 @@ impl SimpleDiskCache {
         // We also prune at time intervals.
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map_err(|e| log::error!("System time error: {}", e))
+            .map_err(|e| log::error!("System time error: {e}"))
             .unwrap()
             .as_secs();
         prune_expired |= state.next_prune <= timestamp;
