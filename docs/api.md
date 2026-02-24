@@ -1,6 +1,6 @@
 # API
 
-The Reductionist API accepts HTTP POST requests to `/v3/{operation}`, where `{operation}` is the name of the operation to perform, one of `count`, `min`, `max`, `sum` or `select`.
+The Reductionist API accepts HTTP POST requests to `/v2/{operation}`, where `{operation}` is the name of the operation to perform, one of `count`, `min`, `max`, `sum` or `select`.
 The request body should be a JSON object of the form:
 
 ```

@@ -118,11 +118,11 @@ def display(response, verbose=False):
     response_data = cbor2.loads(response.content)
     dtype = response_data['dtype']
     shape = response_data['shape']
-    counts = response_data['counts']
+    counts = response_data['count']
     counts = np.array(counts)
     if len(counts) > 1:
         counts = counts.reshape(shape)
-    result = np.array(response_data['bytes'], dtype=dtype).reshape(shape)
+    result = np.array(bytes(response_data['bytes']), dtype=dtype).reshape(shape)
     if verbose:
         sep = "\n" if len(counts.shape) > 1 else " "
         print("\nResponse headers:", response.headers)
