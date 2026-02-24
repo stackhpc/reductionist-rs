@@ -80,7 +80,7 @@ pub struct CommandLineArgs {
     /// Override the default key used for chunk storage.
     #[arg(
         long,
-        default_value = "%source-%bucket-%object-%offset-%size-%auth",
+        default_value = "%url-%offset-%size-%auth",
         env = "REDUCTIONIST_CHUNK_CACHE_KEY"
     )]
     pub chunk_cache_key: String,
