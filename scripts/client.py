@@ -61,9 +61,8 @@ def parse_number(s: str):
 
 def build_request_data(args: argparse.Namespace) -> dict:
     request_data = {
-        'source': args.source,
-        'bucket': args.bucket,
-        'object': args.object,
+        'interface_type': 's3',
+        'url': f'{args.source}/{args.bucket}/{args.object}',
         'dtype': args.dtype,
         'offset': args.offset,
         'size': args.size,

@@ -5,17 +5,13 @@ The request body should be a JSON object of the form:
 
 ```
 {
-    // The URL for the S3 source
+    // The object store backend to be used
     // - required
-    "source": "https://s3.example.com/,
+    "interface_type": "s3|http|https",
 
-    // The name of the S3 bucket
+    // The URL for the S3 or HTTP object
     // - required
-    "bucket": "my-bucket",
-
-    // The path to the object within the bucket
-    // - required
-    "object": "path/to/object",
+    "source": "https://s3.example.com/bucket/object",
 
     // The data type to use when interpreting binary data
     // - required
@@ -77,8 +73,10 @@ The request body should be a JSON object of the form:
 }
 ```
 
-Request authentication is implemented using [Basic Auth](https://en.wikipedia.org/wiki/Basic_access_authentication) with the username and password consisting of your S3 Access Key ID and Secret Access Key, respectively.
+Request authentication is implemented using [Basic Auth](https://en.wikipedia.org/wiki/Basic_access_authentication).
+For S3 object stores the username and password should consist of your S3 Access Key ID and Secret Access Key, respectively.
 Unauthenticated access to S3 is possible by omitting the basic auth header.
+For HTTP(s) object stores authentication is also implemented using Basic Auth and unauthenticated access is possible by omitting the basic auth header.
 
 On success, all operations return HTTP 200 OK with the response body being a [CBOR](https://cbor.io/) object of the following format:
 

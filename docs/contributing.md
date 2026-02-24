@@ -130,18 +130,20 @@ reductionist
 
 For simple testing purposes Minio is a convenient object storage server.
 
+As the Reductionist has been extended to support HTTP object store scripts are provided to start and stop container implementations of these stores, used within CI/CD.
+
 ### Deploy Minio object storage
 
 Start a local [Minio](https://min.io/) server which serves the test data:
 
 ```sh
-./scripts/minio-start
+./scripts/storage-start
 ```
 
 The Minio server will run in a detached container and may be stopped:
 
 ```sh
-./scripts/minio-stop
+./scripts/storage-stop
 ```
 
 Note that object data is not preserved when the container is stopped.

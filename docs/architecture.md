@@ -10,7 +10,7 @@ A few properties make it relatively easy to build a conceptual mental model of h
 - All operations share the same request processing pipeline.
 - The request processing pipeline for each request is a fairly linear sequence of steps.
 - There is no persistent state.
-- The only external service that is interacted with is an S3-compatible object store.
+- The only external service that is interacted with is the object store, either HTTP(s) or S3 compatible.
 
 The more challenging aspects of the system are the lower level details of asynchronous programming, memory management, the Rust type system and working with multi-dimensional arrays.
 
@@ -56,10 +56,60 @@ This is implemented using the `S3ClientMap` in `src/s3_client.rs` and benchmarke
 
 Downloaded storage chunk data is returned to the request handler as a [Bytes](https://docs.rs/bytes/latest/bytes/struct.Bytes.html) object, which is a wrapper around a `u8` (byte) array.
 
-## S3 object caching
+## HTTP(s) object download
 
-A cache can be optionally enabled to store downloaded S3 objects to disk, this allows the Reductionist to repeat operations on already downloaded data objects utilising faster disk I/O over network I/O.
-Authentication is passed through to the S3 object store and access to cached data by users other than the original requestor is allowed if S3 authentication permits. Authentication can be optionally disabled for further cache speedup in trusted environments.
+Object data may also be downloaded from any HTTP server using the [reqwest HTTP client](https://docs.rs/reqwest/latest/reqwest/).
+As with the S3 object download we will typically be operating on a "storage chunk" within the larger dataset that the object contains, so the HTTP server must support range request.
+
+This is achieved using the `ChunkDownloader` trait defined in `src/chunk_store.rs`.
+
+```rust
+/// Chunk downloader trait.
+///
+/// # Methods
+/// * `is_authorised`: Check if access is authorised.
+/// * `download`: Download the requested data.
+pub trait ChunkDownloader<'a> {
+    /// Are we authorized to access the data?
+    ///
+    /// Returns true if authorized, false otherwise.
+    ///
+    /// # Arguments
+    ///
+    /// * `auth`: Optional authorization header
+    /// * `request_data`: RequestData object for the request
+    fn is_authorised(
+        &self,
+        auth: &Option<TypedHeader<Authorization<Basic>>>,
+        request_data: &models::RequestData,
+    ) -> impl std::future::Future<Output = Result<bool, ActiveStorageError>>;
+
+    /// Download requested data.
+    ///
+    /// Returns bytes.
+    ///
+    /// # Arguments
+    ///
+    /// * `auth`: Optional authorization header
+    /// * `request_data`: RequestData object for the request
+    /// * `resource_manager`: ResourceManager object
+    /// * `mem_permits`: Memory permits for the request
+    fn download(
+        &self,
+        auth: &Option<TypedHeader<Authorization<Basic>>>,
+        request_data: &models::RequestData,
+        resource_manager: &ResourceManager,
+        mem_permits: Option<SemaphorePermit<'a>>,
+    ) -> impl std::future::Future<Output = Result<Bytes, ActiveStorageError>>;
+}
+```
+
+## Object caching
+
+A cache can be optionally enabled to store downloaded data chunks to disk, this allows the Reductionist to repeat operations on already downloaded data chunks utilising faster disk I/O over network I/O.
+
+Authentication is passed through to the object store and access to cached data by users other than the original requestor is allowed if authentication permits. This authentication request can add an undesired overhead negating the efficiency of caching data and so can be optionally disabled for further cache speedup in trusted environments.
+A second authentication option stores cached chunks per user providing a faster authenticated cache.
 
 A [Tokio MPSC channel](https://docs.rs/tokio/latest/tokio/sync/mpsc/index.html) bridges write access between the requests of the asynchronous [Axum](https://docs.rs/axum) web framework and synchronous writes to the disk cache; this allows requests to the Reductionist to continue unblocked along their operation pipeline whilst being queued for cache storage.
 

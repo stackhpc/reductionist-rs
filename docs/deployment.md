@@ -265,9 +265,7 @@ The assumption is made that the object on the S3 data store doesn't change, i.e.
 
 | Token | Description |
 | - | - |
-| `%source` | Source URL for S3 data store |
-| `%bucket` | S3 bucket |
-| `%object` | Object key |
+| `%url` | Source URL for the object |
 | `%offset` | Offset of data byte range |
 | `%size` | Size of data byte range |
 | `%dtype` | Data type |
