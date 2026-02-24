@@ -5,10 +5,9 @@ use crate::cli::CommandLineArgs;
 use crate::error::ActiveStorageError;
 use crate::filter_pipeline;
 use crate::metrics::{metrics_handler, track_metrics};
-use crate::models;
+use crate::models::{self, CBORResponse};
 use crate::operation;
 use crate::operations;
-use crate::types::{ByteOrder, NATIVE_BYTE_ORDER};
 use crate::validated_json::ValidatedJson;
 
 use axum::middleware;
@@ -16,47 +15,28 @@ use axum::{
     extract::{Path, State},
     headers::authorization::{Authorization, Basic},
     http::header,
+    http::StatusCode,
     response::{IntoResponse, Response},
     routing::{get, post},
     Router, TypedHeader,
 };
 use bytes::Bytes;
-
+use serde_cbor;
 use tower::Layer;
 use tower::ServiceBuilder;
 use tower_http::normalize_path::NormalizePathLayer;
 use tower_http::trace::TraceLayer;
 use tracing::debug_span;
 
-/// `x-activestorage-dtype` header definition
-static HEADER_DTYPE: header::HeaderName = header::HeaderName::from_static("x-activestorage-dtype");
-/// `x-activestorage-shape` header definition
-static HEADER_SHAPE: header::HeaderName = header::HeaderName::from_static("x-activestorage-shape");
-/// `x-activestorage-count` header definition
-static HEADER_COUNT: header::HeaderName = header::HeaderName::from_static("x-activestorage-count");
-/// `x-activestorage-byte-order` header definition
-static HEADER_BYTE_ORDER: header::HeaderName =
-    header::HeaderName::from_static("x-activestorage-byte-order");
-const HEADER_BYTE_ORDER_VALUE: &str = match NATIVE_BYTE_ORDER {
-    ByteOrder::Big => "big",
-    ByteOrder::Little => "little",
-};
-
 impl IntoResponse for models::Response {
     /// Convert a [crate::models::Response] into a [axum::response::Response].
     fn into_response(self) -> Response {
         (
-            [
-                (
-                    &header::CONTENT_TYPE,
-                    mime::APPLICATION_OCTET_STREAM.to_string(),
-                ),
-                (&HEADER_DTYPE, self.dtype.to_string().to_lowercase()),
-                (&HEADER_SHAPE, serde_json::to_string(&self.shape).unwrap()),
-                (&HEADER_COUNT, serde_json::to_string(&self.count).unwrap()),
-                (&HEADER_BYTE_ORDER, HEADER_BYTE_ORDER_VALUE.to_string()),
-            ],
-            self.body,
+            StatusCode::OK,
+            [(&header::CONTENT_TYPE, "application/cbor")],
+            serde_cbor::to_vec(&CBORResponse::new(&self))
+                .map_err(|e| log::error!("Failed to serialize CBOR: {}", e))
+                .unwrap(),
         )
             .into_response()
     }

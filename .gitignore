@@ -19,6 +19,7 @@
 
 # Others
 scripts/venv
+venv
 .vscode
 
 # Test generated files

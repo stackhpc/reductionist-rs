@@ -6,7 +6,7 @@ use strum_macros::Display;
 use url::Url;
 use validator::{Validate, ValidationError};
 
-use crate::types::{ByteOrder, DValue, Missing};
+use crate::types::{ByteOrder, DValue, Missing, NATIVE_BYTE_ORDER};
 
 /// Supported numerical data types
 #[derive(Clone, Copy, Debug, Deserialize, Display, PartialEq)]
@@ -43,7 +43,7 @@ impl DType {
 /// Array ordering
 ///
 /// Defines an ordering for multi-dimensional arrays.
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 pub enum Order {
     /// Row-major (C) ordering
     C,
@@ -108,7 +108,7 @@ pub enum Filter {
 }
 
 /// Axes over which to perform the reduction
-#[derive(Debug, PartialEq, Default, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Default, Deserialize)]
 #[serde(rename_all = "lowercase", untagged)]
 pub enum ReductionAxes {
     #[default]
@@ -118,7 +118,7 @@ pub enum ReductionAxes {
 }
 
 /// Request data for operations
-#[derive(Debug, Deserialize, PartialEq, Validate)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Validate)]
 #[serde(deny_unknown_fields)]
 #[validate(schema(function = "validate_request_data"))]
 pub struct RequestData {
@@ -253,9 +253,9 @@ fn validate_request_data(request_data: &RequestData) -> Result<(), ValidationErr
         }
         (Some(shape), ReductionAxes::Multi(axes)) => {
             // Check we've not been given too many axes
-            if axes.len() >= shape.len() {
+            if axes.len() > shape.len() {
                 return Err(ValidationError::new(
-                    "Number of reduction axes must be less than length of shape - to reduce over all axes omit the axis field completely",
+                    "Number of reduction axes must be less than or equal to length of shape",
                 ));
             }
             // Check axes are ordered correctly
@@ -317,6 +317,38 @@ impl Response {
             dtype,
             shape,
             count,
+        }
+    }
+}
+
+/// A tailored version of Response for CBOR serialization.
+#[derive(Serialize)]
+pub struct CBORResponse {
+    /// Response data. May be a scalar or multi-dimensional array.
+    pub bytes: Bytes,
+    /// Data type of the response, represented by lower case string
+    pub dtype: String,
+    /// Shape of the response
+    pub shape: Vec<usize>,
+    /// Number of non-missing elements operated
+    /// along each reduction axis
+    pub count: Vec<i64>,
+    /// Byte order of the response data
+    pub byte_order: &'static str,
+}
+
+impl CBORResponse {
+    /// Return a CBOR Response object
+    pub fn new(response: &Response) -> CBORResponse {
+        CBORResponse {
+            bytes: response.body.clone(),
+            dtype: response.dtype.to_string().to_lowercase(),
+            shape: response.shape.clone(),
+            count: response.count.clone(),
+            byte_order: match NATIVE_BYTE_ORDER {
+                ByteOrder::Big => "big",
+                ByteOrder::Little => "little",
+            },
         }
     }
 }

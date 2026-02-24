@@ -11,6 +11,7 @@
 #   --dtype uint32
 
 import argparse
+import cbor2
 import http.client
 import json
 import requests
@@ -114,13 +115,14 @@ def request(url: str, username: str, password: str, request_data: dict, cacert: 
 
 def display(response, verbose=False):
     #print(response.content)
-    dtype = response.headers['x-activestorage-dtype']
-    shape = json.loads(response.headers['x-activestorage-shape'])
-    counts = json.loads(response.headers['x-activestorage-count'])
+    response_data = cbor2.loads(response.content)
+    dtype = response_data['dtype']
+    shape = response_data['shape']
+    counts = response_data['count']
     counts = np.array(counts)
     if len(counts) > 1:
         counts = counts.reshape(shape)
-    result = np.frombuffer(response.content, dtype=dtype).reshape(shape)
+    result = np.array(bytes(response_data['bytes']), dtype=dtype).reshape(shape)
     if verbose:
         sep = "\n" if len(counts.shape) > 1 else " "
         print("\nResponse headers:", response.headers)
@@ -143,7 +145,7 @@ def main():
     request_data = build_request_data(args)
     if args.verbose:
         print("\nRequest data:", request_data)
-    url = f'{args.server}/v1/{args.operation}/'
+    url = f'{args.server}/v2/{args.operation}/'
     response = request(url, args.username, args.password, request_data, args.cacert)
     if response.ok:
         display(response, verbose=args.verbose)
