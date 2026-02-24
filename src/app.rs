@@ -5,12 +5,11 @@ use crate::cli::CommandLineArgs;
 use crate::error::ActiveStorageError;
 use crate::filter_pipeline;
 use crate::metrics::{metrics_handler, track_metrics, LOCAL_CACHE_MISSES};
-use crate::models;
+use crate::models::{self, CBORResponse};
 use crate::operation;
 use crate::operations;
 use crate::resource_manager::ResourceManager;
 use crate::s3_client;
-use crate::types::{ByteOrder, NATIVE_BYTE_ORDER};
 use crate::validated_json::ValidatedJson;
 
 use axum::middleware;
@@ -18,34 +17,21 @@ use axum::{
     extract::{Path, State},
     headers::authorization::{Authorization, Basic},
     http::header,
+    http::StatusCode,
     response::{IntoResponse, Response},
     routing::{get, post},
     Router, TypedHeader,
 };
 use bytes::Bytes;
-use tokio::sync::SemaphorePermit;
-
+use serde_cbor;
 use std::sync::Arc;
+use tokio::sync::SemaphorePermit;
 use tower::Layer;
 use tower::ServiceBuilder;
 use tower_http::normalize_path::NormalizePathLayer;
 use tower_http::trace::TraceLayer;
 use tracing::debug_span;
 use tracing::Instrument;
-
-/// `x-activestorage-dtype` header definition
-static HEADER_DTYPE: header::HeaderName = header::HeaderName::from_static("x-activestorage-dtype");
-/// `x-activestorage-shape` header definition
-static HEADER_SHAPE: header::HeaderName = header::HeaderName::from_static("x-activestorage-shape");
-/// `x-activestorage-count` header definition
-static HEADER_COUNT: header::HeaderName = header::HeaderName::from_static("x-activestorage-count");
-/// `x-activestorage-byte-order` header definition
-static HEADER_BYTE_ORDER: header::HeaderName =
-    header::HeaderName::from_static("x-activestorage-byte-order");
-const HEADER_BYTE_ORDER_VALUE: &str = match NATIVE_BYTE_ORDER {
-    ByteOrder::Big => "big",
-    ByteOrder::Little => "little",
-};
 
 /// Shared application state passed to each operation request handler.
 struct AppState {
@@ -100,17 +86,11 @@ impl IntoResponse for models::Response {
     /// Convert a [crate::models::Response] into a [axum::response::Response].
     fn into_response(self) -> Response {
         (
-            [
-                (
-                    &header::CONTENT_TYPE,
-                    mime::APPLICATION_OCTET_STREAM.to_string(),
-                ),
-                (&HEADER_DTYPE, self.dtype.to_string().to_lowercase()),
-                (&HEADER_SHAPE, serde_json::to_string(&self.shape).unwrap()),
-                (&HEADER_COUNT, serde_json::to_string(&self.count).unwrap()),
-                (&HEADER_BYTE_ORDER, HEADER_BYTE_ORDER_VALUE.to_string()),
-            ],
-            self.body,
+            StatusCode::OK,
+            [(&header::CONTENT_TYPE, "application/cbor")],
+            serde_cbor::to_vec(&CBORResponse::new(&self))
+                .map_err(|e| log::error!("Failed to serialize CBOR: {}", e))
+                .unwrap(),
         )
             .into_response()
     }
@@ -132,7 +112,7 @@ pub fn init(args: &CommandLineArgs) {
 ///
 /// * a [tower_http::trace::TraceLayer] for tracing requests and responses
 fn router(args: &CommandLineArgs) -> Router {
-    fn v1(state: SharedAppState) -> Router {
+    fn v2(state: SharedAppState) -> Router {
         Router::new()
             .route("/count", post(operation_handler::<operations::Count>))
             .route("/max", post(operation_handler::<operations::Max>))
@@ -148,7 +128,7 @@ fn router(args: &CommandLineArgs) -> Router {
     Router::new()
         .route("/.well-known/reductionist-schema", get(schema))
         .route("/metrics", get(metrics_handler))
-        .nest("/v1", v1(state))
+        .nest("/v2", v2(state))
         .route_layer(middleware::from_fn(track_metrics))
 }
 

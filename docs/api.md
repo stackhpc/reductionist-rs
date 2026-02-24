@@ -1,6 +1,6 @@
 # API
 
-The Reductionist API accepts HTTP POST requests to `/v1/{operation}`, where `{operation}` is the name of the operation to perform, one of `count`, `min`, `max`, `sum` or `select`.
+The Reductionist API accepts HTTP POST requests to `/v2/{operation}`, where `{operation}` is the name of the operation to perform, one of `count`, `min`, `max`, `sum` or `select`.
 The request body should be a JSON object of the form:
 
 ```
@@ -80,13 +80,28 @@ The request body should be a JSON object of the form:
 Request authentication is implemented using [Basic Auth](https://en.wikipedia.org/wiki/Basic_access_authentication) with the username and password consisting of your S3 Access Key ID and Secret Access Key, respectively.
 Unauthenticated access to S3 is possible by omitting the basic auth header.
 
-On success, all operations return HTTP 200 OK with the response using the same datatype as specified in the request except for `count` which always returns the result as `int64`.
-The server returns the following headers with the HTTP response:
+On success, all operations return HTTP 200 OK with the response body being a [CBOR](https://cbor.io/) object of the following format:
 
-- `x-activestorage-dtype`: The data type of the data in the response payload. One of `int32`, `int64`, `uint32`, `uint64`, `float32` or `float64`.
-- `x-activestorage-byte-order`: The byte order of the data in the response payload. Either `big` or `little`.
-- `x-activestorage-shape`: A JSON-encoded list of numbers describing the shape of the data in the response payload. May be an empty list for a scalar result.
-- `x-activestorage-count`: The number of non-missing array elements operated on while performing the requested reduction. This header is useful, for example, to calculate the mean over multiple requests where the number of items operated on may differ between chunks.
+```
+{
+    // Response data. May be a scalar or multi-dimensional array.
+    "bytes": b"\0\0\0\0\x06\0\0\0\t\0\0\0\0\0\0\0\x01\0\0\0\x03\0\0\0\x05\0\0\0\t\0\0\0\x08\0\0\0\x01\0\0\0\0\0\0\0\x08\0\0\0\t\0\0\0\x05\0\0\0\x04\0\0\0\x03\0\0\0\x05\0\0\0\x05\0\0\0\x02\0\0\0\0\0\0\0",
+    // The data type of the bytes result, represented by lower case string.
+    // One of int32, int64, uint32, uint64, float32 or float64.
+    "dtype": "int32",
+    // An array of numbers describing the shape of the data in the bytes returned.
+    // May be empty for a scalar result.
+    "shape": [10, 2],
+    // The number of non-missing array elements operated on while performing the requested reduction.
+    // This is useful, for example, to calculate the mean over multiple requests
+    // where the number of items operated on may differ between chunks.
+    "count": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    // The byte order of the data in the response payload.
+    // Either `big` or `little`.
+    "byte_order": "little",
+}
+
+```
 
 On error, an HTTP 4XX (client) or 5XX (server) response code will be returned, with the response body being a JSON object of the following format:
 
