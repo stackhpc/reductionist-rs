@@ -98,7 +98,7 @@ mod tests {
                 assert_eq!(io_err.kind(), std::io::ErrorKind::InvalidInput);
                 assert_eq!(io_err.to_string(), "invalid gzip header");
             }
-            err => panic!("unexpected error {}", err),
+            err => panic!("unexpected error {err}"),
         }
     }
 
@@ -111,9 +111,9 @@ mod tests {
                 DecodeErrorStatus::GenericStr(message) => {
                     assert_eq!(message, "Unknown zlib compression method 9");
                 }
-                err => panic!("unexpected zune error {:?}", err),
+                err => panic!("unexpected zune error {err:?}"),
             },
-            err => panic!("unexpected error {}", err),
+            err => panic!("unexpected error {err}"),
         }
     }
 }

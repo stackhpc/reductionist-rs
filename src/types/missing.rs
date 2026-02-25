@@ -124,8 +124,6 @@ impl<T: Element> Missing<T> {
 
 #[cfg(test)]
 mod tests {
-    use num_traits::Float;
-
     use super::*;
 
     #[test]
@@ -175,7 +173,7 @@ mod tests {
     #[should_panic(expected = "IncompatibleMissing(Number(2147483648))")]
     fn test_try_from_missing_value_too_large() {
         Missing::<i32>::try_from(&Missing::<DValue>::MissingValue(
-            (i32::max_value() as i64 + 1).into(),
+            (i32::MAX as i64 + 1).into(),
         ))
         .unwrap();
     }
@@ -194,7 +192,7 @@ mod tests {
     #[should_panic(expected = "IncompatibleMissing(Number(9223372036854775808))")]
     fn test_try_from_missing_values_too_large() {
         Missing::<i64>::try_from(&Missing::<DValue>::MissingValues(vec![
-            (i64::max_value() as u64 + 1).into(),
+            (i64::MAX as u64 + 1).into(),
             (-1).into(),
         ]))
         .unwrap();
@@ -209,10 +207,8 @@ mod tests {
     #[test]
     #[should_panic(expected = "IncompatibleMissing(Number(4294967296))")]
     fn test_try_from_valid_min_too_large() {
-        Missing::<u32>::try_from(&Missing::<DValue>::ValidMin(
-            (u32::max_value() as u64 + 1).into(),
-        ))
-        .unwrap();
+        Missing::<u32>::try_from(&Missing::<DValue>::ValidMin((u32::MAX as u64 + 1).into()))
+            .unwrap();
     }
 
     #[test]
@@ -238,10 +234,10 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "IncompatibleMissing(Number(6.805646932770577e38))")]
+    #[should_panic(expected = "IncompatibleMissing(Number(6.805646932770577e+38))")]
     fn test_try_from_valid_range_too_large() {
         Missing::<f32>::try_from(&Missing::<DValue>::ValidRange(
-            DValue::from_f64((f32::max_value() as f64) * 2.0).unwrap(),
+            DValue::from_f64((f32::MAX as f64) * 2.0).unwrap(),
             DValue::from_f64(42.0).unwrap(),
         ))
         .unwrap();

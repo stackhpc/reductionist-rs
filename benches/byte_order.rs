@@ -31,7 +31,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         let shape = get_shape(data.len(), &request_data);
         let mut array = build_array_mut_from_shape(shape, &mut data).unwrap();
         for selection in [None, Some(vec![Slice::new(size / 4, size / 2, 2)])] {
-            let name = format!("byte_order({}, {:?})", size, selection);
+            let name = format!("byte_order({size}, {selection:?})");
             c.bench_function(&name, |b| {
                 b.iter(|| {
                     reverse_array_byte_order(black_box(&mut array), &selection);
