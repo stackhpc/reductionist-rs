@@ -26,6 +26,10 @@ server_key="/etc/ssl/default/server.key"
 cp "$server_crt" "$origin/server.crt"
 cp "$server_key" "$origin/server.key"
 
+# Setup htpasswd for basic authentication.
+# NOTE: Do NOT commit generated htpasswd contents to version control.
+htpasswd -bc "$origin/htpasswd" admin admin
+
 # Start our local nginx
 # https://hub.docker.com/_/nginx
 echo "Starting nginx serving on '$volume'"
