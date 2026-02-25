@@ -58,7 +58,7 @@ serde_json = "1.0"
 strum_macros = "0.24"
 tempfile = "3.19.0"
 thiserror = "1.0"
-time = "= 0.3.23"
+time = "= 0.3.47"
 tokio = { version = "1.28", features = ["full"] }
 tokio-rayon = "2.1"
 tower = "0.4"
