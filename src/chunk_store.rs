@@ -132,7 +132,7 @@ impl<'a> ChunkStore {
             (false, _) => {
                 self.download(auth, request_data, resource_manager, mem_permits).await
             }
-            (true, Some(_)    ) => {
+            (true, Some(_)) => {
                 self.cached_download(auth, request_data, resource_manager, mem_permits).await
             }
             (true, None) => panic!(

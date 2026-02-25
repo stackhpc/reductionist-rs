@@ -12,7 +12,7 @@ pub struct AppState {
     /// Resource manager.
     pub resource_manager: ResourceManager,
 
-    // Chunk store.
+    /// Chunk store.
     pub chunk_store: chunk_store::ChunkStore,
 }
 

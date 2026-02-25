@@ -347,8 +347,8 @@ impl From<ActiveStorageError> for ErrorResponse {
                 }
             }
 
-            ActiveStorageError::HTTPRequestError { error: _ }
-            |ActiveStorageError::S3RequestError { error: _ }
+            ActiveStorageError::HTTPRequestError { error: _ }|
+            ActiveStorageError::S3RequestError { error: _ }
              => {
                 Self::bad_request(&error)
             }
