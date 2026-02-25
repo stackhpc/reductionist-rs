@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+
+set -e
+
+origin=$(dirname "$0")
+origin=$(cd "$origin"; pwd)
+storage="$origin/testdata"
+if [ -e "$storage" ]; then
+    rm -rf "$storage"
+fi
+
+# Start our local minio S3 storage
+# https://hub.docker.com/r/minio/minio
+mkdir -p "$storage/minio"
+docker run \
+    --name minio \
+    --rm \
+    -d \
+    -p 9000:9000 \
+    -p 9001:9001 \
+    -v "$storage/minio:/data" \
+    quay.io/minio/minio server /data --console-address ":9001"
+
+# Start our local nginx
+# https://hub.docker.com/_/nginx
+# https://gist.github.com/felbinger/9059bc70817055f902fc5a1de71646d0
+# https://stackoverflow.com/questions/10631933/nginx-static-file-serving-confusion-with-root-alias
+mkdir -p "$storage/nginx"
+chmod -R a+rwx "$storage/nginx"
+docker run \
+    --name nginx \
+    --rm \
+    -d \
+    -p 8000:80 \
+    -v "$origin/nginx.conf:/etc/nginx/conf.d/default.conf" \
+    -v "$origin/htpasswd:/etc/nginx/htpasswd" \
+    -v "$storage/nginx:/usr/share/nginx/html" \
+    docker.io/nginx
+

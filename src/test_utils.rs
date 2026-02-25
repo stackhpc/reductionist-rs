@@ -6,9 +6,11 @@ use url::Url;
 /// Create a RequestData object with only required fields set.
 pub(crate) fn get_test_request_data() -> RequestData {
     RequestData {
-        source: Url::parse("http://example.com").unwrap(),
-        bucket: "bar".to_string(),
-        object: "baz".to_string(),
+        interface_type: "s3".to_string(),
+        url: Url::parse(
+            "http://example.com/bucket/test--operation-min-dtype-uint64--shape-[10, 5, 2]-etc.bin",
+        )
+        .unwrap(),
         dtype: DType::Int32,
         byte_order: None,
         offset: None,
@@ -26,9 +28,11 @@ pub(crate) fn get_test_request_data() -> RequestData {
 /// Create a RequestData object with all fields set.
 pub(crate) fn get_test_request_data_optional() -> RequestData {
     RequestData {
-        source: Url::parse("http://example.com").unwrap(),
-        bucket: "bar".to_string(),
-        object: "baz".to_string(),
+        interface_type: "s3".to_string(),
+        url: Url::parse(
+            "http://example.com/bucket/test--operation-min-dtype-uint64--shape-[10, 5, 2]-etc.bin",
+        )
+        .unwrap(),
         dtype: DType::Int32,
         byte_order: Some(ByteOrder::Little),
         offset: Some(4),

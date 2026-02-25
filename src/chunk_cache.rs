@@ -40,6 +40,7 @@ impl ChunkCacheEntry {
 /// unless the buffer is full, upon which the task will be blocked until
 /// buffered space becomes available.
 /// Buffer size is configurable.
+#[derive(Debug)]
 pub struct ChunkCache {
     /// The underlying cache object.
     cache: Arc<SimpleDiskCache>,

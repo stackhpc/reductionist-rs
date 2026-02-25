@@ -76,8 +76,8 @@ jobs:
         uses: actions/checkout@v3
         with:
           repository: stackhpc/s3-active-storage-compliance-suite
-          path: compliance
           ref: ${{ github.head_ref || github.ref_name }}
+          path: compliance
 
       - name: Setup python
         uses: actions/setup-python@v4
@@ -92,7 +92,7 @@ jobs:
         working-directory: compliance
 
       - name: Start minio object storage
-        run: scripts/minio-start
+        run: scripts/storage-start
 
       - name: Wait for minio object storage to start
         run: |
@@ -163,7 +163,7 @@ jobs:
         if: always()
 
       - name: Stop minio object storage
-        run: scripts/minio-stop
+        run: scripts/storage-stop
         if: always()
 
   deployment-test:

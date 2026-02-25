@@ -7,8 +7,11 @@ use tokio::sync::{Semaphore, SemaphorePermit};
 /// [crate::resource_manager::ResourceManager] provides a simple way to allocate various resources
 /// to tasks. Resource management is performed using a Tokio Semaphore for each type of resource.
 pub struct ResourceManager {
+    /// Optional semaphore for HTTP connections.
+    connections_http: Option<Semaphore>,
+
     /// Optional semaphore for S3 connections.
-    s3_connections: Option<Semaphore>,
+    connections_s3: Option<Semaphore>,
 
     /// Optional semaphore for memory (bytes).
     memory: Option<Semaphore>,
@@ -23,21 +26,28 @@ pub struct ResourceManager {
 impl ResourceManager {
     /// Returns a new ResourceManager object.
     pub fn new(
-        s3_connection_limit: Option<usize>,
+        connection_limit_http: Option<usize>,
+        connection_limit_s3: Option<usize>,
         memory_limit: Option<usize>,
         task_limit: Option<usize>,
     ) -> Self {
         Self {
-            s3_connections: s3_connection_limit.map(Semaphore::new),
+            connections_http: connection_limit_http.map(Semaphore::new),
+            connections_s3: connection_limit_s3.map(Semaphore::new),
             memory: memory_limit.map(Semaphore::new),
             total_memory: memory_limit,
             tasks: task_limit.map(Semaphore::new),
         }
     }
 
+    /// Acquire an HTTP connection resource.
+    pub async fn connection_http(&self) -> Result<Option<SemaphorePermit>, ActiveStorageError> {
+        optional_acquire(&self.connections_http, 1).await
+    }
+
     /// Acquire an S3 connection resource.
-    pub async fn s3_connection(&self) -> Result<Option<SemaphorePermit>, ActiveStorageError> {
-        optional_acquire(&self.s3_connections, 1).await
+    pub async fn connection_s3(&self) -> Result<Option<SemaphorePermit>, ActiveStorageError> {
+        optional_acquire(&self.connections_s3, 1).await
     }
 
     /// Acquire memory resource.
@@ -86,33 +96,43 @@ mod tests {
 
     #[tokio::test]
     async fn no_resource_management() {
-        let rm = ResourceManager::new(None, None, None);
-        assert!(rm.s3_connections.is_none());
+        let rm = ResourceManager::new(None, None, None, None);
+        assert!(rm.connections_http.is_none());
+        assert!(rm.connections_s3.is_none());
         assert!(rm.memory.is_none());
         assert!(rm.tasks.is_none());
-        let _c = rm.s3_connection().await.unwrap();
+        let _c1 = rm.connection_http().await.unwrap();
+        let _c2 = rm.connection_s3().await.unwrap();
         let _m = rm.memory(1).await.unwrap();
         let _t = rm.task().await.unwrap();
-        assert!(_c.is_none());
+        assert!(_c1.is_none());
+        assert!(_c2.is_none());
         assert!(_m.is_none());
         assert!(_t.is_none());
     }
 
     #[tokio::test]
     async fn full_resource_management() {
-        let rm = ResourceManager::new(Some(1), Some(1), Some(1));
-        assert!(rm.s3_connections.is_some());
+        let rm = ResourceManager::new(Some(1), Some(1), Some(1), Some(1));
+        assert!(rm.connections_s3.is_some());
+        assert!(rm.connections_http.is_some());
         assert!(rm.memory.is_some());
         assert!(rm.tasks.is_some());
-        let _c = rm.s3_connection().await.unwrap();
+        let _c1 = rm.connection_s3().await.unwrap();
+        let _c2 = rm.connection_http().await.unwrap();
         let _m = rm.memory(1).await.unwrap();
         let _t = rm.task().await.unwrap();
-        assert!(_c.is_some());
+        assert!(_c1.is_some());
+        assert!(_c2.is_some());
         assert!(_m.is_some());
         assert!(_t.is_some());
         // Check that there are no more resources (without blocking).
         assert_eq!(
-            rm.s3_connections.as_ref().unwrap().try_acquire().err(),
+            rm.connections_http.as_ref().unwrap().try_acquire().err(),
+            Some(TryAcquireError::NoPermits)
+        );
+        assert_eq!(
+            rm.connections_s3.as_ref().unwrap().try_acquire().err(),
             Some(TryAcquireError::NoPermits)
         );
         assert_eq!(

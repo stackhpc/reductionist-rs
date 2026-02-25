@@ -19,4 +19,13 @@
 
 # Others
 scripts/venv
+venv
 .vscode
+
+# Test generated files
+testdata/
+scripts/htpasswd
+scripts/testdata/
+scripts/server.crt
+scripts/server.key
+

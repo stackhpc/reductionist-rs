@@ -1,6 +1,6 @@
 # Reductionist
 
-This project implements simple reductions on S3 objects containing numeric binary data.
+This project implements simple reductions on S3 / HTTP objects containing numeric binary data.
 By implementing these reductions in the storage system the volume of data that needs to be
 transferred to the end user is vastly reduced, leading to faster computations.
 
@@ -22,7 +22,8 @@ Note: The original S3 Active Storage project was renamed to Reductionist, to avo
 Reductionist provides the following features:
 
 * HTTP(S) API with JSON request data
-* Access to data stored in S3-compatible storage
+* Access to data stored in S3 compatible storage
+* Access to data stored in HTTP(s) range request compatible storage
 * Basic numerical operations on multi-dimensional arrays (count, min, max, select, sum)
 * Perform calculations on a selection/slice of an array
 * Perform calculations allowing for missing data

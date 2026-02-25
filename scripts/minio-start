@@ -1,4 +1,31 @@
 #!/usr/bin/env bash
 
-# Use timestamped storage volume so that test data is removed when container is stopped
-exec docker run --detach --rm -p 9000:9000 -p 9001:9001 -v minio_$(date +%s) --name minio minio/minio server data --console-address ":9001"
+set -e
+
+origin=$(dirname "$0")
+origin=$(cd "$origin"; pwd)
+me=$(basename "$0")
+
+volume="$1"
+if [ -z "$volume" ]; then
+    cat <<EOF
+
+usage: $me <path to share>
+
+EOF
+    exit 1
+fi
+volume=$(cd "$volume"; pwd)
+
+# Start our local minio
+# https://hub.docker.com/r/minio/minio
+echo "Starting minio serving on '$volume'"
+docker run \
+    --name minio-user-share \
+    --rm \
+    -d \
+    -p 9000:9000 \
+    -p 9001:9001 \
+    -v "$volume:/data" \
+    quay.io/minio/minio server /data --console-address ":9001"
+
