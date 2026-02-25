@@ -44,7 +44,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     let bucket = "s3-client-bench";
     let runtime = tokio::runtime::Runtime::new().unwrap();
     let map = S3ClientMap::new();
-    let resource_manager = ResourceManager::new(None, None, None);
+    let resource_manager = ResourceManager::new(None, None, None, None);
     for size_k in [64, 256, 1024] {
         let size: isize = size_k * 1024;
         let data: Vec<u32> = (0_u32..(size as u32)).collect::<Vec<u32>>();

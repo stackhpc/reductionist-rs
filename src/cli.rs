@@ -40,9 +40,12 @@ pub struct CommandLineArgs {
     /// Memory limit in bytes. Default is no limit.
     #[arg(long, env = "REDUCTIONIST_MEMORY_LIMIT")]
     pub memory_limit: Option<usize>,
+    /// HTTP connection limit. Default is no limit.
+    #[arg(long, env = "REDUCTIONIST_HTTP_CONNECTION_LIMIT")]
+    pub connection_limit_http: Option<usize>,
     /// S3 connection limit. Default is no limit.
     #[arg(long, env = "REDUCTIONIST_S3_CONNECTION_LIMIT")]
-    pub s3_connection_limit: Option<usize>,
+    pub connection_limit_s3: Option<usize>,
     /// Thread limit for CPU-bound tasks. Default is one less than the number of CPUs. Used only
     /// when use_rayon is false.
     #[arg(long, env = "REDUCTIONIST_THREAD_LIMIT")]

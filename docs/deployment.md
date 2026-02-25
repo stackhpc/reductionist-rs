@@ -237,6 +237,7 @@ The ``reductionist_env`` parameter allows configuration of the environment varia
 | REDUCTIONIST_ENABLE_JAEGER | Whether to enable sending traces to Jaeger |
 | REDUCTIONIST_USE_RAYON | Whether to use Rayon for execution of CPU-bound tasks |
 | REDUCTIONIST_MEMORY_LIMIT | Memory limit in bytes |
+| REDUCTIONIST_HTTP_CONNECTION_LIMIT | HTTP connection limit |
 | REDUCTIONIST_S3_CONNECTION_LIMIT | S3 connection limit |
 | REDUCTIONIST_THREAD_LIMIT | Thread limit for CPU-bound tasks |
 | REDUCTIONIST_USE_CHUNK_CACHE | Whether to enable caching of downloaded data objects to disk |

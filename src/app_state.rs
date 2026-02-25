@@ -20,8 +20,12 @@ impl AppState {
     /// Create and return an [AppState].
     pub fn new(args: &CommandLineArgs) -> Self {
         let task_limit = args.thread_limit.or_else(|| Some(num_cpus::get() - 1));
-        let resource_manager =
-            ResourceManager::new(args.s3_connection_limit, args.memory_limit, task_limit);
+        let resource_manager = ResourceManager::new(
+            args.connection_limit_http,
+            args.connection_limit_s3,
+            args.memory_limit,
+            task_limit,
+        );
         let chunk_store = chunk_store::ChunkStore::new(args);
 
         Self {

@@ -92,7 +92,7 @@ impl<'a> chunk_store::ChunkDownloader<'a> for ChunkDownloaderS3 {
         mut mem_permits: Option<SemaphorePermit<'a>>,
     ) -> Result<Bytes, ActiveStorageError> {
         // Acquire connection permit to be freed via drop when this function returns
-        let _conn_permits = resource_manager.s3_connection().await?;
+        let _conn_permits = resource_manager.connection_s3().await?;
         // Prepare S3 credentials
         let credentials = if let Some(TypedHeader(auth)) = auth {
             s3_client::S3Credentials::access_key(auth.username(), auth.password())

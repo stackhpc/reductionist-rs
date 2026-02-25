@@ -86,7 +86,7 @@ impl<'a> chunk_store::ChunkDownloader<'a> for ChunkDownloaderHTTP {
         mut mem_permits: Option<SemaphorePermit<'a>>,
     ) -> Result<Bytes, ActiveStorageError> {
         // Acquire connection permit to be freed via drop when this function returns
-        let _conn_permits = resource_manager.s3_connection().await?;
+        let _conn_permits = resource_manager.connection_http().await?;
         // Prepare an authenticated GET request
         let request = if let Some(TypedHeader(auth)) = auth {
             self.reqwest_client
