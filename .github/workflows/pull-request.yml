@@ -76,7 +76,10 @@ jobs:
         uses: actions/checkout@v3
         with:
           repository: stackhpc/s3-active-storage-compliance-suite
-          ref: ${{ github.head_ref || github.ref_name }}
+          # Use the head ref for pull requests and the branch ref for pushes to main
+          # This is useful for testing Reductionist and the compliance suite
+          # whilst they are developed in parallel using like named branches
+          #ref: ${{ github.head_ref || github.ref_name }}
           path: compliance
 
       - name: Setup python
