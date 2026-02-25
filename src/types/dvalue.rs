@@ -107,13 +107,13 @@ mod tests {
     #[test]
     #[should_panic(expected = "IncompatibleMissing(Number(2147483648))")]
     fn test_try_from_dvalue_i32_too_large() {
-        i32::try_from_dvalue((i32::max_value() as i64 + 1).into()).unwrap();
+        i32::try_from_dvalue((i32::MAX as i64 + 1).into()).unwrap();
     }
 
     #[test]
     #[should_panic(expected = "IncompatibleMissing(Number(-2147483649))")]
     fn test_try_from_dvalue_i32_too_negative() {
-        i32::try_from_dvalue((i32::min_value() as i64 - 1).into()).unwrap();
+        i32::try_from_dvalue((i32::MIN as i64 - 1).into()).unwrap();
     }
 
     #[test]
@@ -125,7 +125,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "IncompatibleMissing(Number(9223372036854775808))")]
     fn test_try_from_dvalue_i64_too_large() {
-        i64::try_from_dvalue((i64::max_value() as u64 + 1).into()).unwrap();
+        i64::try_from_dvalue((i64::MAX as u64 + 1).into()).unwrap();
     }
 
     #[test]
@@ -143,7 +143,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "IncompatibleMissing(Number(4294967296))")]
     fn test_try_from_dvalue_u32_too_large() {
-        u32::try_from_dvalue((u32::max_value() as u64 + 1).into()).unwrap();
+        u32::try_from_dvalue((u32::MAX as u64 + 1).into()).unwrap();
     }
 
     #[test]
@@ -183,9 +183,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "IncompatibleMissing(Number(6.805646932770577e38))")]
+    #[should_panic(expected = "IncompatibleMissing(Number(6.805646932770577e+38))")]
     fn test_try_from_dvalue_f32_too_large() {
-        f32::try_from_dvalue(DValue::from_f64((f32::max_value() as f64) * 2.0).unwrap()).unwrap();
+        f32::try_from_dvalue(DValue::from_f64((f32::MAX as f64) * 2.0).unwrap()).unwrap();
     }
 
     #[test]

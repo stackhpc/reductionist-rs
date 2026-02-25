@@ -58,13 +58,17 @@ pub enum Order {
 /// When start or end is negative:
 /// * positive_start = start + length
 /// * positive_end = end + length
+///
 /// Start and end are clamped:
 /// * positive_start = min(positive_start, 0)
 /// * positive_end + max(positive_end, length)
+///
 /// When the stride is positive:
 /// * positive_start <= i < positive_end
+///
 /// When the stride is negative:
 /// * positive_end <= i < positive_start
+///
 // NOTE: In serde, structs can be deserialised from sequences or maps. This allows us to support
 // the [<start>, <end>, <stride>] API, with the convenience of named fields.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize, Validate)]
@@ -162,7 +166,7 @@ pub struct RequestData {
 
 /// Validate an array shape
 fn validate_shape(shape: &[usize]) -> Result<(), ValidationError> {
-    if shape.iter().any(|index| *index == 0) {
+    if shape.contains(&0) {
         return Err(ValidationError::new("shape indices must be greater than 0"));
     }
     Ok(())
@@ -528,7 +532,7 @@ mod tests {
                 Token::Str("foo"),
                 Token::StructEnd,
             ],
-            "invalid value: string \"foo\", expected relative URL without a base",
+            "relative URL without a base: \"foo\"",
         )
     }
 
@@ -824,7 +828,7 @@ mod tests {
     #[should_panic(expected = "Incompatible value 9223372036854775807 for missing")]
     fn test_missing_invalid_value_for_dtype() {
         let mut request_data = test_utils::get_test_request_data();
-        request_data.missing = Some(Missing::MissingValue(i64::max_value().into()));
+        request_data.missing = Some(Missing::MissingValue(i64::MAX.into()));
         request_data.validate().unwrap()
     }
 
@@ -920,18 +924,18 @@ mod tests {
                                 "dtype": "int32",
                                 "missing": {{"missing_values": [{}, -1, 0, 1, {}]}}
                               }}"#,
-            i64::min_value(),
-            u64::max_value()
+            i64::MIN,
+            u64::MAX
         );
         let request_data = serde_json::from_str::<RequestData>(&json).unwrap();
         let mut expected = test_utils::get_test_request_data();
         expected.dtype = DType::Int32;
         expected.missing = Some(Missing::MissingValues(vec![
-            i64::min_value().into(),
+            i64::MIN.into(),
             (-1).into(),
             0.into(),
             1.into(),
-            u64::max_value().into(),
+            u64::MAX.into(),
         ]));
         assert_eq!(request_data, expected);
     }

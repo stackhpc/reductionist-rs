@@ -44,7 +44,7 @@ fn criterion_benchmark(c: &mut Criterion) {
             let data: Vec<i64> = (0_i64..size).map(|i| i % 256).collect::<Vec<i64>>();
             let bytes = Bytes::copy_from_slice(data.as_bytes());
             let compressed = compress(compression, &bytes);
-            let name = format!("decompress({}, {})", name, size);
+            let name = format!("decompress({name}, {size})");
             c.bench_function(&name, |b| {
                 b.iter(|| {
                     compression::decompress(compression, black_box(&compressed)).unwrap();

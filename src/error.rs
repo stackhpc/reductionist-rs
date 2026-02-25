@@ -381,7 +381,7 @@ impl IntoResponse for ErrorResponse {
         match json_body {
             Err(err) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Failed to serialise error response: {}", err),
+                format!("Failed to serialise error response: {err}"),
             )
                 .into_response(),
             Ok(json_body) => (

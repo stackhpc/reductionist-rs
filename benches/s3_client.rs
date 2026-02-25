@@ -48,10 +48,10 @@ fn criterion_benchmark(c: &mut Criterion) {
     for size_k in [64, 256, 1024] {
         let size: isize = size_k * 1024;
         let data: Vec<u32> = (0_u32..(size as u32)).collect::<Vec<u32>>();
-        let key = format!("data-{}", size);
+        let key = format!("data-{size}");
         let bytes = Bytes::copy_from_slice(data.as_bytes());
         runtime.block_on(upload(&url, username, password, bucket, &key, bytes));
-        let name = format!("s3_client({})", size);
+        let name = format!("s3_client({size})");
         c.bench_function(&name, |b| {
             b.to_async(&runtime).iter(|| async {
                 let client = S3Client::new(&url, credentials.clone()).await;
@@ -61,7 +61,7 @@ fn criterion_benchmark(c: &mut Criterion) {
                     .unwrap();
             })
         });
-        let name = format!("s3_client_map({})", size);
+        let name = format!("s3_client_map({size})");
         c.bench_function(&name, |b| {
             b.to_async(&runtime).iter(|| async {
                 let client = map.get(&url, credentials.clone()).await;

@@ -35,7 +35,7 @@ impl IntoResponse for models::Response {
             StatusCode::OK,
             [(&header::CONTENT_TYPE, "application/cbor")],
             serde_cbor::to_vec(&CBORResponse::new(&self))
-                .map_err(|e| log::error!("Failed to serialize CBOR: {}", e))
+                .map_err(|e| log::error!("Failed to serialize CBOR: {e}"))
                 .unwrap(),
         )
             .into_response()

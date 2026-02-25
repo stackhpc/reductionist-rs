@@ -211,7 +211,6 @@ where
 mod tests {
     use super::*;
     use crate::test_utils;
-    use num_traits::Float;
 
     #[test]
     fn from_bytes_u32() {
@@ -223,7 +222,7 @@ mod tests {
 
     #[test]
     fn from_bytes_u64() {
-        let value: u64 = u64::max_value();
+        let value: u64 = u64::MAX;
         let mut buf = maligned::align_first::<u8, maligned::A8>(8);
         buf.extend_from_slice(&value.to_ne_bytes());
         assert_eq!([value], from_bytes::<u64>(&mut buf).unwrap());
@@ -239,7 +238,7 @@ mod tests {
 
     #[test]
     fn from_bytes_i64() {
-        let value: i64 = i64::min_value();
+        let value: i64 = i64::MIN;
         let mut buf = maligned::align_first::<u8, maligned::A8>(8);
         buf.extend_from_slice(&value.to_ne_bytes());
         assert_eq!([value], from_bytes::<i64>(&mut buf).unwrap());
@@ -247,7 +246,7 @@ mod tests {
 
     #[test]
     fn from_bytes_f32() {
-        let value: f32 = f32::min_value();
+        let value: f32 = f32::MIN;
         let mut buf = maligned::align_first::<u8, maligned::A4>(4);
         buf.extend_from_slice(&value.to_ne_bytes());
         assert_eq!([value], from_bytes::<f32>(&mut buf).unwrap());
@@ -255,7 +254,7 @@ mod tests {
 
     #[test]
     fn from_bytes_f64() {
-        let value: f64 = f64::max_value();
+        let value: f64 = f64::MAX;
         let mut buf = maligned::align_first::<u8, maligned::A8>(8);
         buf.extend_from_slice(&value.to_ne_bytes());
         assert_eq!([value], from_bytes::<f64>(&mut buf).unwrap());
@@ -485,14 +484,14 @@ mod tests {
 
     #[test]
     fn reverse_array_byte_order_u32() {
-        let mut data = [0, 42, u32::max_value()];
+        let mut data = [0, 42, u32::MAX];
         let mut request_data = test_utils::get_test_request_data();
         request_data.dtype = models::DType::Uint32;
         let shape = get_shape(data.len(), &request_data);
         let mut array = build_array_mut_from_shape(shape, &mut data).unwrap();
         reverse_array_byte_order(&mut array, &request_data.selection);
         // For numbers < 256, LSB becomes MSB == multiply by 2^24
-        assert_eq!([0, 42 << 24, u32::max_value()], data);
+        assert_eq!([0, 42 << 24, u32::MAX], data);
     }
 
     #[test]

@@ -328,7 +328,7 @@ impl<'a> ChunkStore {
         let key = self.replace_cache_key_token(key, "%auth", &auth_repr);
         // No tokens should remain if the supplied key template is valid.
         if key.find('%').is_some() {
-            panic!("Invalid cache key: {}", key);
+            panic!("Invalid cache key: {key}");
         }
         key
     }

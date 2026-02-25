@@ -11,7 +11,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         let data: Vec<i64> = (0_i64..size).map(|i| i % 256).collect::<Vec<i64>>();
         let bytes = Bytes::copy_from_slice(data.as_bytes());
         for element_size in [2, 4, 8] {
-            let name = format!("deshuffle({}, {})", size, element_size);
+            let name = format!("deshuffle({size}, {element_size})");
             c.bench_function(&name, |b| {
                 b.iter(|| {
                     shuffle::deshuffle(black_box(&bytes), element_size);
