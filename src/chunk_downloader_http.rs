@@ -83,7 +83,7 @@ impl<'a> chunk_store::ChunkDownloader<'a> for ChunkDownloaderHTTP {
         auth: &Option<TypedHeader<Authorization<Basic>>>,
         request_data: &models::RequestData,
         resource_manager: &ResourceManager,
-        mem_permits: Option<SemaphorePermit<'a>>,
+        mut mem_permits: Option<SemaphorePermit<'a>>,
     ) -> Result<Bytes, ActiveStorageError> {
         // Acquire connection permit to be freed via drop when this function returns
         let _conn_permits = resource_manager.s3_connection().await?;
@@ -123,13 +123,14 @@ impl<'a> chunk_store::ChunkDownloader<'a> for ChunkDownloaderHTTP {
         // size of data if we were previously unable to guess the size from request
         // data's size + offset parameters.
         // FIXME: how to account for compressed data?
+        let mem_permits = &mut mem_permits;
         match mem_permits {
             None => {
-                resource_manager.memory(content_length).await?;
+                *mem_permits = resource_manager.memory(content_length).await?;
             }
             Some(permits) => {
                 if permits.num_permits() == 0 {
-                    resource_manager.memory(content_length).await?;
+                    *mem_permits = resource_manager.memory(content_length).await?;
                 }
             }
         }
