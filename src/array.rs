@@ -58,7 +58,7 @@ pub fn get_shape(
 fn build_array_from_shape<T>(
     shape: ndarray::Shape<Dim<ndarray::IxDynImpl>>,
     data: &[T],
-) -> Result<ArrayViewD<T>, ActiveStorageError> {
+) -> Result<ArrayViewD<'_, T>, ActiveStorageError> {
     ArrayView::<T, _>::from_shape(shape, data).map_err(ActiveStorageError::ShapeInvalid)
 }
 
@@ -74,7 +74,7 @@ fn build_array_from_shape<T>(
 pub fn build_array_mut_from_shape<T>(
     shape: ndarray::Shape<Dim<ndarray::IxDynImpl>>,
     data: &mut [T],
-) -> Result<ArrayViewMutD<T>, ActiveStorageError> {
+) -> Result<ArrayViewMutD<'_, T>, ActiveStorageError> {
     ArrayViewMut::<T, _>::from_shape(shape, data).map_err(ActiveStorageError::ShapeInvalid)
 }
 

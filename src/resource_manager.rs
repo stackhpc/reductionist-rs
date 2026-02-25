@@ -41,12 +41,12 @@ impl ResourceManager {
     }
 
     /// Acquire an HTTP connection resource.
-    pub async fn connection_http(&self) -> Result<Option<SemaphorePermit>, ActiveStorageError> {
+    pub async fn connection_http(&self) -> Result<Option<SemaphorePermit<'_>>, ActiveStorageError> {
         optional_acquire(&self.connections_http, 1).await
     }
 
     /// Acquire an S3 connection resource.
-    pub async fn connection_s3(&self) -> Result<Option<SemaphorePermit>, ActiveStorageError> {
+    pub async fn connection_s3(&self) -> Result<Option<SemaphorePermit<'_>>, ActiveStorageError> {
         optional_acquire(&self.connections_s3, 1).await
     }
 
@@ -54,7 +54,7 @@ impl ResourceManager {
     pub async fn memory(
         &self,
         bytes: usize,
-    ) -> Result<Option<SemaphorePermit>, ActiveStorageError> {
+    ) -> Result<Option<SemaphorePermit<'_>>, ActiveStorageError> {
         if let Some(total_memory) = self.total_memory {
             if bytes > total_memory {
                 return Err(ActiveStorageError::InsufficientMemory {
@@ -67,7 +67,7 @@ impl ResourceManager {
     }
 
     /// Acquire a task resource.
-    pub async fn task(&self) -> Result<Option<SemaphorePermit>, ActiveStorageError> {
+    pub async fn task(&self) -> Result<Option<SemaphorePermit<'_>>, ActiveStorageError> {
         optional_acquire(&self.tasks, 1).await
     }
 }
@@ -76,7 +76,7 @@ impl ResourceManager {
 async fn optional_acquire(
     sem: &Option<Semaphore>,
     n: usize,
-) -> Result<Option<SemaphorePermit>, ActiveStorageError> {
+) -> Result<Option<SemaphorePermit<'_>>, ActiveStorageError> {
     let n = n.try_into()?;
     if let Some(sem) = sem {
         sem.acquire_many(n)

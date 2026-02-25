@@ -216,7 +216,7 @@ pub fn validate_raw_size(
             error.add_param("expected size".into(), &expected_size);
             return Err(error);
         }
-    } else if raw_size % dtype_size != 0 {
+    } else if !raw_size.is_multiple_of(dtype_size) {
         let mut error =
             ValidationError::new("Raw data size must be a multiple of dtype size in bytes");
         error.add_param("raw size".into(), &raw_size);
