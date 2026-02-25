@@ -11,7 +11,7 @@ The request body should be a JSON object of the form:
 
     // The URL for the S3 or HTTP object
     // - required
-    "source": "https://s3.example.com/bucket/object",
+    "url": "https://s3.example.com/bucket/object",
 
     // The data type to use when interpreting binary data
     // - required
