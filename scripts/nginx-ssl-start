@@ -27,7 +27,11 @@ cp "$server_crt" "$origin/server.crt"
 cp "$server_key" "$origin/server.key"
 
 # Setup htpasswd for basic authentication.
-# NOTE: Do NOT commit generated htpasswd contents to version control.
+# NOTE: Do NOT commit generated htpasswd contents to version control,
+#       it will be ignored using the following default location.
+# To change the credentials used:
+# - replace: admin admin
+# - with   : <your desired username> <your desired password>
 htpasswd -bc "$origin/htpasswd" admin admin
 
 # Start our local nginx
