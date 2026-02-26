@@ -6,7 +6,7 @@ The Reductionist supports access of both S3 and HTTP object stores and scripts a
 
 All of the following scripts launch local storage using either [Minio](https://github.com/minio/minio) for S3 or [nginx](https://nginx.org/) for HTTP/HTTPS.
 
-An easy was to manage containers as an unprivileged user is through [Podman](https://podman.io/).
+An easy way to manage containers as an unprivileged user is through [Podman](https://podman.io/).
 
 The `podman-docker` package can be installed on `DEB` and `RPM` based systems, it provides a `docker` like interface which is used by the following scripts.
 
@@ -43,7 +43,7 @@ The script starts a detached Minio container, downloading a Minio image if not a
 
 The container runs with name `minio-user-share`.
 
-Minio's S3 API as accessible on port 9000.
+Minio's S3 API is accessible on port 9000.
 
 Minio's web console is accessible on port 9001.
 
@@ -60,9 +60,9 @@ cd /path/to/reductionist-rs
 
 [nginx](https://nginx.org/) provides HTTP storage, the following scripts allow an existing directory to be used for the storage of objects.
 
-nginx is simply allowing the underlying filestem to be accessed via HTTP and/or HTTPS.
+nginx is simply allowing the underlying filesystem to be accessed via HTTP and/or HTTPS.
 
-This is particularly useful for making existing object filestores accessible to the Reductionist without having to worry about file permissions - if the using running podman can access these files they can be made available to the Reductionist.
+This is particularly useful for making existing object filestores accessible to the Reductionist without having to worry about file permissions - if the user running podman can access these files they can be made available to the Reductionist.
 
 The included `nginx.conf` has a few useful features, mainly geared towards Reductionist testing of authenticated and unauthenticated access with and without TLS certificates:
 
@@ -136,7 +136,7 @@ server_key="/etc/ssl/default/server.key"
 ```
 
 - `server_crt` - The path to the full TLS certificate chain
-- `server_key` - The path the TLS certificate private key
+- `server_key` - The path to the TLS certificate private key
 
 Often systems under `/etc/ssl` utilise symbolic links so the script copies them locally to ensure they can be easily volume mounted by the nginx container.
 
