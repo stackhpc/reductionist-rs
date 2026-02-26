@@ -1,6 +1,6 @@
 # Storage
 
-The Reductionist supports access of both S3 and HTTP object stores and scripts accompany the source code to allow running local stores, particularly useful for testing.
+The Reductionist supports access to both S3 and HTTP object stores. Scripts are provided with the source code to allow running local stores, which is particularly useful for testing.
 
 ## Scripts for starting local storage
 
@@ -8,14 +8,14 @@ All of the following scripts launch local storage using either [Minio](https://g
 
 An easy way to manage containers as an unprivileged user is through [Podman](https://podman.io/).
 
-The `podman-docker` package can be installed on `DEB` and `RPM` based systems, it provides a `docker` like interface which is used by the following scripts.
+The `podman-docker` package can be installed on `DEB` and `RPM` based systems. It provides a `docker` like interface which is used by the following scripts.
 
 | Script | Description |
 | - | - |
-| scripts/minio-start | Starts a local Minio container for user managed S3 storage |
+| scripts/minio-start | Starts a local Minio container for user-managed S3 storage |
 | scripts/minio-stop | Stops the locally started Minio container |
-| scripts/nginx-start | Starts a local nginx container for user managed HTTP storage |
-| scripts/nginx-ssl-start | Starts a local nginx container for user managed HTTPS storage |
+| scripts/nginx-start | Starts a local nginx container for user-managed HTTP storage |
+| scripts/nginx-ssl-start | Starts a local nginx container for user-managed HTTPS storage |
 | | using user provided TLS certificates |
 | scripts/nginx-stop | Stops the locally started nginx container |
 | scripts/storage-start | Starts both local Minio and nginx containers for CI/CD |
@@ -23,17 +23,17 @@ The `podman-docker` package can be installed on `DEB` and `RPM` based systems, i
 
 ## Using Minio for local S3 storage
 
-[Minio](https://github.com/minio/minio) provides S3 compatible storage, the following scripts allow an existing directory to be used for the storage of Minio exported objects.
+[Minio](https://github.com/minio/minio) provides S3-compatible storage, the following scripts allow an existing directory to be used for the storage of Minio exported objects.
 
-Minio stores objects locally in its own file format so the local directory is best populated via Minio's S3 API, but from a test perspective these scripts are useful for persisting a Minio based object store between restarts of this script. The contents of the existing directory will not be wiped.
+Minio stores objects locally in its own file format so the local directory is best populated via Minio's S3 API, but from a test perspective these scripts are useful for persisting a Minio based object store between container restarts. The contents of the existing directory will not be wiped.
 
 ### Starting Minio
 
 Checkout the Reductionist source and start Minio as follows:
 
 ```shell
-git clone https://github.com/stackhpc/reductionist-rs
-cd /path/to/reductionist-rs
+git clone https://github.com/stackhpc/reductionist-rs.git
+cd reductionist-rs
 ./scripts/minio-start </path/to/persistent/storage/directory>
 ```
 
@@ -95,14 +95,14 @@ This is not very useful from the perspective of securing existing files we want 
 Checkout the Reductionist source and start nginx as follows:
 
 ```shell
-git clone https://github.com/stackhpc/reductionist-rs
-cd /path/to/reductionist-rs
+git clone https://github.com/stackhpc/reductionist-rs.git
+cd reductionist-rs
 ./scripts/nginx-start </path/to/persistent/storage/directory>
 ```
 
 The directory `/path/to/persistent/storage/directory` must already exist, anything it contains is accessible via nginx.
 
-The script starts a detached nginx container, downloading a nginx image if not already downloaded.
+The script starts a detached nginx container, downloading an nginx image if not already downloaded.
 
 The container runs with name `nginx-user-share`.
 
@@ -122,7 +122,7 @@ cd /path/to/reductionist-rs
 Checkout the Reductionist source as follows:
 
 ```shell
-git clone https://github.com/stackhpc/reductionist-rs
+git clone https://github.com/stackhpc/reductionist-rs.git
 ```
 
 Edit the script `/path/to/reductionist-rs/scripts/nginx-ssl-start` in the section:
@@ -155,7 +155,7 @@ To stop nginx use the same stop script previously documented above.
 
 With the default nginx configuration it's possible to test both authenticated and unauthenticated access to the same location, but this is not very useful from the perspective of securing existing files we want to make accessible to the Reductionist.
 
-### Enabling authentication for all access
+#### Enabling authentication for all access
 
 To enable a completely secured server:
 
@@ -184,7 +184,7 @@ The default credentials are:
 To change the credentials:
 
 - edit `/path/to/reductionist-rs/scripts/nginx-start` if using the HTTP server
-- edit `/path/to/reductionist-rs/scripts/nginx-ssl-atart` if using the HTTPS server
+- edit `/path/to/reductionist-rs/scripts/nginx-ssl-start` if using the HTTPS server
 
 Edit the `htpasswd` line:
 
