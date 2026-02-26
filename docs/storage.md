@@ -60,13 +60,19 @@ cd /path/to/reductionist-rs
 
 [nginx](https://nginx.org/) provides HTTP storage, the following scripts allow an existing directory to be used for the storage of objects.
 
-nginx is simply allowing the underlying filestem to be accessed via HTTP and/or HTTPS,
-the included `nginx.conf` has a few useful features:
+nginx is simply allowing the underlying filestem to be accessed via HTTP and/or HTTPS.
+
+This is particularly useful for making existing object filestores accessible to the Reductionist without having to worry about file permissions - if the using running podman can access these files they can be made available to the Reductionist.
+
+The included `nginx.conf` has a few useful features, mainly geared towards Reductionist testing of authenticated and unauthenticated access with and without TLS certificates:
 
 | Address | Description |
 | - | - |
 | http://localhost:8000 | HTTP access to the exported directory |
+| http://localhost:8000/private | Authenticated HTTP access to the exported directory |
 | http://localhost:8000/upload | HTTP PUT write access to the exported directory |
+| | allowing for example CI/CD to test Reductionist's HTTP object store |
+| http://localhost:8000/private/upload | Authenticated HTTP PUT write access to the exported directory |
 | | allowing for example CI/CD to test Reductionist's HTTP object store |
 
 An additional `nginx-ssl.conf` and accompanying script allow HTTPS using user provided TLS certificates:
@@ -74,8 +80,15 @@ An additional `nginx-ssl.conf` and accompanying script allow HTTPS using user pr
 | Address | Description |
 | - | - |
 | https://localhost:8000 | HTTPS access to the exported directory |
+| https://localhost:8000/private | Authenticated HTTPS access to the exported directory |
 | https://localhost:8000/upload | HTTPS PUT write access to the exported directory |
 | | allowing for example CI/CD to test Reductionist's HTTPS object store |
+| https://localhost:8000/private/upload | Authenticated HTTPS PUT write access to the exported directory |
+| | allowing for example CI/CD to test Reductionist's HTTPS object store |
+
+With the default configuration it's possible to test both authenticated and unauthenticated access to the same location.
+
+This is not very useful from the perspective of securing existing files we want to make accessible to the Reductionist, see the later section on [Authentication](#authentication)
 
 ### Starting nginx without TLS certificates
 
@@ -137,6 +150,23 @@ cd /path/to/reductionist-rs
 ```
 
 To stop nginx use the same stop script previously documented above.
+
+### Authentication
+
+With the default nginx configuration it's possible to test both authenticated and unauthenticated access to the same location, but this is not very useful from the perspective of securing existing files we want to make accessible to the Reductionist.
+
+- To enable a completely secure HTTP server edit `/path/to/reductionist-rs/scripts/nginx.conf`
+- To enable a completely secure HTTPS server edit `/path/to/reductionist-rs/scripts/nginx-ssl.conf`
+
+Look for and uncomment the two `auth_basic` lines:
+
+```config
+# Uncomment to require authentication for all access
+auth_basic "Access Restricted";
+auth_basic_user_file /etc/nginx/htpasswd;
+```
+
+Then start nginx as previously documented.
 
 ## Scripts used by CI/CD
 
