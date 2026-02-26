@@ -155,8 +155,12 @@ To stop nginx use the same stop script previously documented above.
 
 With the default nginx configuration it's possible to test both authenticated and unauthenticated access to the same location, but this is not very useful from the perspective of securing existing files we want to make accessible to the Reductionist.
 
-- To enable a completely secure HTTP server edit `/path/to/reductionist-rs/scripts/nginx.conf`
-- To enable a completely secure HTTPS server edit `/path/to/reductionist-rs/scripts/nginx-ssl.conf`
+### Enabling authentication for all access
+
+To enable a completely secured server:
+
+- for HTTP edit `/path/to/reductionist-rs/scripts/nginx.conf`
+- for HTTPS edit `/path/to/reductionist-rs/scripts/nginx-ssl.conf`
 
 Look for and uncomment the two `auth_basic` lines:
 
@@ -166,7 +170,33 @@ auth_basic "Access Restricted";
 auth_basic_user_file /etc/nginx/htpasswd;
 ```
 
-Then start nginx as previously documented.
+#### Username and password used for authentication
+
+A `htpasswd` file is created by the `nginx-start` and `nginx-ssl-start` scripts, the resulting `htpasswd` file is then volume mounted within the nginx container.
+
+The `htpasswd` file is excluded from version control as credentials committed this way are generally flagged as a security risk.
+
+The default credentials are:
+
+- *username* : **admin**
+- *password* : **admin**
+
+To change the credentials:
+
+- edit `/path/to/reductionist-rs/scripts/nginx-start` if using the HTTP server
+- edit `/path/to/reductionist-rs/scripts/nginx-ssl-atart` if using the HTTPS server
+
+Edit the `htpasswd` line:
+
+```shell
+# Setup htpasswd for basic authentication.
+# NOTE: Do NOT commit generated htpasswd contents to version control,
+#       it will be ignored using the following default location.
+# To change the credentials used:
+# - replace: admin admin
+# - with   : <your desired username> <your desired password>
+htpasswd -bc "$origin/htpasswd" admin admin
+```
 
 ## Scripts used by CI/CD
 
