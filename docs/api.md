@@ -53,7 +53,7 @@ The request body should be a JSON object of the form:
 
     // Algorithm used to compress the data
     // - optional, defaults to no compression
-    "compression": {"id": "gzip|zlib"},
+    "compression": {"id": "blosc2|gzip|zlib"},
 
     // List of algorithms used to filter the data
     // - optional, defaults to no filters

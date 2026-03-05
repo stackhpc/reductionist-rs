@@ -96,6 +96,8 @@ impl Slice {
 #[serde(rename_all = "lowercase")]
 #[serde(tag = "id")]
 pub enum Compression {
+    /// Blosc2
+    Blosc2,
     /// Gzip
     Gzip,
     /// Zlib
@@ -782,7 +784,7 @@ mod tests {
                 Token::Str("foo"),
                 Token::MapEnd,
             ],
-            "unknown variant `foo`, expected `gzip` or `zlib`",
+            "unknown variant `foo`, expected one of `blosc2`, `gzip`, `zlib`",
         )
     }
 

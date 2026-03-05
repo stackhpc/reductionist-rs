@@ -29,6 +29,10 @@ use crate::types::DValue;
 #[derive(Debug, Error)]
 pub enum ActiveStorageError {
     /// Error decompressing data
+    #[error("failed to decompress data: {error}")]
+    DecompressionBlosc2 { error: &'static str },
+
+    /// Error decompressing data
     #[error("failed to decompress data")]
     DecompressionFlate2(#[from] std::io::Error),
 
@@ -240,7 +244,8 @@ impl From<ActiveStorageError> for ErrorResponse {
     fn from(error: ActiveStorageError) -> Self {
         let response = match &error {
             // Bad request
-            ActiveStorageError::DecompressionFlate2(_)
+            ActiveStorageError::DecompressionBlosc2 { error: _ }
+            | ActiveStorageError::DecompressionFlate2(_)
             | ActiveStorageError::DecompressionZune(_)
             | ActiveStorageError::EmptyArray { operation: _ }
             | ActiveStorageError::IncompatibleMissing(_)
@@ -432,6 +437,15 @@ mod tests {
         // Map Vec items from str to String
         let caused_by = caused_by.map(|cb| cb.iter().map(|s| s.to_string()).collect());
         assert_eq!(caused_by, error_response.error.caused_by);
+    }
+
+    #[tokio::test]
+    async fn decompression_blosc2_error() {
+        let str_error = "decompression error";
+        let error = ActiveStorageError::DecompressionBlosc2 { error: str_error };
+        let message = "failed to decompress data: decompression error";
+        let caused_by = None;
+        test_active_storage_error(error, StatusCode::BAD_REQUEST, message, caused_by).await;
     }
 
     #[tokio::test]
