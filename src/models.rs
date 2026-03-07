@@ -111,6 +111,9 @@ pub enum Compression {
 pub enum Filter {
     /// Byte shuffle
     Shuffle { element_size: usize },
+    /// Another byte shuffle, SIMD-accelerated version
+    #[serde(rename = "shuffle_simd")]
+    ShuffleSimd { element_size: usize },
 }
 
 /// Axes over which to perform the reduction
@@ -804,7 +807,7 @@ mod tests {
                 Token::Str("foo"),
                 Token::MapEnd,
             ],
-            "unknown variant `foo`, expected `shuffle`",
+            "unknown variant `foo`, expected `shuffle` or `shuffle_simd`",
         )
     }
 
