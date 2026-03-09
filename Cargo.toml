@@ -1,8 +1,7 @@
 [package]
 name = "reductionist"
-version = "0.11.0"
+version = "0.12.0"
 edition = "2021"
-# Due to AWS SDK.
 rust-version = "1.93.0"
 license = "Apache-2.0"
 description = "S3 Active Storage server"
