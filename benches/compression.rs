@@ -1,12 +1,12 @@
 /// Benchmarks for the byte shuffle filter implementation.
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use reductionist::compression;
 use reductionist::models;
 
 use axum::body::Bytes;
-use blusc::{blosc2_compress, BLOSC2_MAX_OVERHEAD, BLOSC_SHUFFLE};
-use flate2::read::{GzEncoder, ZlibEncoder};
+use blusc::{BLOSC_SHUFFLE, BLOSC2_MAX_OVERHEAD, blosc2_compress};
 use flate2::Compression;
+use flate2::read::{GzEncoder, ZlibEncoder};
 use std::io::Read;
 // Bring trait into scope to use as_bytes method.
 use zerocopy::AsBytes;

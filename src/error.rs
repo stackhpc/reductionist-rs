@@ -7,8 +7,8 @@ use aws_sdk_s3::operation::head_object::HeadObjectError;
 use aws_smithy_types::byte_stream::error::Error as ByteStreamError;
 use axum::{
     extract::rejection::JsonRejection,
-    http::header,
     http::StatusCode,
+    http::header,
     response::{IntoResponse, Response},
 };
 use ndarray::ShapeError;
@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 use thiserror::Error;
 use tokio::sync::AcquireError;
-use tracing::{event, Level};
+use tracing::{Level, event};
 use zune_inflate::errors::InflateDecodeErrors;
 
 use crate::types::DValue;

@@ -12,13 +12,13 @@ use crate::validated_json::ValidatedJson;
 
 use axum::middleware;
 use axum::{
+    Router, TypedHeader,
     extract::{Path, State},
     headers::authorization::{Authorization, Basic},
-    http::header,
     http::StatusCode,
+    http::header,
     response::{IntoResponse, Response},
     routing::{get, post},
-    Router, TypedHeader,
 };
 use bytes::Bytes;
 use serde_cbor;

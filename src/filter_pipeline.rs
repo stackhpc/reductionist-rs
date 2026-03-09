@@ -37,8 +37,8 @@ pub fn filter_pipeline(
 mod tests {
     use super::*;
     use crate::test_utils;
-    use flate2::read::{GzEncoder, ZlibEncoder};
     use flate2::Compression;
+    use flate2::read::{GzEncoder, ZlibEncoder};
     use std::io::Read;
 
     fn compress_gzip(data: &[u8]) -> Bytes {

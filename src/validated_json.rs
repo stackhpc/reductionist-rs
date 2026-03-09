@@ -4,7 +4,7 @@ use crate::error::ActiveStorageError;
 
 use async_trait::async_trait;
 use axum::{
-    extract::{rejection::JsonRejection, FromRequest, Json},
+    extract::{FromRequest, Json, rejection::JsonRejection},
     http::Request,
 };
 use serde::de::DeserializeOwned;
@@ -39,11 +39,11 @@ mod tests {
 
     use super::*;
     use axum::{
+        Router,
         body::Body,
         http::{self, Request, StatusCode},
         response::Response,
         routing::post,
-        Router,
     };
     use regex::Regex;
     use serde::{Deserialize, Serialize};

@@ -9,8 +9,8 @@ use crate::resource_manager::ResourceManager;
 use tokio::sync::SemaphorePermit;
 
 use axum::{
-    headers::authorization::{Authorization, Basic},
     TypedHeader,
+    headers::authorization::{Authorization, Basic},
 };
 use bytes::Bytes;
 use tracing::Instrument;
@@ -130,10 +130,12 @@ impl<'a> ChunkStore {
     ) -> Result<bytes::Bytes, ActiveStorageError> {
         match (self.chunk_cache_enabled, &self.chunk_cache) {
             (false, _) => {
-                self.download(auth, request_data, resource_manager, mem_permits).await
+                self.download(auth, request_data, resource_manager, mem_permits)
+                    .await
             }
             (true, Some(_)) => {
-                self.cached_download(auth, request_data, resource_manager, mem_permits).await
+                self.cached_download(auth, request_data, resource_manager, mem_permits)
+                    .await
             }
             (true, None) => panic!(
                 "Chunk cache enabled but no chunk cache provided.\nThis is a bug. Please report it to the application developers."

@@ -214,8 +214,9 @@ pub fn validate_raw_size(
     if let Some(shape) = shape {
         let expected_size = shape.iter().product::<usize>() * dtype_size;
         if raw_size != expected_size {
-            let mut error =
-                ValidationError::new("Raw data size must be equal to the product of shape indices and dtype size in bytes");
+            let mut error = ValidationError::new(
+                "Raw data size must be equal to the product of shape indices and dtype size in bytes",
+            );
             error.add_param("raw size".into(), &raw_size);
             error.add_param("dtype size".into(), &dtype_size);
             error.add_param("expected size".into(), &expected_size);
@@ -366,7 +367,7 @@ impl CBORResponse {
 mod tests {
     use super::*;
     use crate::test_utils;
-    use serde_test::{assert_de_tokens, assert_de_tokens_error, Token};
+    use serde_test::{Token, assert_de_tokens, assert_de_tokens_error};
 
     // The following tests use serde_test to validate the correct function of the deserialiser.
     // The validations are also tested.
@@ -384,7 +385,9 @@ mod tests {
                 Token::Str("interface_type"),
                 Token::Str("s3"),
                 Token::Str("url"),
-                Token::Str("http://example.com/bucket/test--operation-min-dtype-uint64--shape-[10, 5, 2]-etc.bin"),
+                Token::Str(
+                    "http://example.com/bucket/test--operation-min-dtype-uint64--shape-[10, 5, 2]-etc.bin",
+                ),
                 Token::Str("dtype"),
                 Token::Enum { name: "DType" },
                 Token::Str("int32"),
@@ -408,7 +411,9 @@ mod tests {
                 Token::Str("interface_type"),
                 Token::Str("s3"),
                 Token::Str("url"),
-                Token::Str("http://example.com/bucket/test--operation-min-dtype-uint64--shape-[10, 5, 2]-etc.bin"),
+                Token::Str(
+                    "http://example.com/bucket/test--operation-min-dtype-uint64--shape-[10, 5, 2]-etc.bin",
+                ),
                 Token::Str("dtype"),
                 Token::Enum { name: "DType" },
                 Token::Str("int32"),
@@ -552,7 +557,9 @@ mod tests {
                 Token::Str("interface_type"),
                 Token::Str("s3"),
                 Token::Str("url"),
-                Token::Str("http://example.com/bucket/test--operation-min-dtype-uint64--shape-[10, 5, 2]-etc.bin"),
+                Token::Str(
+                    "http://example.com/bucket/test--operation-min-dtype-uint64--shape-[10, 5, 2]-etc.bin",
+                ),
                 Token::StructEnd,
             ],
             "missing field `dtype`",
@@ -561,14 +568,18 @@ mod tests {
 
     #[test]
     fn test_invalid_dtype() {
-        assert_de_tokens_error::<RequestData>(&[
-            Token::Struct { name: "RequestData", len: 2 },
-            Token::Str("dtype"),
-            Token::Enum { name: "DType" },
-            Token::Str("foo"),
-            Token::StructEnd
+        assert_de_tokens_error::<RequestData>(
+            &[
+                Token::Struct {
+                    name: "RequestData",
+                    len: 2,
+                },
+                Token::Str("dtype"),
+                Token::Enum { name: "DType" },
+                Token::Str("foo"),
+                Token::StructEnd,
             ],
-            "unknown variant `foo`, expected one of `int32`, `int64`, `uint32`, `uint64`, `float32`, `float64`"
+            "unknown variant `foo`, expected one of `int32`, `int64`, `uint32`, `uint64`, `float32`, `float64`",
         )
     }
 
@@ -823,7 +834,7 @@ mod tests {
                 Token::Some,
                 Token::Enum { name: "Missing" },
                 Token::Str("foo"),
-                Token::StructEnd
+                Token::StructEnd,
             ],
             "unknown variant `foo`, expected one of `missing_value`, `missing_values`, `valid_min`, `valid_max`, `valid_range`",
         )
@@ -839,12 +850,16 @@ mod tests {
 
     #[test]
     fn test_unknown_field() {
-        assert_de_tokens_error::<RequestData>(&[
-            Token::Struct { name: "RequestData", len: 2 },
-            Token::Str("foo"),
-            Token::StructEnd
+        assert_de_tokens_error::<RequestData>(
+            &[
+                Token::Struct {
+                    name: "RequestData",
+                    len: 2,
+                },
+                Token::Str("foo"),
+                Token::StructEnd,
             ],
-            "unknown field `foo`, expected one of `interface_type`, `url`, `dtype`, `byte_order`, `offset`, `size`, `shape`, `axis`, `order`, `selection`, `compression`, `filters`, `missing`"
+            "unknown field `foo`, expected one of `interface_type`, `url`, `dtype`, `byte_order`, `offset`, `size`, `shape`, `axis`, `order`, `selection`, `compression`, `filters`, `missing`",
         )
     }
 

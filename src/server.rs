@@ -5,7 +5,7 @@ use crate::cli;
 use std::{net::SocketAddr, process::exit, str::FromStr, time::Duration};
 
 use axum::ServiceExt;
-use axum_server::{tls_rustls::RustlsConfig, Handle};
+use axum_server::{Handle, tls_rustls::RustlsConfig};
 use expanduser::expanduser;
 use tokio::signal;
 

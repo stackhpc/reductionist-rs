@@ -1,10 +1,10 @@
 /// Benchmarks for S3 client implementation.
 use aws_credential_types::Credentials;
-use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::Client;
+use aws_sdk_s3::primitives::ByteStream;
 use aws_types::region::Region;
 use axum::body::Bytes;
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use reductionist::resource_manager::ResourceManager;
 use reductionist::s3_client::{S3Client, S3ClientMap, S3Credentials};
 use url::Url;

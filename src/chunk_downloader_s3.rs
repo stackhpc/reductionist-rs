@@ -5,8 +5,8 @@ use crate::resource_manager::ResourceManager;
 use crate::s3_client;
 
 use axum::{
-    headers::authorization::{Authorization, Basic},
     TypedHeader,
+    headers::authorization::{Authorization, Basic},
 };
 use bytes::Bytes;
 use tokio::sync::SemaphorePermit;

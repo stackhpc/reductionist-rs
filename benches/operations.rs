@@ -1,5 +1,5 @@
 /// Benchmarks for numerical operations.
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use reductionist::error::ActiveStorageError;
 use reductionist::models::{DType, RequestData, Response};
 use reductionist::operation::Operation;

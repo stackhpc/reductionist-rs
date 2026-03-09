@@ -4,8 +4,8 @@ use crate::models;
 use crate::resource_manager::ResourceManager;
 
 use axum::{
-    headers::authorization::{Authorization, Basic},
     TypedHeader,
+    headers::authorization::{Authorization, Basic},
 };
 use bytes::Bytes;
 use tokio::sync::SemaphorePermit;
@@ -109,7 +109,7 @@ impl<'a> chunk_store::ChunkDownloader<'a> for ChunkDownloaderHTTP {
                 _ => {
                     return Err(ActiveStorageError::HTTPRequestError {
                         error: format!("HTTP request failed with status: {}", response.status()),
-                    })
+                    });
                 }
             },
             Err(e) => return Err(ActiveStorageError::from(e)),
