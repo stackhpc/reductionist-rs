@@ -55,13 +55,13 @@ impl ResourceManager {
         &self,
         bytes: usize,
     ) -> Result<Option<SemaphorePermit<'_>>, ActiveStorageError> {
-        if let Some(total_memory) = self.total_memory {
-            if bytes > total_memory {
-                return Err(ActiveStorageError::InsufficientMemory {
-                    requested: bytes,
-                    total: total_memory,
-                });
-            };
+        if let Some(total_memory) = self.total_memory
+            && bytes > total_memory
+        {
+            return Err(ActiveStorageError::InsufficientMemory {
+                requested: bytes,
+                total: total_memory,
+            });
         };
         optional_acquire(&self.memory, bytes).await
     }

@@ -15,8 +15,8 @@ use validator::ValidationError;
 use crate::error::ActiveStorageError;
 use crate::models::DType;
 use crate::operation::Element;
-use crate::types::dvalue::TryFromDValue;
 use crate::types::DValue;
+use crate::types::dvalue::TryFromDValue;
 
 /// Missing data
 ///
@@ -67,14 +67,14 @@ impl<T: PartialOrd + Serialize + TryFromDValue> Missing<T> {
             error
         })?;
         // Validate min + max for valid ranges.
-        if let Missing::ValidRange(min, max) = missing_primitive {
-            if min >= max {
-                let mut error =
-                    ValidationError::new("Missing data valid range min must be less than max");
-                error.add_param("min".into(), &min);
-                error.add_param("max".into(), &max);
-                return Err(error);
-            };
+        if let Missing::ValidRange(min, max) = missing_primitive
+            && min >= max
+        {
+            let mut error =
+                ValidationError::new("Missing data valid range min must be less than max");
+            error.add_param("min".into(), &min);
+            error.add_param("max".into(), &max);
+            return Err(error);
         };
         Ok(())
     }

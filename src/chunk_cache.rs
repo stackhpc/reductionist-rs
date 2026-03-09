@@ -516,10 +516,10 @@ impl SimpleDiskCache {
             self.prune_expired().await;
             // Do we need to prune further to keep within a maximum size threshold?
             state = self.load_state().await;
-            if let Some(max_size_bytes) = self.max_size_bytes {
-                if state.current_size_bytes + headroom_bytes >= max_size_bytes {
-                    self.prune_disk_space(headroom_bytes).await?;
-                }
+            if let Some(max_size_bytes) = self.max_size_bytes
+                && state.current_size_bytes + headroom_bytes >= max_size_bytes
+            {
+                self.prune_disk_space(headroom_bytes).await?;
             }
             // Update state with the time of the next periodic pruning.
             state = self.load_state().await;

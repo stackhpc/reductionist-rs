@@ -84,9 +84,9 @@ fn decompress_zune_zlib(data: &Bytes) -> Result<Bytes, ActiveStorageError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use blusc::{blosc2_compress, BLOSC2_MAX_OVERHEAD, BLOSC_SHUFFLE};
-    use flate2::read::{GzEncoder, ZlibEncoder};
+    use blusc::{BLOSC_SHUFFLE, BLOSC2_MAX_OVERHEAD, blosc2_compress};
     use flate2::Compression;
+    use flate2::read::{GzEncoder, ZlibEncoder};
     use zune_inflate::errors::DecodeErrorStatus;
 
     fn compress_blosc() -> Vec<u8> {

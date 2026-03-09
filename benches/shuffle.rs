@@ -1,6 +1,6 @@
 /// Benchmarks for the byte shuffle filter implementations.
 use axum::body::Bytes;
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use reductionist::filters::shuffle;
 use reductionist::filters::shuffle_simd;
 // Bring trait into scope to use as_bytes method.

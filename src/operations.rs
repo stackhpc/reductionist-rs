@@ -59,11 +59,7 @@ fn count_array_multi_axis<T: Element>(
             // equivalent to a 'reduction over no axes'
             array.map(|val| {
                 if let Some(missing) = &missing {
-                    if !missing.is_missing(val) {
-                        1
-                    } else {
-                        0
-                    }
+                    if !missing.is_missing(val) { 1 } else { 0 }
                 } else {
                     1
                 }
@@ -203,13 +199,12 @@ fn reduction_over_zero_axes<T: Element>(
             (*val, 1)
         }
     };
-    let result = match order {
+    match order {
         // Account for the fact that map always
         // iterates in C-order.
         Some(Order::F) => array.t().map(func),
         _ => array.map(func),
-    };
-    result
+    }
 }
 
 /// Performs a max over one or more axes of the provided array

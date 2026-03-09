@@ -1,5 +1,5 @@
 /// Benchmarks for the byte order reversal implementation.
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use reductionist::array::{build_array_mut_from_shape, get_shape, reverse_array_byte_order};
 use reductionist::models::{DType, RequestData, Slice};
 use url::Url;

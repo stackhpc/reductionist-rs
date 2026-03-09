@@ -5,8 +5,8 @@ use crate::error::ActiveStorageError;
 use crate::resource_manager::ResourceManager;
 
 use aws_credential_types::Credentials;
-use aws_sdk_s3::operation::head_object::HeadObjectError;
 use aws_sdk_s3::Client;
+use aws_sdk_s3::operation::head_object::HeadObjectError;
 use aws_sdk_s3::{config::BehaviorVersion, error::SdkError};
 use aws_smithy_runtime_api::http::Response;
 use aws_types::region::Region;
