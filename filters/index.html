@@ -1,0 +1,785 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://stackhpc.github.io/reductionist-rs/filters/">
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-8.5.10">
+    
+    
+      
+        <title>Adding support for a new filter - Reductionist</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.975780f9.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.2505c338.min.css">
+        
+          
+          
+          <meta name="theme-color" content="#ef5552">
+        
+      
+      
+
+    
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="">
+  
+    
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#adding-support-for-a-new-filter" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Reductionist" class="md-header__button md-logo" aria-label="Reductionist" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Reductionist
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Adding support for a new filter
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/stackhpc/reductionist-rs" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Reductionist" class="md-nav__button md-logo" aria-label="Reductionist" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    Reductionist
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/stackhpc/reductionist-rs" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+      
+
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        Home
+      </a>
+    </li>
+  
+
+    
+      
+      
+      
+
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        API
+      </a>
+    </li>
+  
+
+    
+      
+      
+      
+
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../deployment/" class="md-nav__link">
+        Deployment
+      </a>
+    </li>
+  
+
+    
+      
+      
+      
+
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        Architecture
+      </a>
+    </li>
+  
+
+    
+      
+      
+      
+
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        Contributing
+      </a>
+    </li>
+  
+
+    
+      
+      
+      
+
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pyactivestorage/" class="md-nav__link">
+        PyActiveStorage Integration
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#explaining-by-example" class="md-nav__link">
+    Explaining by example
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prevent-reinventing-the-wheel-with-rust-crates" class="md-nav__link">
+    Prevent reinventing the wheel with Rust crates
+  </a>
+  
+    <nav class="md-nav" aria-label="Prevent reinventing the wheel with Rust crates">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#choosing-an-existing-filter-crate" class="md-nav__link">
+    Choosing an existing filter crate
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#updating-the-reductionist-code-base" class="md-nav__link">
+    Updating the Reductionist code base
+  </a>
+  
+    <nav class="md-nav" aria-label="Updating the Reductionist code base">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#add-the-byteshuffle-crate-to-the-reductionist" class="md-nav__link">
+    Add the byteshuffle crate to the Reductionist
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#update-the-list-of-filters-available-srcmodelsrs" class="md-nav__link">
+    Update the list of filters available - src/models.rs
+  </a>
+  
+    <nav class="md-nav" aria-label="Update the list of filters available - src/models.rs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#testing-in-modelsrs" class="md-nav__link">
+    Testing in models.rs
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#add-the-code-behind-the-defiltering-srcfiltersrs-srcfiltersshuffle_simdrs" class="md-nav__link">
+    Add the code behind the defiltering - src/filters.rs, src/filters/shuffle_simd.rs
+  </a>
+  
+    <nav class="md-nav" aria-label="Add the code behind the defiltering - src/filters.rs, src/filters/shuffle_simd.rs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#testing-in-filtersrs-filtersshuffle_simdrs" class="md-nav__link">
+    Testing in filters.rs, filters/shuffle_simd.rs
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#benchmarking-benchesshufflers" class="md-nav__link">
+    Benchmarking - benches/shuffle.rs
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compiling-the-code" class="md-nav__link">
+    Compiling the code
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing-the-code" class="md-nav__link">
+    Testing the code
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#running-benchmarks" class="md-nav__link">
+    Running benchmarks
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#checking-all-prerequisites-before-committing-code" class="md-nav__link">
+    Checking all prerequisites before committing code
+  </a>
+  
+    <nav class="md-nav" aria-label="Checking all prerequisites before committing code">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#code-formatting" class="md-nav__link">
+    Code formatting
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#linting-and-suggested-code-improvements" class="md-nav__link">
+    Linting and suggested code improvements
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#automating-the-whole-sequence-of-checks" class="md-nav__link">
+    Automating the whole sequence of checks
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#update-the-api-documentation-and-schema-docsapimd" class="md-nav__link">
+    Update the API documentation and schema - docs/api.md
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#completing-the-addition-of-a-new-filter" class="md-nav__link">
+    Completing the addition of a new filter
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#concluding-whether-simd-acceleration-improves-performance" class="md-nav__link">
+    Concluding whether SIMD-acceleration improves performance
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  <a href="https://github.com/stackhpc/reductionist-rs/edit/master/docs/filters.md" title="Edit this page" class="md-content__button md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
+  </a>
+
+
+<h1 id="adding-support-for-a-new-filter">Adding support for a new filter<a class="headerlink" href="#adding-support-for-a-new-filter" title="Permanent link">&para;</a></h1>
+<p>The Reductionist supports decompression of compressed object data chunks.</p>
+<p>To quote the documentation of <a href="https://docs.rs/byteshuffle/latest/byteshuffle/">Rust crate byteshuffle</a></p>
+<blockquote>
+<p>The byte-shuffle is a very efficient way to improve the compressibility of data that consists of an array of fixed-size objects. It rearranges the array in order to group all elements’ least significant bytes together, most-significant bytes together, and everything in between. Since real applications’ arrays often contain consecutive elements that are closely correlated with each other, this filter frequently results in lengthy continuous runs of identical bytes. Such runs are highly compressible by general-purpose compression libraries like gzip, lz4, etc.</p>
+</blockquote>
+<p>In compression algorithms such as <a href="https://blosc.org/">Blosc</a> the algorithm may incorporate their own filters to improve compression.</p>
+<p>Where the filter isn't incorporated into the compression algorithm Reductionist allows filters to be incorporated into its pipeline, first the pipeline decompresses object data and then it reverse filters the data.</p>
+<p>Reductionist tries to make it as easy as possible to add support for new filters.</p>
+<p>Reductionist is built using <a href="https://rust-lang.org/">Rust</a> and prerequisite knowledge will be invaluable.</p>
+<p>A good source of Rust knowledge can be found in what's affectionately named <a href="https://rust-lang.org/learn/">the book</a>, which is available to read for free online.</p>
+<p>Rust is very good at ensuring performant code is written, at the same time this can seem a little unforgiving.</p>
+<p>There are built-in tools we will use whilst writing this code:
+* <code>cargo fmt</code> - ensures the code conforms to code formatting standards aiding in readability and maintainability
+* <code>cargo clippy</code> - a collection of <a href="https://en.wikipedia.org/wiki/Lint_(software)">lints</a> that catch common mistakes and improve on code
+* <code>cargo test</code> - built-in unit testing aiming for complete code test coverage</p>
+<p>These tools are incorporated into the Reductionist repository's commit procedure, it's not possible to merge a pull request for a new filter into the <code>main</code> branch without these tools passing.</p>
+<p>We'll document how these tools can be run locally from a single script to ensure there are no surprises when the repository workflow runs these same tools.</p>
+<h2 id="explaining-by-example">Explaining by example<a class="headerlink" href="#explaining-by-example" title="Permanent link">&para;</a></h2>
+<p>Arguably the easiest way to add support for a new filter is to follow an example, using it as a template.</p>
+<p>We will follow support for the addition of <a href="https://docs.rs/byteshuffle/latest/byteshuffle/">byteshuffle</a>.</p>
+<p>Reductionist already has deshuffle support, <code>byteshuffle</code> and its deshuffle component were inspired by the Blosc project and offer SIMD-accelerated byte shuffle/unshuffle routines.</p>
+<p>Reductionist incorporates benchmarking which will allow a performance comparison of these two competing filters.</p>
+<p>This example has been contributed to the main <a href="https://github.com/stackhpc/reductionist-rs/">Reductionist repository</a> and can be found in its Git history.</p>
+<p>The process of contributing to the Reductionist involves a pull request which for this example can be found <a href="https://github.com/stackhpc/reductionist-rs/pull/117">here</a>. This PR gives a nice view of the changes required to add new filter support.</p>
+<h2 id="prevent-reinventing-the-wheel-with-rust-crates">Prevent reinventing the wheel with Rust crates<a class="headerlink" href="#prevent-reinventing-the-wheel-with-rust-crates" title="Permanent link">&para;</a></h2>
+<p>If we're to add support for a new feature we should first check <a href="https://crates.io/">crates.io: Rust Package Registry</a>.
+This houses well tested implementations of community provided Rust software.</p>
+<p>We've already mentioned <code>byteshuffle</code>, this existing SIMD-accelerated byte shuffle/unshuffle implementation is a good example of using community tested code so we don't have to write our own.</p>
+<p>Something to consider when looking for existing crates is "Are they implemented purely in Rust or are they Rust bindings to existing system libraries?"</p>
+<p><strong>We prefer a pure Rust implementation, because if we're to deploy Reductionist we already have everything "Rust" covered.</strong></p>
+<p><strong>Incorporating a potentially non-standard system library into the Reductionist deployment is not covered and out of scope.</strong></p>
+<h3 id="choosing-an-existing-filter-crate">Choosing an existing filter crate<a class="headerlink" href="#choosing-an-existing-filter-crate" title="Permanent link">&para;</a></h3>
+<p>We go to <a href="https://crates.io/">https://crates.io/</a> where we can search for filters by keyword.</p>
+<p>Choosing a crate can be a bit of an iterative process, there are often many available.</p>
+<p>Documentation varies across crates and selecting the most popular and supported is a good idea.</p>
+<p>When a crate is added to your project it will be automatically downloaded, along with any dependencies, and built.</p>
+<p>If the build fails, is it a Rust compilation error or an indication that it builds against system libraries?</p>
+<p>Implementations that are Rust bindings against system libraries should be avoided if possible. To ensure a straightforward containerised Reductionist <a href="https://github.com/stackhpc/reductionist-rs/blob/main/docs/deployment.md">deployment</a> avoid crates that need non-standard libraries adding to Reductionist's container.</p>
+<h2 id="updating-the-reductionist-code-base">Updating the Reductionist code base<a class="headerlink" href="#updating-the-reductionist-code-base" title="Permanent link">&para;</a></h2>
+<p>Assumptions made are:
+* You know how to obtain the <a href="https://github.com/stackhpc/reductionist-rs">Reductionist code</a>
+* You are familiar with developing new features in a <a href="https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/about-branches">feature branch of the repository</a>
+* You have an understanding of <a href="https://rust-lang.org/">Rust</a>
+* You have an understanding of <a href="https://doc.rust-lang.org/cargo/">cargo</a> - Rust's build system and package manager
+* You have an understanding of <a href="https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/about-pull-requests">GitHub and pull requests</a></p>
+<h3 id="add-the-byteshuffle-crate-to-the-reductionist">Add the byteshuffle crate to the Reductionist<a class="headerlink" href="#add-the-byteshuffle-crate-to-the-reductionist" title="Permanent link">&para;</a></h3>
+<p>Starting point - you've checked out the Reductionist and are within the root of the repository.</p>
+<p>Add the <code>byteshuffle</code> dependency to Reductionist:</p>
+<div class="highlight"><pre><span></span><code>cargo<span class="w"> </span>add<span class="w"> </span>byteshuffle
+</code></pre></div>
+<p>If you run <code>git status</code> you'll notice this has updated <code>Cargo.toml</code>.</p>
+<p>A nice touch is to edit <code>Cargo.toml</code> where you'll see the <code>byteshuffle</code> dependency has been added:</p>
+<div class="highlight"><pre><span></span><code><span class="n">byteshuffle</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0.1.2&quot;</span>
+</code></pre></div>
+<p>Then you move this dependency so they're listed alphabetically, nice if you're ever managing dependencies by hand.</p>
+<h3 id="update-the-list-of-filters-available-srcmodelsrs">Update the list of filters available - src/models.rs<a class="headerlink" href="#update-the-list-of-filters-available-srcmodelsrs" title="Permanent link">&para;</a></h3>
+<p>Update <code>src/models.rs</code></p>
+<p>This contains the Filter <a href="https://doc.rust-lang.org/rust-by-example/custom_types/enum.html">enum</a>, essentially the list of filters supported by the Reductionist.</p>
+<p>The order isn't important so we try to keep it alphabetical.</p>
+<p>We add a new enum to the list of filters.</p>
+<p>We might want to name the enum variant as <code>Shuffle_SIMD</code> for two reasons:</p>
+<ul>
+<li>SIMD is an acronym, and we want to reflect that in the enum variant name</li>
+<li>Rust <a href="https://serde.rs/">serde</a> will be translating this enum between API requests such that specifying a filter in a request would use <code>shuffle_simd</code> for the enum <code>Shuffle_SIMD</code></li>
+</ul>
+<p>Rust cargo will however complain if we use this enum:</p>
+<div class="highlight"><pre><span></span><code><span class="k">pub</span><span class="w"> </span><span class="k">enum</span><span class="w"> </span><span class="nc">Filter</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="sd">/// Byte shuffle</span>
+<span class="w">    </span><span class="n">Shuffle</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">element_size</span><span class="p">:</span><span class="w"> </span><span class="kt">usize</span><span class="w"> </span><span class="p">},</span>
+<span class="w">    </span><span class="sd">/// Another byte shuffle, SIMD-accelerated version</span>
+<span class="w">    </span><span class="n">Shuffle_SIMD</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">element_size</span><span class="p">:</span><span class="w"> </span><span class="kt">usize</span><span class="w"> </span><span class="p">},</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>complaining with:</p>
+<div class="highlight"><pre><span></span><code>116 |     Shuffle_SIMD { element_size: usize },
+    |     ^^^^^^^^^^^^ help: convert the identifier to upper camel case: `ShuffleSimd`
+</code></pre></div>
+<p>To keep Rust happy whilst allowing API requests to use <code>shuffle_simd</code> we implement the enum as follows:</p>
+<div class="highlight"><pre><span></span><code><span class="k">pub</span><span class="w"> </span><span class="k">enum</span><span class="w"> </span><span class="nc">Filter</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="sd">/// Byte shuffle</span>
+<span class="w">    </span><span class="n">Shuffle</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">element_size</span><span class="p">:</span><span class="w"> </span><span class="kt">usize</span><span class="w"> </span><span class="p">},</span>
+<span class="w">    </span><span class="sd">/// Another byte shuffle, SIMD-accelerated version</span>
+<span class="w">    </span><span class="cp">#[serde(rename = </span><span class="s">&quot;shuffle_simd&quot;</span><span class="cp">)]</span>
+<span class="w">    </span><span class="n">ShuffleSimd</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">element_size</span><span class="p">:</span><span class="w"> </span><span class="kt">usize</span><span class="w"> </span><span class="p">},</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>This ensures that wherever the API request is involved it's expecting <code>shuffle_simd</code> and not <code>shufflesimd</code>.</p>
+<h4 id="testing-in-modelsrs">Testing in models.rs<a class="headerlink" href="#testing-in-modelsrs" title="Permanent link">&para;</a></h4>
+<p>The unit test <code>test_invalid_filter</code> in <code>src/models.rs</code> must be updated.</p>
+<p>Requests made to the Reductionist will name a filter, if used, so we're just making sure the validation for requests is in sync with the filters listed in the enum.</p>
+<h3 id="add-the-code-behind-the-defiltering-srcfiltersrs-srcfiltersshuffle_simdrs">Add the code behind the defiltering - src/filters.rs, src/filters/shuffle_simd.rs<a class="headerlink" href="#add-the-code-behind-the-defiltering-srcfiltersrs-srcfiltersshuffle_simdrs" title="Permanent link">&para;</a></h3>
+<p>First we update <code>src/filters.rs</code>.</p>
+<p>I'm going to mention what you probably already know when it comes to Rust and <code>cargo clippy</code>, but it's nice to reiterate.</p>
+<p>There's a <a href="https://doc.rust-lang.org/rust-by-example/flow_control/match.html">match</a> pattern that determines the function used for each filter listed in the <code>Filter</code> enum we updated earlier in <code>src/models.rs</code>.</p>
+<p>Rust is not going to let our code compile unless all match branches are covered, Rust makes it impossible to leave this as a "loose end".</p>
+<p>The branch added to this match references a function external to this <code>src/filters.rs</code> hence at the top of this file we declare the function:</p>
+<div class="highlight"><pre><span></span><code><span class="k">pub</span><span class="w"> </span><span class="k">mod</span><span class="w"> </span><span class="nn">shuffle_simd</span><span class="p">;</span>
+</code></pre></div>
+<p>This then allows us to add the implementation to a new file <code>src/filters/shuffle_simd.rs</code>.</p>
+<p>We can start by copying <code>src/filters/shuffle.rs</code> to <code>src/filters/shuffle_simd.rs</code> so tests are easily adapted since this is just another implementation of a byte-shuffle deshuffling filter.</p>
+<p>The <a href="https://docs.rs/byteshuffle/latest/byteshuffle/">byteshuffle documentation</a> provides a quick start which is enough information to implement a defiltering function.</p>
+<p>You might well wonder whether you've implemented this correctly, well we're going to test it!</p>
+<h4 id="testing-in-filtersrs-filtersshuffle_simdrs">Testing in filters.rs, filters/shuffle_simd.rs<a class="headerlink" href="#testing-in-filtersrs-filtersshuffle_simdrs" title="Permanent link">&para;</a></h4>
+<p>There's already a unit test in <code>src/filters.rs</code> that uses code in the corresponding <code>filters/&lt;filter&gt;.rs</code> file to filter some data so that the reverse filtering can be tested for a match.</p>
+<p>We add a test that follows suit for the new filter.</p>
+<p>In <code>src/filters/shuffle_simd.rs</code> we have more comprehensive testing as here lies the actual implementation.</p>
+<h3 id="benchmarking-benchesshufflers">Benchmarking - benches/shuffle.rs<a class="headerlink" href="#benchmarking-benchesshufflers" title="Permanent link">&para;</a></h3>
+<p>Benchmarking is optional, <code>benches/shuffle.rs</code> has been updated as we have the opportunity to benchmark this new byte-shuffle filter addition against the original.</p>
+<h2 id="compiling-the-code">Compiling the code<a class="headerlink" href="#compiling-the-code" title="Permanent link">&para;</a></h2>
+<p>You should now be able to compile the code with:</p>
+<div class="highlight"><pre><span></span><code>cargo<span class="w"> </span>build
+</code></pre></div>
+<p>What I haven't mentioned in detail are the <a href="https://doc.rust-lang.org/rust-by-example/mod/use.html">use</a> declarations needed to pull in relevant code dependencies from the <code>byteshuffle</code> crate.</p>
+<p>Rust is very good at pointing out what's missing, the crate documentation should also tell you what's needed.</p>
+<p>Rust is also very good at keeping things tidy, pointing out where <code>use</code> is specifying unused dependencies, you can be liberal as you get the code working and remove the unused when later warned.</p>
+<h2 id="testing-the-code">Testing the code<a class="headerlink" href="#testing-the-code" title="Permanent link">&para;</a></h2>
+<p>We must have all tests passing if we're to merge this code into Reductionist's <em>main</em> branch.</p>
+<p>Run:</p>
+<div class="highlight"><pre><span></span><code>cargo<span class="w"> </span><span class="nb">test</span>
+</code></pre></div>
+<p>Test code is not built by default so you may now see new build errors.</p>
+<h2 id="running-benchmarks">Running benchmarks<a class="headerlink" href="#running-benchmarks" title="Permanent link">&para;</a></h2>
+<p>This is useful as it's also providing additional testing.</p>
+<p>Run:</p>
+<div class="highlight"><pre><span></span><code>cargo<span class="w"> </span>bench
+</code></pre></div>
+<p>The benchmark code is not built by default so you may now see new build errors.</p>
+<h2 id="checking-all-prerequisites-before-committing-code">Checking all prerequisites before committing code<a class="headerlink" href="#checking-all-prerequisites-before-committing-code" title="Permanent link">&para;</a></h2>
+<h3 id="code-formatting">Code formatting<a class="headerlink" href="#code-formatting" title="Permanent link">&para;</a></h3>
+<p>Run:</p>
+<div class="highlight"><pre><span></span><code>cargo<span class="w"> </span>fmt
+</code></pre></div>
+<p>to apply formatting changes suggested by <code>rustfmt</code>.</p>
+<h3 id="linting-and-suggested-code-improvements">Linting and suggested code improvements<a class="headerlink" href="#linting-and-suggested-code-improvements" title="Permanent link">&para;</a></h3>
+<p>Run:</p>
+<div class="highlight"><pre><span></span><code>cargo<span class="w"> </span>clippy
+</code></pre></div>
+<p>to see if it spots any commonly made coding errors.</p>
+<p>As mentioned earlier, to run clippy on all code including tests and benchmarks you need to run:</p>
+<div class="highlight"><pre><span></span><code>cargo<span class="w"> </span>clippy<span class="w"> </span>--all-targets<span class="w"> </span>--<span class="w"> </span>-D<span class="w"> </span>warnings
+</code></pre></div>
+<p>which also treats warnings as errors.</p>
+<p>We've not made a big code change so if there are any they can probably be fixed with:</p>
+<div class="highlight"><pre><span></span><code>cargo<span class="w"> </span>clippy<span class="w"> </span>--fix<span class="w"> </span>--lib<span class="w"> </span>-p<span class="w"> </span>reductionist
+</code></pre></div>
+<p>As with everything cargo the output is very helpful and usually tells you what to run to have cargo fix things for you.</p>
+<h3 id="automating-the-whole-sequence-of-checks">Automating the whole sequence of checks<a class="headerlink" href="#automating-the-whole-sequence-of-checks" title="Permanent link">&para;</a></h3>
+<p>From the root directory of the Reductionist repository run:</p>
+<div class="highlight"><pre><span></span><code>./tools/pre-commit
+</code></pre></div>
+<p>This runs all of the above and must exit without error otherwise the Reductionist's GitHub workflow is going to find the same errors and prevent a pull request from being merged into the Reductionist <code>main</code> branch.</p>
+<h3 id="update-the-api-documentation-and-schema-docsapimd">Update the API documentation and schema - docs/api.md<a class="headerlink" href="#update-the-api-documentation-and-schema-docsapimd" title="Permanent link">&para;</a></h3>
+<p>Whenever you add a new <code>Filter</code> variant (such as <code>ShuffleSimd</code>), you must also update the public API documentation and any associated schema definitions.</p>
+<p>In particular, ensure that the <code>filter.id</code> field in <code>docs/api.md</code> (and any relevant schema) lists the new algorithm identifier (for example, <code>shuffle_simd</code>) alongside the existing values (such as <code>shuffle</code>), so that the documented API matches the behavior implemented in <code>src/models.rs</code>.</p>
+<p>Keeping these documents in sync avoids confusing clients and prevents validation errors when they legitimately use newly supported filters.</p>
+<h2 id="completing-the-addition-of-a-new-filter">Completing the addition of a new filter<a class="headerlink" href="#completing-the-addition-of-a-new-filter" title="Permanent link">&para;</a></h2>
+<p>All changes to the Reductionist must be made in a feature branch and merged into the default <code>main</code> branch using a pull request.</p>
+<p>It will not be possible to merge the changes unless all tests pass within the workflow.</p>
+<h2 id="concluding-whether-simd-acceleration-improves-performance">Concluding whether SIMD-acceleration improves performance<a class="headerlink" href="#concluding-whether-simd-acceleration-improves-performance" title="Permanent link">&para;</a></h2>
+<p>lotRunning benchmarks outputs a let of information.</p>
+<p>Each file under the <code>benches</code> directory in the root of the repository creates a separate executable.</p>
+<p>We can reduce the scope of what the benchmarks execute with:</p>
+<div class="highlight"><pre><span></span><code>cargo<span class="w"> </span>bench<span class="w"> </span>--bench<span class="w"> </span>shuffle
+</code></pre></div>
+<p>to run just the benchmarks in <code>shuffle.rs</code>.</p>
+<p>Benchmarks store performance data each run so we can look for performance improvement or degradation.</p>
+<p>To avoid going too deep into analysis of the output the following shows just the test durations so we can compare the original byte <code>shuffle</code> to the newer SIMD-accelerated byte shuffle <code>shuffle_simd</code>:</p>
+<div class="highlight"><pre><span></span><code>deshuffle(65536, 2)     time:   [1.4776 ms 1.5060 ms 1.5368 ms]
+
+deshuffle_simd(65536, 2)
+                        time:   [806.78 µs 810.34 µs 814.32 µs]
+
+deshuffle(65536, 4)     time:   [973.38 µs 1.0116 ms 1.0542 ms]
+
+deshuffle_simd(65536, 4)
+                        time:   [764.10 µs 782.75 µs 806.10 µs]
+
+deshuffle(65536, 8)     time:   [852.72 µs 878.92 µs 907.06 µs]
+
+deshuffle_simd(65536, 8)
+                        time:   [598.39 µs 608.91 µs 621.69 µs]
+
+deshuffle(262144, 2)    time:   [5.9936 ms 6.1219 ms 6.2597 ms]
+
+deshuffle_simd(262144, 2)
+                        time:   [3.3238 ms 3.3726 ms 3.4259 ms]
+
+deshuffle(262144, 4)    time:   [3.8684 ms 3.9543 ms 4.0496 ms]
+
+deshuffle_simd(262144, 4)
+                        time:   [3.1684 ms 3.2070 ms 3.2468 ms]
+
+deshuffle(262144, 8)    time:   [3.5358 ms 3.6156 ms 3.7070 ms]
+
+deshuffle_simd(262144, 8)
+                        time:   [2.4563 ms 2.4917 ms 2.5317 ms]
+
+deshuffle(1048576, 2)   time:   [22.125 ms 22.310 ms 22.510 ms]
+
+deshuffle_simd(1048576, 2)
+                        time:   [14.332 ms 14.757 ms 15.232 ms]
+
+deshuffle(1048576, 4)   time:   [14.273 ms 14.361 ms 14.458 ms]
+
+deshuffle_simd(1048576, 4)
+                        time:   [12.268 ms 12.584 ms 12.958 ms]
+
+deshuffle(1048576, 8)   time:   [13.333 ms 13.456 ms 13.588 ms]
+
+deshuffle_simd(1048576, 8)
+                        time:   [9.6107 ms 9.7639 ms 9.9573 ms]
+
+deshuffle(4194304, 2)   time:   [132.12 ms 134.39 ms 136.89 ms]
+
+deshuffle_simd(4194304, 2)
+                        time:   [84.205 ms 85.217 ms 86.296 ms]
+
+deshuffle(4194304, 4)   time:   [96.291 ms 97.229 ms 98.244 ms]
+
+deshuffle_simd(4194304, 4)
+                        time:   [76.597 ms 77.399 ms 78.373 ms]
+
+deshuffle(4194304, 8)   time:   [91.219 ms 92.672 ms 94.329 ms]
+
+deshuffle_simd(4194304, 8)
+                        time:   [70.878 ms 72.563 ms 74.524 ms]
+</code></pre></div>
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    <script id="__config" type="application/json">{"base": "..", "features": [], "search": "../assets/javascripts/workers/search.16e2a7d4.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.config.lang": "en", "search.config.pipeline": "trimmer, stopWordFilter", "search.config.separator": "[\\s\\-]+", "search.placeholder": "Search", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version.title": "Select version"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.5a2dcb6a.min.js"></script>
+      
+    
+    
+  </body>
+</html>
