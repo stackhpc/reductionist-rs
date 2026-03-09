@@ -57,7 +57,11 @@ The request body should be a JSON object of the form:
 
     // List of algorithms used to filter the data
     // - optional, defaults to no filters
-    "filters": [{"id": "shuffle", "element_size": 4}],
+    // - for byte-shuffle filtering, use either "shuffle" or "shuffle_simd"
+    "filters": [
+        {"id": "shuffle", "element_size": 4},
+        {"id": "shuffle_simd", "element_size": 4}
+    ],
 
     // Missing data description
     // - optional, defaults to no missing data

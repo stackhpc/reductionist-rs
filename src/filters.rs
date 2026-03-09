@@ -1,6 +1,7 @@
 //! Filter implementations.
 
 pub mod shuffle;
+pub mod shuffle_simd;
 
 use crate::error::ActiveStorageError;
 use crate::models;
@@ -16,6 +17,9 @@ use axum::body::Bytes;
 pub fn decode(filter: &models::Filter, data: &Bytes) -> Result<Bytes, ActiveStorageError> {
     match filter {
         models::Filter::Shuffle { element_size } => Ok(shuffle::deshuffle(data, *element_size)),
+        models::Filter::ShuffleSimd { element_size } => {
+            Ok(shuffle_simd::deshuffle(data, *element_size))
+        }
     }
 }
 
@@ -30,6 +34,17 @@ mod tests {
         let bytes = Bytes::copy_from_slice(&data);
         let shuffled = filters::shuffle::test_utils::shuffle(&bytes, 4);
         let filter = models::Filter::Shuffle { element_size: 4 };
+        let result = decode(&filter, &shuffled).unwrap();
+        assert_eq!(data.as_ref(), result);
+    }
+
+    #[test]
+    fn test_decode_shuffle_simd() {
+        let data = [1, 2, 3, 4, 5, 6, 7, 8];
+        let bytes = Bytes::copy_from_slice(&data);
+        // Shuffle the data using the non-SIMD shuffle function to ensure consistency with the SIMD deshuffle.
+        let shuffled = filters::shuffle::test_utils::shuffle(&bytes, 4);
+        let filter = models::Filter::ShuffleSimd { element_size: 4 };
         let result = decode(&filter, &shuffled).unwrap();
         assert_eq!(data.as_ref(), result);
     }
