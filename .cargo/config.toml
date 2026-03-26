@@ -1,0 +1,2 @@
+[build]
+rustflags = ["--cfg", "tokio_allow_from_blocking_fd"]
