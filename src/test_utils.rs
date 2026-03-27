@@ -22,6 +22,7 @@ pub(crate) fn get_test_request_data() -> RequestData {
         compression: None,
         filters: None,
         missing: None,
+        option_disable_chunk_cache: None,
         option_shape_as_bytes: None,
         option_count_as_bytes: None,
     }
@@ -50,6 +51,7 @@ pub(crate) fn get_test_request_data_optional() -> RequestData {
         compression: Some(Compression::Gzip),
         filters: Some(vec![Filter::Shuffle { element_size: 4 }]),
         missing: Some(Missing::MissingValue(42.into())),
+        option_disable_chunk_cache: Some(true),
         option_shape_as_bytes: Some(true),
         option_count_as_bytes: Some(true),
     }

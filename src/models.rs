@@ -167,6 +167,8 @@ pub struct RequestData {
     pub filters: Option<Vec<Filter>>,
     /// Missing data
     pub missing: Option<Missing<DValue>>,
+    /// Option to disable chunk cache
+    pub option_disable_chunk_cache: Option<bool>,
     /// Option to return shape as bytes
     pub option_shape_as_bytes: Option<bool>,
     /// Option to return count as bytes
@@ -540,6 +542,9 @@ mod tests {
                 Token::Enum { name: "Missing" },
                 Token::Str("missing_value"),
                 Token::I32(42),
+                Token::Str("option_disable_chunk_cache"),
+                Token::Some,
+                Token::Bool(true),
                 Token::Str("option_shape_as_bytes"),
                 Token::Some,
                 Token::Bool(true),
@@ -919,7 +924,7 @@ mod tests {
                 Token::Str("foo"),
                 Token::StructEnd,
             ],
-            "unknown field `foo`, expected one of `interface_type`, `url`, `dtype`, `byte_order`, `offset`, `size`, `shape`, `axis`, `order`, `selection`, `compression`, `filters`, `missing`, `option_shape_as_bytes`, `option_count_as_bytes`",
+            "unknown field `foo`, expected one of `interface_type`, `url`, `dtype`, `byte_order`, `offset`, `size`, `shape`, `axis`, `order`, `selection`, `compression`, `filters`, `missing`, `option_disable_chunk_cache`, `option_shape_as_bytes`, `option_count_as_bytes`",
         )
     }
 
@@ -952,6 +957,7 @@ mod tests {
                         "compression": {"id": "gzip"},
                         "filters": [{"id": "shuffle", "element_size": 4}],
                         "missing": {"missing_value": 42},
+                        "option_disable_chunk_cache": true,
                         "option_shape_as_bytes": true,
                         "option_count_as_bytes": true
                       }"#;
@@ -975,6 +981,7 @@ mod tests {
                         "compression": {"id": "zlib"},
                         "filters": [{"id": "shuffle", "element_size": 8}],
                         "missing": {"valid_range": [-1.0, 999.0]},
+                        "option_disable_chunk_cache": true,
                         "option_shape_as_bytes": true,
                         "option_count_as_bytes": true
                       }"#;

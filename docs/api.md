@@ -75,6 +75,9 @@ The request body should be a JSON object of the form:
         "valid_range": [-42, 42],
     },
 
+    // Optional: disable the chunk cache for this request
+    "option_disable_chunk_cache": false,
+
     // Optional: convert the shape to bytes for more efficient serialisation
     "option_shape_as_bytes": false,
 
