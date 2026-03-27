@@ -103,11 +103,24 @@ On success, all operations return HTTP 200 OK with the response body being a [CB
     // An array of numbers describing the shape of the data in the bytes returned.
     // May be empty for a scalar result.
     "shape": [10, 2],
+    // If the option `option_shape_as_bytes` was enabled in the request
+    // `shape` will be encoded into the following `shape_as_bytes` as a byte stream
+    // and `shape` will be an empty `[]` vector.
+    // The `shape_as_bytes` field encodes the shape as consecutive 64-bit unsigned
+    // integers (u64), 8 bytes per element, using the response `byte_order`
+    // ("big" or "little") for endianness when decoding.
+    "shape_as_bytes": b"",
     // The number of non-missing array elements operated on while performing the requested reduction.
     // This is useful, for example, to calculate the mean over multiple requests
     // where the number of items operated on may differ between chunks.
     "count": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    // The byte order of the data in the response payload.
+    // If the option `option_count_as_bytes` was enabled in the request
+    // `count` will be encoded into the following `count_as_bytes` as a byte stream
+    // and `count` will be an empty `[]` vector.
+    // The `count_as_bytes` field encodes the count as consecutive 64-bit signed
+    // integers (i64), 8 bytes per element, using the response `byte_order`
+    // ("big" or "little") for endianness when decoding.
+    "count_as_bytes": b"",    // The byte order of the data in the response payload.
     // Either `big` or `little`.
     "byte_order": "little",
 }

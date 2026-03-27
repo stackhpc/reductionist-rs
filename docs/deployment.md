@@ -288,7 +288,7 @@ Performance will always be best when authentication is disabled which is achieve
 
 | Environment Variable | Description | |
 | - | - | - |
-| REDUCTIONIST_CHUNK_CACHE_KEY | "%url-%offset-%size"` | Namely the key should not contain `%auth` |
+| REDUCTIONIST_CHUNK_CACHE_KEY | "%url-%offset-%size" | Namely the key should not contain `%auth` |
 | REDUCTIONIST_CHUNK_CACHE_BYPASS_AUTH | true | Disable S3 authentication check prior to retrieving cached chunk |
 
 ##### Client can only retrieve chunks that they cached
@@ -297,7 +297,7 @@ If authentication is required then the fastest option is to store cached chunks 
 
 | Environment Variable | Description | |
 | - | - | - |
-| REDUCTIONIST_CHUNK_CACHE_KEY | "%url-%offset-%size-%auth"` | Namely the key should contain `%auth` |
+| REDUCTIONIST_CHUNK_CACHE_KEY | "%url-%offset-%size-%auth" | Namely the key should contain `%auth` |
 | REDUCTIONIST_CHUNK_CACHE_BYPASS_AUTH | true | Disable S3 authentication check prior to retrieving cached chunk |
 
 The key name, once constructed from parameters, is [MD5](https://en.wikipedia.org/wiki/MD5) encoded so credentials aren't exposed via the chunk cache filesystem.
@@ -308,7 +308,7 @@ If cached chunks are to be shared between clients then the Reductionist can perf
 
 | Environment Variable | Description | |
 | - | - | - |
-| REDUCTIONIST_CHUNK_CACHE_KEY | "%url-%offset-%size"` | Namely the key should not contain `%auth` |
+| REDUCTIONIST_CHUNK_CACHE_KEY | "%url-%offset-%size" | Namely the key should not contain `%auth` |
 | REDUCTIONIST_CHUNK_CACHE_BYPASS_AUTH | true | Enable S3 authentication check prior to retrieving cached chunk |
 
 ## Usage

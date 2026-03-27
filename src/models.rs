@@ -359,10 +359,12 @@ pub struct CBORResponse {
     pub dtype: String,
     /// Shape of the response
     pub shape: Vec<usize>,
+    #[serde(skip_serializing_if = "Bytes::is_empty")]
     pub shape_as_bytes: Bytes,
     /// Number of non-missing elements operated
     /// along each reduction axis
     pub count: Vec<i64>,
+    #[serde(skip_serializing_if = "Bytes::is_empty")]
     pub count_as_bytes: Bytes,
     /// Byte order of the response data
     pub byte_order: &'static str,
@@ -377,30 +379,26 @@ impl CBORResponse {
         // We allow the option to convert the count vector to bytes,
         // which is more compact and efficient to serialize.
         let (count, count_as_bytes) = match response.option_count_as_bytes {
-            true => (
-                vec![],
-                response
-                    .count
-                    .iter()
-                    .flat_map(|c| c.to_le_bytes().to_vec())
-                    .collect::<Vec<u8>>()
-                    .into(),
-            ),
+            true => (vec![], {
+                let mut buf = Vec::with_capacity(response.count.len() * 8);
+                for c in &response.count {
+                    buf.extend_from_slice(&c.to_ne_bytes());
+                }
+                buf.into()
+            }),
             false => (response.count.clone(), vec![].into()),
         };
 
         // We also allow the option to convert the shape vector to bytes,
         // which is more compact and efficient to serialize.
         let (shape, shape_as_bytes) = match response.option_shape_as_bytes {
-            true => (
-                vec![],
-                response
-                    .shape
-                    .iter()
-                    .flat_map(|s| s.to_le_bytes().to_vec())
-                    .collect::<Vec<u8>>()
-                    .into(),
-            ),
+            true => (vec![], {
+                let mut buf = Vec::with_capacity(response.shape.len() * 8);
+                for s in &response.shape {
+                    buf.extend_from_slice(&(*s as u64).to_ne_bytes());
+                }
+                buf.into()
+            }),
             false => (response.shape.clone(), vec![].into()),
         };
 
@@ -1054,7 +1052,7 @@ mod tests {
     fn convert_shape_from_bytes(shape_as_bytes: &bytes::Bytes) -> Vec<usize> {
         shape_as_bytes
             .chunks_exact(8)
-            .map(|chunk| usize::from_le_bytes(chunk.try_into().unwrap()))
+            .map(|chunk| usize::from_ne_bytes(chunk.try_into().unwrap()))
             .collect()
     }
 
@@ -1084,7 +1082,7 @@ mod tests {
     fn convert_count_from_bytes(count_as_bytes: &bytes::Bytes) -> Vec<i64> {
         count_as_bytes
             .chunks_exact(8)
-            .map(|chunk| i64::from_le_bytes(chunk.try_into().unwrap()))
+            .map(|chunk| i64::from_ne_bytes(chunk.try_into().unwrap()))
             .collect()
     }
 
