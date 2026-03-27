@@ -73,7 +73,13 @@ The request body should be a JSON object of the form:
         "valid_min": 42,
         "valid_max": 42,
         "valid_range": [-42, 42],
-    }
+    },
+
+    // Optional: convert the shape to bytes for more efficient serialisation
+    "option_shape_as_bytes": false,
+
+    // Optional: convert the count to bytes for more efficient serialisation
+    "option_count_as_bytes": false
 }
 ```
 

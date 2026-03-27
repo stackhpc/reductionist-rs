@@ -19,6 +19,8 @@ fn get_test_request_data() -> RequestData {
         compression: None,
         filters: None,
         missing: None,
+        option_shape_as_bytes: None,
+        option_count_as_bytes: None,
     }
 }
 

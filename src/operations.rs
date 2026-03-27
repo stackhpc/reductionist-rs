@@ -154,6 +154,8 @@ impl NumOperation for Count {
             models::DType::Int64,
             shape,
             counts,
+            request_data.option_shape_as_bytes.unwrap_or(false),
+            request_data.option_count_as_bytes.unwrap_or(false),
         ))
     }
 }
@@ -323,6 +325,8 @@ impl NumOperation for Max {
             request_data.dtype,
             shape,
             counts,
+            request_data.option_shape_as_bytes.unwrap_or(false),
+            request_data.option_count_as_bytes.unwrap_or(false),
         ))
     }
 }
@@ -473,6 +477,8 @@ impl NumOperation for Min {
             request_data.dtype,
             shape,
             counts,
+            request_data.option_shape_as_bytes.unwrap_or(false),
+            request_data.option_count_as_bytes.unwrap_or(false),
         ))
     }
 }
@@ -513,6 +519,8 @@ impl NumOperation for Select {
             request_data.dtype,
             shape,
             vec![count],
+            request_data.option_shape_as_bytes.unwrap_or(false),
+            request_data.option_count_as_bytes.unwrap_or(false),
         ))
     }
 }
@@ -634,6 +642,8 @@ impl NumOperation for Sum {
             request_data.dtype,
             shape,
             counts,
+            request_data.option_shape_as_bytes.unwrap_or(false),
+            request_data.option_count_as_bytes.unwrap_or(false),
         ))
     }
 }
