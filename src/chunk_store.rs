@@ -133,10 +133,16 @@ impl<'a> ChunkStore {
                 self.download(auth, request_data, resource_manager, mem_permits)
                     .await
             }
-            (true, Some(_)) => {
-                self.cached_download(auth, request_data, resource_manager, mem_permits)
-                    .await
-            }
+            (true, Some(_)) => match request_data.option_disable_chunk_cache {
+                Some(true) => {
+                    self.download(auth, request_data, resource_manager, mem_permits)
+                        .await
+                }
+                _ => {
+                    self.cached_download(auth, request_data, resource_manager, mem_permits)
+                        .await
+                }
+            },
             (true, None) => panic!(
                 "Chunk cache enabled but no chunk cache provided.\nThis is a bug. Please report it to the application developers."
             ),

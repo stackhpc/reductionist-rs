@@ -167,6 +167,12 @@ pub struct RequestData {
     pub filters: Option<Vec<Filter>>,
     /// Missing data
     pub missing: Option<Missing<DValue>>,
+    /// Option to disable chunk cache
+    pub option_disable_chunk_cache: Option<bool>,
+    /// Option to return shape as bytes
+    pub option_shape_as_bytes: Option<bool>,
+    /// Option to return count as bytes
+    pub option_count_as_bytes: Option<bool>,
 }
 
 /// Validate an array shape
@@ -317,16 +323,29 @@ pub struct Response {
     /// Number of non-missing elements operated
     /// along each reduction axis
     pub count: Vec<i64>,
+    /// Option to return shape as bytes
+    pub option_shape_as_bytes: bool,
+    /// Option to return count as bytes
+    pub option_count_as_bytes: bool,
 }
 
 impl Response {
     /// Return a Response object
-    pub fn new(body: Bytes, dtype: DType, shape: Vec<usize>, count: Vec<i64>) -> Response {
+    pub fn new(
+        body: Bytes,
+        dtype: DType,
+        shape: Vec<usize>,
+        count: Vec<i64>,
+        option_shape_as_bytes: bool,
+        option_count_as_bytes: bool,
+    ) -> Response {
         Response {
             body,
             dtype,
             shape,
             count,
+            option_shape_as_bytes,
+            option_count_as_bytes,
         }
     }
 }
@@ -340,9 +359,13 @@ pub struct CBORResponse {
     pub dtype: String,
     /// Shape of the response
     pub shape: Vec<usize>,
+    #[serde(skip_serializing_if = "Bytes::is_empty")]
+    pub shape_as_bytes: Bytes,
     /// Number of non-missing elements operated
     /// along each reduction axis
     pub count: Vec<i64>,
+    #[serde(skip_serializing_if = "Bytes::is_empty")]
+    pub count_as_bytes: Bytes,
     /// Byte order of the response data
     pub byte_order: &'static str,
 }
@@ -350,11 +373,42 @@ pub struct CBORResponse {
 impl CBORResponse {
     /// Return a CBOR Response object
     pub fn new(response: &Response) -> CBORResponse {
+        // The response count field is a vector of i64 values,
+        // this vector gets large when we are reducing over fewer axes
+        // highlighting deficiencies in Python's handling of lists.
+        // We allow the option to convert the count vector to bytes,
+        // which is more compact and efficient to serialize.
+        let (count, count_as_bytes) = match response.option_count_as_bytes {
+            true => (vec![], {
+                let mut buf = Vec::with_capacity(response.count.len() * 8);
+                for c in &response.count {
+                    buf.extend_from_slice(&c.to_ne_bytes());
+                }
+                buf.into()
+            }),
+            false => (response.count.clone(), vec![].into()),
+        };
+
+        // We also allow the option to convert the shape vector to bytes,
+        // which is more compact and efficient to serialize.
+        let (shape, shape_as_bytes) = match response.option_shape_as_bytes {
+            true => (vec![], {
+                let mut buf = Vec::with_capacity(response.shape.len() * 8);
+                for s in &response.shape {
+                    buf.extend_from_slice(&(*s as u64).to_ne_bytes());
+                }
+                buf.into()
+            }),
+            false => (response.shape.clone(), vec![].into()),
+        };
+
         CBORResponse {
             bytes: response.body.clone(),
             dtype: response.dtype.to_string().to_lowercase(),
-            shape: response.shape.clone(),
-            count: response.count.clone(),
+            shape,
+            shape_as_bytes,
+            count,
+            count_as_bytes,
             byte_order: match NATIVE_BYTE_ORDER {
                 ByteOrder::Big => "big",
                 ByteOrder::Little => "little",
@@ -486,6 +540,15 @@ mod tests {
                 Token::Enum { name: "Missing" },
                 Token::Str("missing_value"),
                 Token::I32(42),
+                Token::Str("option_disable_chunk_cache"),
+                Token::Some,
+                Token::Bool(true),
+                Token::Str("option_shape_as_bytes"),
+                Token::Some,
+                Token::Bool(true),
+                Token::Str("option_count_as_bytes"),
+                Token::Some,
+                Token::Bool(true),
                 Token::StructEnd,
             ],
         );
@@ -859,7 +922,7 @@ mod tests {
                 Token::Str("foo"),
                 Token::StructEnd,
             ],
-            "unknown field `foo`, expected one of `interface_type`, `url`, `dtype`, `byte_order`, `offset`, `size`, `shape`, `axis`, `order`, `selection`, `compression`, `filters`, `missing`",
+            "unknown field `foo`, expected one of `interface_type`, `url`, `dtype`, `byte_order`, `offset`, `size`, `shape`, `axis`, `order`, `selection`, `compression`, `filters`, `missing`, `option_disable_chunk_cache`, `option_shape_as_bytes`, `option_count_as_bytes`",
         )
     }
 
@@ -891,7 +954,10 @@ mod tests {
                         "selection": [[1, 2, 3], [4, 5, 6], [1, 1, 1]],
                         "compression": {"id": "gzip"},
                         "filters": [{"id": "shuffle", "element_size": 4}],
-                        "missing": {"missing_value": 42}
+                        "missing": {"missing_value": 42},
+                        "option_disable_chunk_cache": true,
+                        "option_shape_as_bytes": true,
+                        "option_count_as_bytes": true
                       }"#;
         let request_data = serde_json::from_str::<RequestData>(json).unwrap();
         assert_eq!(request_data, test_utils::get_test_request_data_optional());
@@ -912,7 +978,10 @@ mod tests {
                         "selection": [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
                         "compression": {"id": "zlib"},
                         "filters": [{"id": "shuffle", "element_size": 8}],
-                        "missing": {"valid_range": [-1.0, 999.0]}
+                        "missing": {"valid_range": [-1.0, 999.0]},
+                        "option_disable_chunk_cache": true,
+                        "option_shape_as_bytes": true,
+                        "option_count_as_bytes": true
                       }"#;
         let request_data = serde_json::from_str::<RequestData>(json).unwrap();
         let mut expected = test_utils::get_test_request_data_optional();
@@ -958,5 +1027,85 @@ mod tests {
             u64::MAX.into(),
         ]));
         assert_eq!(request_data, expected);
+    }
+
+    #[test]
+    fn test_cbor_response() {
+        let response = Response::new(
+            vec![1, 2, 3].into(),
+            DType::Int32,
+            vec![3, 2, 1],
+            vec![3, 1, 2],
+            false,
+            false,
+        );
+        let cbor_response = CBORResponse::new(&response);
+        assert_eq!(cbor_response.bytes, vec![1, 2, 3]);
+        assert_eq!(cbor_response.dtype, "int32");
+        assert_eq!(cbor_response.shape, vec![3, 2, 1]);
+        assert_eq!(cbor_response.shape_as_bytes, vec![]);
+        assert_eq!(cbor_response.count, vec![3, 1, 2]);
+        assert_eq!(cbor_response.count_as_bytes, vec![]);
+        assert_eq!(cbor_response.byte_order, "little");
+    }
+
+    fn convert_shape_from_bytes(shape_as_bytes: &bytes::Bytes) -> Vec<usize> {
+        shape_as_bytes
+            .chunks_exact(8)
+            .map(|chunk| usize::from_ne_bytes(chunk.try_into().unwrap()))
+            .collect()
+    }
+
+    #[test]
+    fn test_cbor_response_option_shape_as_bytes() {
+        let response = Response::new(
+            vec![1, 2, 3].into(),
+            DType::Int32,
+            vec![3, 2, 1],
+            vec![3, 1, 2],
+            true,
+            false,
+        );
+        let cbor_response = CBORResponse::new(&response);
+        assert_eq!(cbor_response.bytes, vec![1, 2, 3]);
+        assert_eq!(cbor_response.dtype, "int32");
+        assert_eq!(cbor_response.shape, Vec::<usize>::new());
+        assert_eq!(
+            convert_shape_from_bytes(&cbor_response.shape_as_bytes),
+            vec![3, 2, 1]
+        );
+        assert_eq!(cbor_response.count, vec![3, 1, 2]);
+        assert_eq!(cbor_response.count_as_bytes, Vec::<u8>::new());
+        assert_eq!(cbor_response.byte_order, "little");
+    }
+
+    fn convert_count_from_bytes(count_as_bytes: &bytes::Bytes) -> Vec<i64> {
+        count_as_bytes
+            .chunks_exact(8)
+            .map(|chunk| i64::from_ne_bytes(chunk.try_into().unwrap()))
+            .collect()
+    }
+
+    #[test]
+    fn test_cbor_response_option_count_as_bytes() {
+        let response = Response::new(
+            vec![1, 2, 3].into(),
+            DType::Int32,
+            vec![3, 2, 1],
+            vec![3, 1, 2],
+            false,
+            true,
+        );
+        let cbor_response = CBORResponse::new(&response);
+        assert_eq!(cbor_response.bytes, vec![1, 2, 3]);
+        assert_eq!(cbor_response.dtype, "int32");
+        assert_eq!(cbor_response.shape, vec![3, 2, 1]);
+        assert_eq!(cbor_response.shape_as_bytes, Vec::<u8>::new());
+        assert_eq!(cbor_response.count, Vec::<i64>::new());
+        assert_eq!(
+            convert_count_from_bytes(&cbor_response.count_as_bytes),
+            vec![3, 1, 2]
+        );
+        assert_eq!(cbor_response.byte_order, "little");
     }
 }

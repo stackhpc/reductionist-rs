@@ -21,6 +21,14 @@ docker run \
     -v "$storage/minio:/data" \
     quay.io/minio/minio server /data --console-address ":9001"
 
+# Setup htpasswd for basic authentication.
+# NOTE: Do NOT commit generated htpasswd contents to version control,
+#       it will be ignored using the following default location.
+# To change the credentials used:
+# - replace: admin admin
+# - with   : <your desired username> <your desired password>
+htpasswd -bc "$origin/htpasswd" admin admin
+
 # Start our local nginx
 # https://hub.docker.com/_/nginx
 # https://gist.github.com/felbinger/9059bc70817055f902fc5a1de71646d0

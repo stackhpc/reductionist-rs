@@ -256,7 +256,7 @@ The idempotent nature of ansible necessitates that if redeploying then a running
 ### Chunk Cache Key
 
 This defines the name of the key which should uniquely identify a downloaded chunk.
-The default value is "%source-%bucket-%object-%offset-%size-%auth". All the parameters used here would be used in the API call to download an S3 object and so should uniquely identify an object.
+The default value is "%url-%offset-%size-%auth". All the parameters used here would be used in the API call to download an S3 object and so should uniquely identify an object.
 The assumption is made that the object on the S3 data store doesn't change, i.e. replaced using different compression.
 
 * Use insufficient parameters to uniquely identify a chunk and a request may be served with a cached chunk containing the wrong data
@@ -288,7 +288,7 @@ Performance will always be best when authentication is disabled which is achieve
 
 | Environment Variable | Description | |
 | - | - | - |
-| REDUCTIONIST_CHUNK_CACHE_KEY | "%source-%bucket-%object-%offset-%size"` | Namely the key should not contain `%auth` |
+| REDUCTIONIST_CHUNK_CACHE_KEY | "%url-%offset-%size" | Namely the key should not contain `%auth` |
 | REDUCTIONIST_CHUNK_CACHE_BYPASS_AUTH | true | Disable S3 authentication check prior to retrieving cached chunk |
 
 ##### Client can only retrieve chunks that they cached
@@ -297,7 +297,7 @@ If authentication is required then the fastest option is to store cached chunks 
 
 | Environment Variable | Description | |
 | - | - | - |
-| REDUCTIONIST_CHUNK_CACHE_KEY | "%source-%bucket-%object-%offset-%size-%auth"` | Namely the key should contain `%auth` |
+| REDUCTIONIST_CHUNK_CACHE_KEY | "%url-%offset-%size-%auth" | Namely the key should contain `%auth` |
 | REDUCTIONIST_CHUNK_CACHE_BYPASS_AUTH | true | Disable S3 authentication check prior to retrieving cached chunk |
 
 The key name, once constructed from parameters, is [MD5](https://en.wikipedia.org/wiki/MD5) encoded so credentials aren't exposed via the chunk cache filesystem.
@@ -308,7 +308,7 @@ If cached chunks are to be shared between clients then the Reductionist can perf
 
 | Environment Variable | Description | |
 | - | - | - |
-| REDUCTIONIST_CHUNK_CACHE_KEY | "%source-%bucket-%object-%offset-%size"` | Namely the key should not contain `%auth` |
+| REDUCTIONIST_CHUNK_CACHE_KEY | "%url-%offset-%size" | Namely the key should not contain `%auth` |
 | REDUCTIONIST_CHUNK_CACHE_BYPASS_AUTH | true | Enable S3 authentication check prior to retrieving cached chunk |
 
 ## Usage

@@ -1,0 +1,8 @@
+[build]
+# NOTE: We intentionally enable Tokio's internal `tokio_allow_from_blocking_fd` cfg here.
+# This disables a debug assertion that normally rejects blocking file descriptors (FDs)
+# passed into Tokio. Our environment may hand pre-existing blocking std FDs to Tokio,
+# and we rely on this escape hatch to interoperate with that code without panicking.
+# If possible, prefer updating the socket/FD setup code to set non-blocking mode
+# instead of relying on this cfg.
+rustflags = ["--cfg", "tokio_allow_from_blocking_fd"]

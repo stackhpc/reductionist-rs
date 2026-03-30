@@ -114,6 +114,8 @@ mod tests {
                 request_data.dtype,
                 vec![3],
                 vec![3],
+                false,
+                false,
             ))
         }
     }
@@ -144,6 +146,8 @@ mod tests {
                 request_data.dtype,
                 vec![1, 2],
                 vec![2],
+                false,
+                false,
             ))
         }
     }
