@@ -359,12 +359,10 @@ pub struct CBORResponse {
     pub dtype: String,
     /// Shape of the response
     pub shape: Vec<usize>,
-    #[serde(skip_serializing_if = "Bytes::is_empty")]
     pub shape_as_bytes: Bytes,
     /// Number of non-missing elements operated
     /// along each reduction axis
     pub count: Vec<i64>,
-    #[serde(skip_serializing_if = "Bytes::is_empty")]
     pub count_as_bytes: Bytes,
     /// Byte order of the response data
     pub byte_order: &'static str,
